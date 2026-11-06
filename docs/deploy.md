@@ -24,6 +24,16 @@ Copy the `database_id` it prints into `wrangler.jsonc`, replacing the placeholde
 pnpm exec wrangler d1 migrations apply anchor --remote
 ```
 
+## 2b. Create the re-encryption queues
+
+Project key rotation re-encrypts secret values in the background through Cloudflare Queues
+(spec §6.2). Create the work queue and its dead letter queue once, before the first deploy:
+
+```sh
+pnpm exec wrangler queues create anchor-reencrypt
+pnpm exec wrangler queues create anchor-reencrypt-dlq
+```
+
 ## 3. Generate, back up, then set the root key
 
 The root key wraps every project's key, and those keys encrypt every secret value. Cloudflare never
@@ -74,7 +84,8 @@ file serves `index.html`. Security headers (CSP, `X-Frame-Options`, ...) come fr
 
 The deploy also registers the daily Cron Trigger (`0 3 * * *`, from `triggers.crons` in
 `wrangler.jsonc`). There is nothing to set up by hand: it purges audit events past retention (see
-[Audit retention](#audit-retention)).
+[Audit retention](#audit-retention)) and resumes stalled project key rotations (see
+[Rotating a project key](#rotating-a-project-key)).
 
 ## 6. Create the first owner
 
@@ -121,6 +132,23 @@ anonymous traffic can grow the database until audit inserts fail, and because se
 closed when they cannot be audited, secret reads then fail too. Add a Cloudflare rate-limiting rule
 (dashboard → Security → WAF → Rate limiting rules) for `POST /api/v1/auth/*` and
 `POST /api/v1/invites/*`, for example 20 requests per minute per IP, and watch the D1 size.
+
+## Rotating a project key
+
+Each project has a key (KEK) that encrypts its secret values. A project admin rotates it with
+`POST /api/v1/projects/<slug>/keys/rotate` (202). That creates a new key version for new writes,
+marks the old one `retiring`, and re-encrypts existing values in the background, 100 versions per
+queue message. Every value stays readable throughout. `GET /api/v1/projects/<slug>/keys` shows the
+key versions and the rotation progress (`done` / `total`).
+
+- The old key becomes `retired` only when no stored version uses it any more.
+- Calling rotate again while a rotation runs resumes it (re-sends its message) instead of starting
+  a second one.
+- A message that keeps failing is retried 10 times, then lands in `anchor-reencrypt-dlq`. The daily
+  Cron Trigger re-sends the message of any rotation idle for 15 minutes, as does the next rotate call.
+- A stored value that fails its integrity check stops the rotation with status `failed` and error
+  `decrypt_failed`, and logs `secret_decrypt_failed` with the ids. Treat it as an incident:
+  investigate, then start a new rotation.
 
 ## Rotating the root key
 

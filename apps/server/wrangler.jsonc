@@ -5,7 +5,7 @@
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
-  // Daily audit retention purge (src/audit/scheduled.ts).
+  // Daily: audit retention purge and stale KEK rotation sweep (src/audit/scheduled.ts).
   "triggers": { "crons": ["0 3 * * *"] },
   // The dashboard SPA (apps/web build). /api/* always reaches the Worker; any other unknown path
   // serves index.html so client-side routes deep-link. Build it first: `pnpm build` at the root.
@@ -23,5 +23,18 @@
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  // KEK rotation re-encryption (src/keys/queue.ts). One message = one batch of ≤ 100 versions.
+  // Create both queues before the first deploy (docs/deploy.md).
+  "queues": {
+    "producers": [{ "binding": "REENCRYPT_QUEUE", "queue": "anchor-reencrypt" }],
+    "consumers": [
+      {
+        "queue": "anchor-reencrypt",
+        "max_batch_size": 1,
+        "max_retries": 10,
+        "dead_letter_queue": "anchor-reencrypt-dlq"
+      }
+    ]
+  }
 }

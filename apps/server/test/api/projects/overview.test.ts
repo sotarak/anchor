@@ -1,6 +1,14 @@
 import type { OverviewDto, ProjectDto } from "@anchor/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, createMember, createUserWithSession, json, jsonInit, resetDb } from "#test/support";
+import {
+  api,
+  createMember,
+  createServiceToken,
+  createUserWithSession,
+  json,
+  jsonInit,
+  resetDb,
+} from "#test/support";
 
 let owner: string;
 const bearer = (t: string) => ({ headers: { authorization: `Bearer ${t}` } });
@@ -78,6 +86,52 @@ describe("GET /projects/:project/overview", () => {
     expect((await overview(stranger.token)).status).toBe(403);
     expect((await api("/api/v1/projects/app/overview")).status).toBe(401);
     expect((await api("/api/v1/projects/nope/overview", bearer(owner))).status).toBe(404);
+  });
+
+  it("a service token sees only the environments its scopes cover at the requested path", async () => {
+    await put("dev", "A", "v", "/api");
+    await put("prod", "A", "v", "/api");
+    await put("dev", "ROOT");
+    const { token } = await createServiceToken("app", {
+      permission: "read",
+      scopes: [{ environment: "dev", path: "/api" }],
+    });
+    const nested = await json<OverviewDto>(await overview(token, "?path=%2Fapi"));
+    expect(nested.environments.map((e) => e.slug)).toEqual(["dev"]);
+    expect(nested.keys.map((k) => k.key)).toEqual(["A"]);
+    expect(Object.keys(nested.keys[0]?.cells ?? {})).toEqual(["dev"]);
+    // Outside its scoped path the token reads nothing, not even key names.
+    const root = await overview(token, "?path=%2F");
+    expect(root.status).toBe(200);
+    expect(await json<OverviewDto>(root)).toEqual({ environments: [], keys: [] });
+  });
+
+  it("a service token for another project gets 403", async () => {
+    await put("dev", "A");
+    const other = await api(
+      "/api/v1/projects",
+      jsonInit("POST", { name: "Other", slug: "other" }, { token: owner }),
+    );
+    expect(other.status).toBe(201);
+    const { token } = await createServiceToken("other", {
+      permission: "read-write",
+      scopes: [{ environment: "dev", path: "/" }],
+    });
+    const res = await overview(token);
+    expect(res.status).toBe(403);
+    expect(await res.text()).not.toContain('"A"');
+  });
+
+  it("GET /projects/:project omits access for a service token", async () => {
+    const { token } = await createServiceToken("app", {
+      permission: "read",
+      scopes: [{ environment: "dev", path: "/" }],
+    });
+    const res = await api("/api/v1/projects/app", bearer(token));
+    expect(res.status).toBe(200);
+    const { project } = await json<{ project: ProjectDto }>(res);
+    expect(project.slug).toBe("app");
+    expect("access" in project).toBe(false);
   });
 });
 

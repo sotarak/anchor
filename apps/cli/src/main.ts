@@ -7,6 +7,7 @@ import type { CliDeps } from "./context";
 import { CliError, EXIT } from "./errors";
 import { createNodeIo } from "./io";
 import { Output } from "./output";
+import { createNodeSpawner } from "./process/spawner";
 import { buildProgram, type RunState } from "./program";
 import { createInquirerPrompts } from "./prompts";
 
@@ -21,8 +22,9 @@ async function defaultDeps(partial: Partial<CliDeps>): Promise<CliDeps> {
     io,
     prompts: partial.prompts ?? createInquirerPrompts(),
     fetch: partial.fetch ?? (await configureProxyFromEnv(io.env)) ?? globalThis.fetch,
-    spawner: partial.spawner ?? unavailable("spawner"),
+    spawner: partial.spawner ?? createNodeSpawner(),
     runChild: partial.runChild ?? unavailable("runChild"),
+    selectStore: partial.selectStore,
   };
 }
 

@@ -1,4 +1,5 @@
 import { type ResolvedConfig, resolveConfig } from "./config/resolve";
+import type { CredentialStore } from "./credentials/types";
 import { CliError, EXIT } from "./errors";
 import type { Io } from "./io";
 import { Output } from "./output";
@@ -24,6 +25,8 @@ export interface CliDeps {
   fetch: typeof fetch;
   spawner: Spawner;
   runChild: RunChild;
+  /** Overrides credential-store selection (tests); defaults to selectCredentialStore. */
+  selectStore?: () => Promise<CredentialStore>;
 }
 
 export interface GlobalFlags {

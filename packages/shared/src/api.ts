@@ -49,6 +49,9 @@ export type SecretDto = {
   value?: string;
 };
 
+/** A direct child folder (spec §13.5). */
+export type FolderDto = { path: string; name: string };
+
 export type LoginResponse = { user: UserDto; token?: string; expiresAt: number };
 
 export type SetupStatusDto = { needsSetup: boolean };

@@ -30,10 +30,10 @@ function keyParam(c: Context<AppEnv>): string {
   return parsed.data;
 }
 
-type Target = { principal: Principal; project: ProjectRow; environment: EnvironmentRow };
+export type Target = { principal: Principal; project: ProjectRow; environment: EnvironmentRow };
 
 /** requirePrincipal -> project -> environment. Authorization needs the path, so it comes later. */
-async function resolveTarget(c: Context<AppEnv>): Promise<Target> {
+export async function resolveTarget(c: Context<AppEnv>): Promise<Target> {
   const principal = requirePrincipal(c);
   const project = await getProjectBySlug(c.env.DB, c.req.param("project") ?? "");
   const environment = await getEnvironmentBySlug(c.env.DB, project.id, c.req.param("env") ?? "");

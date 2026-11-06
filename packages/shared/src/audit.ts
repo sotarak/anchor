@@ -28,6 +28,16 @@ export const AUDIT_ACTIONS = [
   "secret.created",
   "secret.updated",
   "secret.deleted",
+  // M5
+  "secret.rolled_back",
+  "secret.version_read",
+  "folder.created",
+  "folder.deleted",
+  "import.created",
+  "import.deleted",
+  "kek.rotation_started",
+  "kek.rotation_finished",
+  "root_key.rewrapped",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

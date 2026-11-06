@@ -1,6 +1,7 @@
 import type { SecretDto } from "@anchor/shared";
 import { AEAD_ALG, open, seal } from "../crypto/aead";
 import { secretAad } from "../crypto/keyring";
+import { ensureFolders } from "../folders/repo";
 import { isUniqueViolation } from "../lib/d1";
 import { utf8Decode, utf8Encode } from "../lib/encoding";
 import { ApiError, IntegrityError } from "../lib/errors";
@@ -147,6 +148,7 @@ export async function putSecret(
     await batchOrConflict(ctx.db, [
       insertSecretStatement(ctx.db, row, ctx.now),
       insertVersionStatement(ctx.db, v, ctx.actorId, ctx.now),
+      ...ensureFolders(ctx.db, ctx.environment.id, input.path, ctx.now),
     ]);
     return { secret: toDto(row, 1, input.comment, ctx.now), created: true, changed: true };
   }
@@ -171,6 +173,7 @@ export async function putSecret(
   await batchOrConflict(ctx.db, [
     insertVersionStatement(ctx.db, v, ctx.actorId, ctx.now),
     setCurrentVersionStatement(ctx.db, existing.id, next, ctx.now),
+    ...ensureFolders(ctx.db, ctx.environment.id, input.path, ctx.now),
   ]);
   return { secret: toDto(existing, next, input.comment, ctx.now), created: false, changed: true };
 }

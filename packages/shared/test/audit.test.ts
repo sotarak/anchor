@@ -33,8 +33,21 @@ const SPEC_M2_ACTIONS = [
   "secret.deleted",
 ];
 
+// Copied from spec §13.6 (M5 additions).
+const SPEC_M5_ACTIONS = [
+  "secret.rolled_back",
+  "secret.version_read",
+  "folder.created",
+  "folder.deleted",
+  "import.created",
+  "import.deleted",
+  "kek.rotation_started",
+  "kek.rotation_finished",
+  "root_key.rewrapped",
+];
+
 describe("AUDIT_ACTIONS", () => {
-  it("AUDIT_ACTIONS contains every M2 action in spec §13.6", () => {
-    expect([...AUDIT_ACTIONS]).toEqual(SPEC_M2_ACTIONS);
+  it("AUDIT_ACTIONS contains every M2 and M5 action in spec §13.6", () => {
+    expect([...AUDIT_ACTIONS]).toEqual([...SPEC_M2_ACTIONS, ...SPEC_M5_ACTIONS]);
   });
 });

@@ -1,0 +1,57 @@
+{
+  "name": "@anchor/web",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#test/support": "./test/support/index.ts"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "test:unit": "vitest run test/unit",
+    "test:components": "vitest run test/components",
+    "test:routes": "vitest run test/routes",
+    "typecheck": "tsc -b --noEmit",
+    "lint:tokens": "node scripts/lint-tokens.mjs src",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@anchor/shared": "workspace:*",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@hookform/resolvers": "^7.0.3",
+    "@tanstack/react-query": "^5.106.1",
+    "@tanstack/react-router": "^1.170.46",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "radix-ui": "^1.8.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-hook-form": "^7.91.0",
+    "react-icons": "^5.7.0",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.7.0",
+    "tw-animate-css": "^1.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "~1.64.1",
+    "@tailwindcss/vite": "~4.3.4",
+    "@tanstack/router-plugin": "^1.168.48",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "jsdom": "^31.0.0",
+    "msw": "~3.0.3",
+    "tailwindcss": "~4.3.4",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
+  }
+}

@@ -1,6 +1,7 @@
 import { Command, Option } from "commander";
 import { envsList } from "./commands/envs";
 import { EXPORT_FORMATS, type ExportFormat, exportCommand } from "./commands/export";
+import { foldersCreate, foldersDelete, foldersList } from "./commands/folders";
 import { init } from "./commands/init";
 import { login } from "./commands/login";
 import { logout } from "./commands/logout";
@@ -188,6 +189,38 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
       examples("anchor secrets delete OLD_KEY", "anchor secrets delete OLD_KEY --yes"),
     )
     .action(act((ctx, key: string) => secretsDelete(ctx, key)));
+
+  const folders = program
+    .command("folders")
+    .description("Manage folders in the current project and environment");
+  folders
+    .command("list")
+    .description("List the subfolders of --path (default /)")
+    .addHelpText("after", examples("anchor folders list", "anchor folders list --path /api --json"))
+    .action(act((ctx) => foldersList(ctx)));
+  folders
+    .command("create")
+    .description("Create a folder and its parents (no-op if it exists)")
+    .argument("<path>", "folder path from the root, e.g. /api/v2")
+    .addHelpText(
+      "after",
+      examples("anchor folders create /api", "anchor folders create /api/v2 --env prod"),
+    )
+    .action(act((ctx, path: string) => foldersCreate(ctx, path)));
+  folders
+    .command("delete")
+    .description("Delete an empty folder; --force also deletes its secrets and subfolders")
+    .argument("<path>", "folder path from the root")
+    .option("--force", "delete the secrets and subfolders inside it too")
+    .addHelpText(
+      "after",
+      examples("anchor folders delete /old", "anchor folders delete /old --force --yes"),
+    )
+    .action(
+      act((ctx, path: string, opts: { force?: boolean }) =>
+        foldersDelete(ctx, path, { force: opts.force === true }),
+      ),
+    );
 
   program
     .command("run")

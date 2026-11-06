@@ -1,5 +1,6 @@
 import type {
   EnvironmentDto,
+  FolderDto,
   LoginResponse,
   ProjectDto,
   SecretDto,
@@ -63,6 +64,13 @@ export interface ApiClient {
     body: { value: string; comment?: string; path: string },
   ): Promise<{ secret: SecretDto; created: boolean }>;
   deleteSecret(project: string, env: string, key: string, q: { path: string }): Promise<void>;
+  listFolders(project: string, env: string, q: { path: string }): Promise<FolderDto[]>;
+  createFolder(
+    project: string,
+    env: string,
+    body: { path: string },
+  ): Promise<{ folder: FolderDto; created: boolean }>;
+  deleteFolder(project: string, env: string, q: { path: string; force: boolean }): Promise<void>;
   listServiceTokens(project: string): Promise<ServiceTokenDto[]>;
   createServiceToken(
     project: string,
@@ -80,6 +88,8 @@ export function createApiClient(opts: HttpOptions): ApiClient {
     (await call<T>(method, path, body)).data;
   const secretsPath = (project: string, env: string) =>
     `/projects/${seg(project)}/environments/${seg(env)}/secrets`;
+  const foldersPath = (project: string, env: string) =>
+    `/projects/${seg(project)}/environments/${seg(env)}/folders`;
   const query = (q: Record<string, string | boolean | undefined>) => {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(q)) if (v !== undefined) params.set(k, String(v));
@@ -153,6 +163,20 @@ export function createApiClient(opts: HttpOptions): ApiClient {
     },
     deleteSecret: async (project, env, key, q) => {
       await call("DELETE", `${secretsPath(project, env)}/${seg(key)}${query({ path: q.path })}`);
+    },
+    listFolders: async (project, env, q) =>
+      (
+        await data<{ folders: FolderDto[] }>(
+          "GET",
+          `${foldersPath(project, env)}${query({ path: q.path })}`,
+        )
+      ).folders,
+    createFolder: async (project, env, body) => {
+      const res = await call<{ folder: FolderDto }>("POST", foldersPath(project, env), body);
+      return { folder: res.data.folder, created: res.status === 201 };
+    },
+    deleteFolder: async (project, env, q) => {
+      await call("DELETE", `${foldersPath(project, env)}${query(q)}`);
     },
     listServiceTokens: async (project) =>
       (

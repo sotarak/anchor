@@ -27,6 +27,7 @@ Commands:
   projects                    Discover projects
   envs                        Discover environments of a project
   secrets                     Manage secrets in the current project, environment and path
+  folders                     Manage folders in the current project and environment
   run [options] [command...]  Run a command with the environment's secrets injected as environment
                               variables
   export [options]            Write the environment's secrets as dotenv, JSON or YAML (file mode
@@ -116,6 +117,122 @@ Global Options:
 Examples:
   $ anchor export --output .env.local
   $ anchor export --format json --env prod > secrets.json
+
+"
+`;
+
+exports[`help text > help for folders 1`] = `
+"Usage: anchor folders [options] [command]
+
+Manage folders in the current project and environment
+
+Options:
+  -h, --help               display help for command
+
+Global Options:
+  --version                print the CLI version
+  --json                   print machine-readable JSON on stdout
+  -q, --quiet              suppress progress messages
+  --no-color               disable colored output
+  --debug                  print request diagnostics to stderr (never secret values)
+  --api-url <url>          Anchor server URL
+  --project <slug>         project slug
+  --env <slug>             environment slug
+  --path <path>            secret folder path
+  -y, --yes                skip confirmations
+
+Commands:
+  list                     List the subfolders of --path (default /)
+  create <path>            Create a folder and its parents (no-op if it exists)
+  delete [options] <path>  Delete an empty folder; --force also deletes its secrets and subfolders
+  help [command]           display help for command
+"
+`;
+
+exports[`help text > help for folders create 1`] = `
+"Usage: anchor folders create [options] <path>
+
+Create a folder and its parents (no-op if it exists)
+
+Arguments:
+  path              folder path from the root, e.g. /api/v2
+
+Options:
+  -h, --help        display help for command
+
+Global Options:
+  --version         print the CLI version
+  --json            print machine-readable JSON on stdout
+  -q, --quiet       suppress progress messages
+  --no-color        disable colored output
+  --debug           print request diagnostics to stderr (never secret values)
+  --api-url <url>   Anchor server URL
+  --project <slug>  project slug
+  --env <slug>      environment slug
+  --path <path>     secret folder path
+  -y, --yes         skip confirmations
+
+Examples:
+  $ anchor folders create /api
+  $ anchor folders create /api/v2 --env prod
+
+"
+`;
+
+exports[`help text > help for folders delete 1`] = `
+"Usage: anchor folders delete [options] <path>
+
+Delete an empty folder; --force also deletes its secrets and subfolders
+
+Arguments:
+  path              folder path from the root
+
+Options:
+  --force           delete the secrets and subfolders inside it too
+  -h, --help        display help for command
+
+Global Options:
+  --version         print the CLI version
+  --json            print machine-readable JSON on stdout
+  -q, --quiet       suppress progress messages
+  --no-color        disable colored output
+  --debug           print request diagnostics to stderr (never secret values)
+  --api-url <url>   Anchor server URL
+  --project <slug>  project slug
+  --env <slug>      environment slug
+  --path <path>     secret folder path
+  -y, --yes         skip confirmations
+
+Examples:
+  $ anchor folders delete /old
+  $ anchor folders delete /old --force --yes
+
+"
+`;
+
+exports[`help text > help for folders list 1`] = `
+"Usage: anchor folders list [options]
+
+List the subfolders of --path (default /)
+
+Options:
+  -h, --help        display help for command
+
+Global Options:
+  --version         print the CLI version
+  --json            print machine-readable JSON on stdout
+  -q, --quiet       suppress progress messages
+  --no-color        disable colored output
+  --debug           print request diagnostics to stderr (never secret values)
+  --api-url <url>   Anchor server URL
+  --project <slug>  project slug
+  --env <slug>      environment slug
+  --path <path>     secret folder path
+  -y, --yes         skip confirmations
+
+Examples:
+  $ anchor folders list
+  $ anchor folders list --path /api --json
 
 "
 `;

@@ -53,6 +53,31 @@ export async function insertFirstOwner(
   return result.meta.changes === 1 ? id : null;
 }
 
+/**
+ * Atomically counts one login attempt against the account before the password is checked, so
+ * parallel requests cannot all read the same failure count. The 5th attempt sets the lock in the
+ * same statement. Returns false when the account is locked (no attempt is counted). A successful
+ * login then resets the state with updateLoginState. Mirrors nextLockState in auth/lockout.ts.
+ */
+export async function reserveLoginAttempt(
+  db: D1Database,
+  userId: string,
+  now: number,
+  limits: { maxFailures: number; lockoutMs: number },
+): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `UPDATE users SET
+         failed_logins = CASE WHEN failed_logins + 1 >= ?1 THEN 0 ELSE failed_logins + 1 END,
+         locked_until = CASE WHEN failed_logins + 1 >= ?1 THEN ?2 ELSE NULL END
+       WHERE id = ?3 AND (locked_until IS NULL OR locked_until <= ?4)
+       RETURNING id`,
+    )
+    .bind(limits.maxFailures, now + limits.lockoutMs, userId, now)
+    .first<{ id: string }>();
+  return row !== null;
+}
+
 export async function updateLoginState(
   db: D1Database,
   userId: string,

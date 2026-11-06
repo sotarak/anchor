@@ -1,7 +1,7 @@
 import type { EnvironmentDto, ProjectDto } from "@anchor/shared";
-import { createWrappedKek, unwrapKek } from "../crypto/keyring";
+import { createWrappedKek, ROOT_KEY_ID, unwrapKek } from "../crypto/keyring";
 import { isUniqueViolation, toBytes } from "../lib/d1";
-import { ApiError } from "../lib/errors";
+import { ApiError, ConfigError, IntegrityError } from "../lib/errors";
 import { newId } from "../lib/random";
 
 export type ProjectRow = {
@@ -28,12 +28,42 @@ export const DEFAULT_ENVIRONMENTS = [
 
 const PROJECT_COLUMNS = "id, slug, name, current_key_version, created_at";
 
+/**
+ * Refuses to wrap new key material under a root key that cannot open the keys already stored.
+ * Without this, a mistyped ANCHOR_ROOT_KEY would split data across two root keys: old projects
+ * fail closed while new ones silently work, and restoring either key breaks the other half.
+ */
+async function assertRootKeyMatchesStoredKeys(db: D1Database, rootKey: CryptoKey): Promise<void> {
+  const row = await db
+    .prepare(
+      "SELECT project_id, version, iv, wrapped_key FROM project_keys WHERE root_key_id = ? LIMIT 1",
+    )
+    .bind(ROOT_KEY_ID)
+    .first<{ project_id: string; version: number; iv: unknown; wrapped_key: unknown }>();
+  if (!row) return;
+  try {
+    await unwrapKek(rootKey, {
+      projectId: row.project_id,
+      version: row.version,
+      rootKeyId: ROOT_KEY_ID,
+      iv: toBytes(row.iv),
+      wrappedKey: toBytes(row.wrapped_key),
+    });
+  } catch (err) {
+    if (err instanceof IntegrityError) {
+      throw new ConfigError("ANCHOR_ROOT_KEY does not match the stored project keys");
+    }
+    throw err;
+  }
+}
+
 export async function createProject(
   db: D1Database,
   rootKey: CryptoKey,
   input: { name: string; slug: string },
   now: number,
 ): Promise<ProjectRow> {
+  await assertRootKeyMatchesStoredKeys(db, rootKey);
   const id = newId();
   const kek = await createWrappedKek(rootKey, id, 1);
   const statements = [

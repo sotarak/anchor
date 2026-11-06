@@ -96,3 +96,24 @@ describe("POST /auth/login", () => {
     );
   });
 });
+
+describe("lockout under concurrency", () => {
+  it("parallel wrong logins cannot exceed 5 guesses per lock", async () => {
+    const attempts = Array.from({ length: 20 }, (_, i) =>
+      login({ email: EMAIL, password: `wrong password number ${i}` }),
+    );
+    const statuses = (await Promise.all(attempts)).map((r) => r.status);
+    expect(statuses.filter((s) => s === 401).length).toBeLessThanOrEqual(5);
+    expect(statuses.filter((s) => s !== 401 && s !== 429)).toEqual([]);
+    expect((await login({ email: EMAIL, password: TEST_PASSWORD })).status).toBe(429);
+  });
+
+  it("a correct password still resets after concurrent failures below the limit", async () => {
+    await Promise.all(
+      [0, 1, 2].map((i) => login({ email: EMAIL, password: `wrong password number ${i}` })),
+    );
+    expect((await state())?.failed_logins).toBe(3);
+    expect((await login({ email: EMAIL, password: TEST_PASSWORD })).status).toBe(200);
+    expect(await state()).toEqual({ failed_logins: 0, locked_until: null });
+  });
+});

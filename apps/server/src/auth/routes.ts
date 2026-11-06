@@ -10,8 +10,14 @@ import type { AppEnv } from "../env";
 import { utf8Encode } from "../lib/encoding";
 import { ApiError } from "../lib/errors";
 import { parseJson } from "../lib/validate";
-import { findUserByEmail, insertFirstOwner, toUserDto, updateLoginState } from "../users/repo";
-import { isLocked, nextLockState } from "./lockout";
+import {
+  findUserByEmail,
+  insertFirstOwner,
+  reserveLoginAttempt,
+  toUserDto,
+  updateLoginState,
+} from "../users/repo";
+import { LOCKOUT_MS, MAX_FAILED_LOGINS } from "./lockout";
 import { readPresentedToken, requireUser } from "./middleware";
 import { clearSessionCookie, createSession, revokeSession, setSessionCookie } from "./sessions";
 
@@ -81,15 +87,15 @@ authRoutes.post("/auth/login", async (c) => {
     await verifyAgainstDummy(body.password);
     throw new ApiError(401, "invalid_credentials", INVALID_CREDENTIALS);
   }
-  const lock = { failedLogins: user.failed_logins, lockedUntil: user.locked_until };
-  if (isLocked(lock, now)) {
+  // Count the attempt as a failure up front (atomically); a correct password resets it below.
+  const limits = { maxFailures: MAX_FAILED_LOGINS, lockoutMs: LOCKOUT_MS };
+  if (!(await reserveLoginAttempt(c.env.DB, user.id, now, limits))) {
     throw new ApiError(429, "rate_limited", "Too many failed attempts, try again later");
   }
   if (!(await verifyPassword(body.password, user.password_hash))) {
-    await updateLoginState(c.env.DB, user.id, nextLockState(lock, "failure", now));
     throw new ApiError(401, "invalid_credentials", INVALID_CREDENTIALS);
   }
-  await updateLoginState(c.env.DB, user.id, nextLockState(lock, "success", now));
+  await updateLoginState(c.env.DB, user.id, { failedLogins: 0, lockedUntil: null });
   const { token, expiresAt } = await createSession(
     c.env.DB,
     user.id,

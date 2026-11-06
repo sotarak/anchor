@@ -222,3 +222,15 @@ describe("secrets service", () => {
     }
   });
 });
+
+describe("secrets service under concurrent delete", () => {
+  it("get racing a delete returns 404 or the value, never an integrity error", async () => {
+    await put(dev, "K", "v");
+    const [, got] = await Promise.all([
+      deleteSecret(dev, { path: "/", key: "K" }),
+      rejection(getSecret(dev, { path: "/", key: "K" })),
+    ]);
+    expect(got).not.toBeInstanceOf(IntegrityError);
+    if (got instanceof ApiError) expect(got.status).toBe(404);
+  });
+});

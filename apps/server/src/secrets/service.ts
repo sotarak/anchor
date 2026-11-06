@@ -8,13 +8,12 @@ import { newId } from "../lib/random";
 import { type EnvironmentRow, getProjectKek, type ProjectRow } from "../projects/repo";
 import {
   deleteSecretRow,
-  findSecret,
-  getVersion,
+  findSecretWithVersion,
   insertSecretStatement,
   insertVersionStatement,
-  listCurrentVersions,
-  listSecretRows,
+  listSecretsWithVersions,
   type SecretRow,
+  type SecretWithVersion,
   setCurrentVersionStatement,
   type VersionRow,
 } from "./repo";
@@ -60,7 +59,7 @@ async function decryptVersion(
 ): Promise<string> {
   const fail = () =>
     new IntegrityError("secret decrypt failed", { sid: secretId, version: expectedVersion });
-  if (!v || v.alg !== AEAD_ALG) throw fail();
+  if (!v || v.version !== expectedVersion || v.alg !== AEAD_ALG) throw fail();
   const kek = await kekFor(ctx, cache, v.key_version);
   try {
     const plain = await open(
@@ -117,10 +116,14 @@ async function batchOrConflict(db: D1Database, statements: D1PreparedStatement[]
   }
 }
 
-async function requireSecret(ctx: SecretContext, path: string, key: string): Promise<SecretRow> {
-  const row = await findSecret(ctx.db, ctx.environment.id, path, key);
-  if (!row) throw new ApiError(404, "not_found", "Secret not found");
-  return row;
+async function requireSecret(
+  ctx: SecretContext,
+  path: string,
+  key: string,
+): Promise<SecretWithVersion> {
+  const found = await findSecretWithVersion(ctx.db, ctx.environment.id, path, key);
+  if (!found) throw new ApiError(404, "not_found", "Secret not found");
+  return found;
 }
 
 export async function putSecret(
@@ -128,9 +131,9 @@ export async function putSecret(
   input: { path: string; key: string; value: string; comment: string },
 ): Promise<{ secret: SecretDto; created: boolean; changed: boolean }> {
   const cache: KekCache = new Map();
-  const existing = await findSecret(ctx.db, ctx.environment.id, input.path, input.key);
+  const found = await findSecretWithVersion(ctx.db, ctx.environment.id, input.path, input.key);
 
-  if (!existing) {
+  if (!found) {
     const row: SecretRow = {
       id: newId(),
       project_id: ctx.project.id,
@@ -148,7 +151,7 @@ export async function putSecret(
     return { secret: toDto(row, 1, input.comment, ctx.now), created: true, changed: true };
   }
 
-  const current = await getVersion(ctx.db, existing.id, existing.current_version);
+  const { secret: existing, current } = found;
   const currentValue = await decryptVersion(
     ctx,
     cache,
@@ -176,18 +179,14 @@ export async function listSecrets(
   ctx: SecretContext,
   q: { path: string; reveal: boolean },
 ): Promise<SecretDto[]> {
-  const [rows, versions] = await Promise.all([
-    listSecretRows(ctx.db, ctx.environment.id, q.path),
-    listCurrentVersions(ctx.db, ctx.environment.id, q.path),
-  ]);
+  const rows = await listSecretsWithVersions(ctx.db, ctx.environment.id, q.path);
   const cache: KekCache = new Map();
   const out: SecretDto[] = [];
-  for (const row of rows) {
-    const v = versions.get(row.id);
+  for (const { secret: row, current } of rows) {
     const value = q.reveal
-      ? await decryptVersion(ctx, cache, row.id, v, row.current_version)
+      ? await decryptVersion(ctx, cache, row.id, current, row.current_version)
       : undefined;
-    out.push(toDto(row, row.current_version, v?.comment ?? "", row.updated_at, value));
+    out.push(toDto(row, row.current_version, current?.comment ?? "", row.updated_at, value));
   }
   return out;
 }
@@ -196,16 +195,15 @@ export async function getSecret(
   ctx: SecretContext,
   q: { path: string; key: string },
 ): Promise<SecretDto> {
-  const row = await requireSecret(ctx, q.path, q.key);
-  const v = await getVersion(ctx.db, row.id, row.current_version);
-  const value = await decryptVersion(ctx, new Map(), row.id, v, row.current_version);
-  return toDto(row, row.current_version, v?.comment ?? "", row.updated_at, value);
+  const { secret: row, current } = await requireSecret(ctx, q.path, q.key);
+  const value = await decryptVersion(ctx, new Map(), row.id, current, row.current_version);
+  return toDto(row, row.current_version, current?.comment ?? "", row.updated_at, value);
 }
 
 export async function deleteSecret(
   ctx: SecretContext,
   q: { path: string; key: string },
 ): Promise<void> {
-  const row = await requireSecret(ctx, q.path, q.key);
-  await deleteSecretRow(ctx.db, row.id);
+  const { secret } = await requireSecret(ctx, q.path, q.key);
+  await deleteSecretRow(ctx.db, secret.id);
 }

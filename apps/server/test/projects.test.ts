@@ -150,3 +150,32 @@ describe("projects", () => {
     vi.restoreAllMocks();
   });
 });
+
+describe("root key mismatch", () => {
+  it("creating a project under a different well-formed root key fails closed with config_error", async () => {
+    expect((await create({ name: "First", slug: "first" })).status).toBe(201);
+    const otherKey = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))));
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await createApp().request(
+        `${TEST_ORIGIN}/api/v1/projects`,
+        jsonInit("POST", { name: "Second", slug: "second" }, { token }),
+        { ...env, ANCHOR_ROOT_KEY: otherKey },
+      );
+      expect(res.status).toBe(500);
+      expect((await json<ApiErrorBody>(res)).error.code).toBe("internal");
+      const logged = errors.mock.calls.map((c) => String(c[0])).join("\n");
+      expect(logged).toContain("config_error");
+      expect(logged).not.toContain(otherKey);
+    } finally {
+      errors.mockRestore();
+    }
+    expect(await count("projects")).toBe(1);
+    expect(await count("project_keys")).toBe(1);
+  });
+
+  it("the first project can be created when no project keys exist yet", async () => {
+    expect(await count("project_keys")).toBe(0);
+    expect((await create({ name: "First", slug: "first" })).status).toBe(201);
+  });
+});

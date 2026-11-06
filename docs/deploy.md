@@ -24,20 +24,30 @@ Copy the `database_id` it prints into `wrangler.jsonc`, replacing the placeholde
 pnpm exec wrangler d1 migrations apply anchor --remote
 ```
 
-## 3. Set the root key
+## 3. Generate, back up, then set the root key
+
+The root key wraps every project's key, and those keys encrypt every secret value. Cloudflare never
+shows a Worker secret again after you set it, so the backup has to happen first.
 
 ```sh
-openssl rand -base64 32 | pnpm exec wrangler secret put ANCHOR_ROOT_KEY
+umask 077
+openssl rand -base64 32 > anchor-root.key
 ```
 
-The root key wraps every project's key, and those keys encrypt every secret value.
+> **Back up `anchor-root.key` offline now** (password manager or offline vault) and confirm the
+> backup reads back the same value. Losing the root key loses every secret, permanently. There is no
+> recovery path by design.
 
-> **Back up the root key offline before going further.** Cloudflare will not show it to you again.
-> Losing it loses every secret, permanently. There is no recovery path by design.
+Then set it and remove the local file:
 
-Generate the key into a file you then store in a password manager or offline vault if you prefer:
-`openssl rand -base64 32 > root.key`, then `pnpm exec wrangler secret put ANCHOR_ROOT_KEY < root.key`,
-then move `root.key` off the machine.
+```sh
+pnpm exec wrangler secret put ANCHOR_ROOT_KEY < anchor-root.key
+rm anchor-root.key
+```
+
+Never replace `ANCHOR_ROOT_KEY` with a new random value on a deployment that already has data. Anchor
+refuses to create projects under a root key that cannot open the existing ones (500 with a
+`config_error` log), and every secret read fails until the original key is restored.
 
 ## 4. Set the setup token
 
@@ -45,7 +55,7 @@ then move `root.key` off the machine.
 openssl rand -base64 32 | tee /dev/stderr | pnpm exec wrangler secret put ANCHOR_SETUP_TOKEN
 ```
 
-Keep the printed value for the next steps. It is only needed once.
+Keep the printed value for step 6. It is only needed once.
 
 ## 5. Deploy
 

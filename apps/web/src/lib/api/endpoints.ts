@@ -11,6 +11,7 @@ import type {
   ProjectDto,
   ProjectRole,
   SecretDto,
+  SecretVersionDto,
   ServiceTokenDto,
   SessionDto,
   SetupStatusDto,
@@ -31,7 +32,10 @@ export type AuditFilters = {
 };
 export type AuditPage = { events: AuditEventDto[]; nextCursor: string | null };
 
-/** One typed function per endpoint the dashboard uses. Only `secrets.get` returns a value. */
+/**
+ * One typed function per endpoint the dashboard uses. Only `secrets.get` and
+ * `secrets.versionValue` return a value; neither is ever wrapped in useQuery.
+ */
 export const api = {
   setup: {
     status: () => apiFetch<SetupStatusDto>("/setup/status"),
@@ -126,6 +130,27 @@ export const api = {
       ).secret,
     remove: (p: string, env: string, key: string, path: string) =>
       apiFetch<void>(`${envUrl(p, env)}/secrets/${e(key)}`, { method: "DELETE", query: { path } }),
+    /** Version metadata only. */
+    versions: async (p: string, env: string, key: string, path: string) =>
+      (
+        await apiFetch<{ versions: SecretVersionDto[] }>(
+          `${envUrl(p, env)}/secrets/${e(key)}/versions`,
+          { query: { path } },
+        )
+      ).versions,
+    /** A past version's value (audited). Never wrap it in useQuery. */
+    versionValue: async (p: string, env: string, key: string, version: number, path: string) =>
+      (
+        await apiFetch<{ version: SecretVersionDto & { value: string } }>(
+          `${envUrl(p, env)}/secrets/${e(key)}/versions/${version}`,
+          { query: { path } },
+        )
+      ).version.value,
+    rollback: (p: string, env: string, key: string, body: { path: string; version: number }) =>
+      apiFetch<{ secret: SecretDto; changed: boolean }>(
+        `${envUrl(p, env)}/secrets/${e(key)}/rollback`,
+        { method: "POST", body },
+      ),
   },
   folders: {
     list: async (p: string, env: string, path: string) =>

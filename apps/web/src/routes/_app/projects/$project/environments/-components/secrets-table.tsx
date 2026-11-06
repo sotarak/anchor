@@ -2,6 +2,7 @@ import type { FolderDto, SecretDto } from "@anchor/shared";
 import {
   RiDeleteBinLine,
   RiFileCopyLine,
+  RiHistoryLine,
   RiKey2Line,
   RiMore2Fill,
   RiPencilLine,
@@ -47,7 +48,9 @@ export function SecretsTable({
   onDelete,
   onOpenFolder = () => {},
   onDeleteFolder = () => {},
+  onHistory = () => {},
 }: {
+  onHistory?: (s: SecretDto) => void;
   folders?: FolderDto[];
   onOpenFolder?: (f: FolderDto) => void;
   onDeleteFolder?: (f: FolderDto) => void;
@@ -137,6 +140,10 @@ export function SecretsTable({
                           Edit
                         </DropdownMenuItem>
                       ) : null}
+                      <DropdownMenuItem onSelect={() => onHistory(s)}>
+                        <RiHistoryLine aria-hidden />
+                        History
+                      </DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => void copyKey(s.key)}>
                         <RiFileCopyLine aria-hidden />
                         Copy key

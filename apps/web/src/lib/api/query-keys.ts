@@ -11,6 +11,9 @@ export const qk = {
   environments: (p: string) => ["projects", p, "environments"] as const,
   secrets: (p: string, env: string, path: string) =>
     ["projects", p, "environments", env, "secrets", path] as const,
+  /** Under `secrets(p, env, path)`, so invalidating that list refreshes the history too. */
+  secretVersions: (p: string, env: string, path: string, key: string) =>
+    ["projects", p, "environments", env, "secrets", path, "versions", key] as const,
   secretsAll: (p: string, env: string) => ["projects", p, "environments", env, "secrets"] as const,
   folders: (p: string, env: string, path: string) =>
     ["projects", p, "environments", env, "folders", path] as const,

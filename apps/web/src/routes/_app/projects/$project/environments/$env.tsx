@@ -18,6 +18,7 @@ import { useClientPages } from "@/components/data/use-client-pages";
 import { DeleteFolderDialog } from "@/components/folders/delete-folder-dialog";
 import { NewFolderSheet } from "@/components/folders/new-folder-sheet";
 import { useFolders } from "@/components/folders/use-folders";
+import { SecretHistorySheet } from "@/components/history/secret-history-sheet";
 import { ConfirmDialog } from "@/components/overlays/confirm-dialog";
 import { GoToPathChip } from "@/components/secrets/go-to-path-chip";
 import { PathBreadcrumb } from "@/components/secrets/path-breadcrumb";
@@ -61,6 +62,9 @@ function SecretsPage() {
   const [deleting, setDeleting] = useState<SecretDto | null>(null);
   const [newFolder, setNewFolder] = useState(false);
   const [deletingFolder, setDeletingFolder] = useState<FolderDto | null>(null);
+  // By key: after a rollback the list refetches and the sheet sees the new current version.
+  const [historyKey, setHistoryKey] = useState<string | null>(null);
+  const historySecret = secrets.data?.find((s) => s.key === historyKey);
 
   const envName = envQuery.data?.find((e) => e.slug === env)?.name ?? env;
   const projectName = projectQuery.data?.name;
@@ -147,6 +151,7 @@ function SecretsPage() {
           onDelete={setDeleting}
           onOpenFolder={(f) => setPath(f.path)}
           onDeleteFolder={setDeletingFolder}
+          onHistory={(s) => setHistoryKey(s.key)}
         />
         {loaded ? <TableFooter {...page.footer} /> : null}
       </TableContainer>
@@ -187,6 +192,17 @@ function SecretsPage() {
           env={env}
           path={path}
           existingKeys={(secrets.data ?? []).map((s) => s.key)}
+        />
+      ) : null}
+      {historySecret ? (
+        <SecretHistorySheet
+          key={`${env}:${path}:${historySecret.key}`}
+          project={project}
+          env={env}
+          path={path}
+          secret={historySecret}
+          canWrite={canWrite}
+          onOpenChange={(open) => !open && setHistoryKey(null)}
         />
       ) : null}
       {newFolder ? (

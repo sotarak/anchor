@@ -112,19 +112,30 @@ describe("navigation", () => {
 
 describe("session", () => {
   it("a 401 from any page query redirects once to login with the current location; the query cache is empty afterwards", async () => {
-    signedInAs(fixtures.owner);
+    // The session is valid for the guard, then expires: every later request is a 401.
+    let expired = false;
+    server.use(
+      http.get("/api/v1/auth/me", () =>
+        expired
+          ? apiError(401, "unauthenticated", "Authentication required")
+          : HttpResponse.json({ user: fixtures.owner }),
+      ),
+    );
     // Both shell queries fail in the same tick, released once the spy is attached.
     let release = () => {};
     const gate = new Promise<void>((r) => {
-      release = r;
+      release = () => {
+        expired = true;
+        r();
+      };
     });
-    const expired = async () => {
+    const expiredResponse = async () => {
       await gate;
       return apiError(401, "unauthenticated", "Authentication required");
     };
     server.use(
-      http.get("/api/v1/projects/app", expired),
-      http.get("/api/v1/projects/app/environments", expired),
+      http.get("/api/v1/projects/app", expiredResponse),
+      http.get("/api/v1/projects/app/environments", expiredResponse),
     );
     const { router, queryClient } = await renderApp("/projects/app?path=%2Fapi");
     const navigate = vi.spyOn(router, "navigate");
@@ -145,7 +156,10 @@ describe("session", () => {
   it("log out clears cache and lands on /login", async () => {
     signedInAs(fixtures.owner);
     projectExists();
-    const logout = vi.fn(() => new HttpResponse(null, { status: 204 }));
+    const logout = vi.fn(() => {
+      signedOut();
+      return new HttpResponse(null, { status: 204 });
+    });
     server.use(http.post("/api/v1/auth/logout", logout));
     const { router, user, queryClient } = await renderApp("/projects");
     await user.click(await screen.findByRole("button", { name: "Account menu" }));

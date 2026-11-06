@@ -10,7 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAccountRouteImport } from './routes/_app/account'
@@ -27,9 +29,19 @@ const AppRoute = AppRouteImport.update({
   id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AcceptInviteRoute = AcceptInviteRouteImport.update({
+  id: '/accept-invite',
+  path: '/accept-invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SetupRoute = SetupRouteImport.update({
@@ -94,7 +106,9 @@ const AppProjectsProjectSettingsServiceTokensRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/accept-invite': typeof AcceptInviteRoute
   '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/account': typeof AppAccountRoute
   '/audit': typeof AppAuditRoute
@@ -107,7 +121,9 @@ export interface FileRoutesByFullPath {
   '/projects/$project/settings/service-tokens': typeof AppProjectsProjectSettingsServiceTokensRoute
 }
 export interface FileRoutesByTo {
+  '/accept-invite': typeof AcceptInviteRoute
   '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/account': typeof AppAccountRoute
   '/audit': typeof AppAuditRoute
@@ -123,7 +139,9 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/accept-invite': typeof AcceptInviteRoute
   '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
   '/_app/account': typeof AppAccountRoute
   '/_app/audit': typeof AppAuditRoute
@@ -140,7 +158,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/accept-invite'
     | '/login'
+    | '/reset-password'
     | '/setup'
     | '/account'
     | '/audit'
@@ -153,7 +173,9 @@ export interface FileRouteTypes {
     | '/projects/$project/settings/service-tokens'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/accept-invite'
     | '/login'
+    | '/reset-password'
     | '/setup'
     | '/account'
     | '/audit'
@@ -168,7 +190,9 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_app'
+    | '/accept-invite'
     | '/login'
+    | '/reset-password'
     | '/setup'
     | '/_app/account'
     | '/_app/audit'
@@ -184,7 +208,9 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  AcceptInviteRoute: typeof AcceptInviteRoute
   LoginRoute: typeof LoginRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SetupRoute: typeof SetupRoute
 }
 
@@ -197,11 +223,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/accept-invite': {
+      id: '/accept-invite'
+      path: '/accept-invite'
+      fullPath: '/accept-invite'
+      preLoaderRoute: typeof AcceptInviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/setup': {
@@ -318,7 +358,9 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  AcceptInviteRoute: AcceptInviteRoute,
   LoginRoute: LoginRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SetupRoute: SetupRoute,
 }
 export const routeTree = rootRouteImport

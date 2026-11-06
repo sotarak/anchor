@@ -9,9 +9,10 @@ export type UserRow = {
   role: InstanceRole;
   failed_logins: number;
   locked_until: number | null;
+  disabled_at: number | null;
 };
 
-const COLUMNS = "id, email, name, password_hash, role, failed_logins, locked_until";
+const COLUMNS = "id, email, name, password_hash, role, failed_logins, locked_until, disabled_at";
 
 export function findUserByEmail(db: D1Database, email: string): Promise<UserRow | null> {
   return db.prepare(`SELECT ${COLUMNS} FROM users WHERE email = ?`).bind(email).first<UserRow>();

@@ -4,6 +4,7 @@ import { authRoutes } from "./auth/routes";
 import type { AppEnv } from "./env";
 import { errorHandler, notFoundHandler } from "./lib/errors";
 import { requestContext } from "./lib/request";
+import { memberRoutes } from "./members/routes";
 import { projectRoutes } from "./projects/routes";
 import { secretRoutes } from "./secrets/routes";
 import { serviceTokenRoutes } from "./service-tokens/routes";
@@ -24,6 +25,7 @@ export function createApp(): Hono<AppEnv> {
   app.route("/api/v1", authRoutes);
   app.route("/api/v1/projects/:project/environments/:env/secrets", secretRoutes);
   app.route("/api/v1/projects/:project/service-tokens", serviceTokenRoutes);
+  app.route("/api/v1/projects/:project/members", memberRoutes);
   app.route("/api/v1/projects", projectRoutes);
 
   app.onError(errorHandler);

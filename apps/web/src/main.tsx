@@ -9,10 +9,12 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Toaster } from "./components/ui/sonner";
 import { createQueryClient } from "./lib/query-client";
+import { wireSessionExpiry } from "./lib/session";
 import { createAppRouter } from "./router";
 
 const queryClient = createQueryClient();
 const router = createAppRouter({ queryClient });
+wireSessionExpiry(router, queryClient);
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root missing");

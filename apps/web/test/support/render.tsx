@@ -3,6 +3,7 @@ import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { act } from "react";
+import { wireSessionExpiry } from "@/lib/session";
 import { createAppRouter } from "@/router";
 
 export function testQueryClient(): QueryClient {
@@ -18,6 +19,7 @@ export async function renderApp(url: string, opts: { queryClient?: QueryClient }
     queryClient,
     history: createMemoryHistory({ initialEntries: [url] }),
   });
+  wireSessionExpiry(router, queryClient);
   const user = userEvent.setup();
   render(
     <QueryClientProvider client={queryClient}>

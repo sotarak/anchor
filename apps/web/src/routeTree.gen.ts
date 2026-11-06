@@ -9,50 +9,317 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppRouteImport } from './routes/_app'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as SetupRouteImport } from './routes/setup'
+import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppAccountRouteImport } from './routes/_app/account'
+import { Route as AppAuditRouteImport } from './routes/_app/audit'
+import { Route as AppUsersRouteImport } from './routes/_app/users'
+import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects/index'
+import { Route as AppProjectsProjectIndexRouteImport } from './routes/_app/projects/$project/index'
+import { Route as AppProjectsProjectEnvironmentsEnvRouteImport } from './routes/_app/projects/$project/environments/$env'
+import { Route as AppProjectsProjectSettingsEnvironmentsRouteImport } from './routes/_app/projects/$project/settings/environments'
+import { Route as AppProjectsProjectSettingsMembersRouteImport } from './routes/_app/projects/$project/settings/members'
+import { Route as AppProjectsProjectSettingsServiceTokensRouteImport } from './routes/_app/projects/$project/settings/service-tokens'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppIndexRoute = AppIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAccountRoute = AppAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAuditRoute = AppAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppUsersRoute = AppUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProjectsIndexRoute = AppProjectsIndexRouteImport.update({
+  id: '/projects/',
+  path: '/projects/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProjectsProjectIndexRoute = AppProjectsProjectIndexRouteImport.update({
+  id: '/projects/$project/',
+  path: '/projects/$project/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProjectsProjectEnvironmentsEnvRoute =
+  AppProjectsProjectEnvironmentsEnvRouteImport.update({
+    id: '/projects/$project/environments/$env',
+    path: '/projects/$project/environments/$env',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppProjectsProjectSettingsEnvironmentsRoute =
+  AppProjectsProjectSettingsEnvironmentsRouteImport.update({
+    id: '/projects/$project/settings/environments',
+    path: '/projects/$project/settings/environments',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppProjectsProjectSettingsMembersRoute =
+  AppProjectsProjectSettingsMembersRouteImport.update({
+    id: '/projects/$project/settings/members',
+    path: '/projects/$project/settings/members',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppProjectsProjectSettingsServiceTokensRoute =
+  AppProjectsProjectSettingsServiceTokensRouteImport.update({
+    id: '/projects/$project/settings/service-tokens',
+    path: '/projects/$project/settings/service-tokens',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/': typeof AppIndexRoute
+  '/login': typeof LoginRoute
+  '/setup': typeof SetupRoute
+  '/account': typeof AppAccountRoute
+  '/audit': typeof AppAuditRoute
+  '/users': typeof AppUsersRoute
+  '/projects/': typeof AppProjectsIndexRoute
+  '/projects/$project/': typeof AppProjectsProjectIndexRoute
+  '/projects/$project/environments/$env': typeof AppProjectsProjectEnvironmentsEnvRoute
+  '/projects/$project/settings/environments': typeof AppProjectsProjectSettingsEnvironmentsRoute
+  '/projects/$project/settings/members': typeof AppProjectsProjectSettingsMembersRoute
+  '/projects/$project/settings/service-tokens': typeof AppProjectsProjectSettingsServiceTokensRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/setup': typeof SetupRoute
+  '/account': typeof AppAccountRoute
+  '/audit': typeof AppAuditRoute
+  '/users': typeof AppUsersRoute
+  '/': typeof AppIndexRoute
+  '/projects': typeof AppProjectsIndexRoute
+  '/projects/$project': typeof AppProjectsProjectIndexRoute
+  '/projects/$project/environments/$env': typeof AppProjectsProjectEnvironmentsEnvRoute
+  '/projects/$project/settings/environments': typeof AppProjectsProjectSettingsEnvironmentsRoute
+  '/projects/$project/settings/members': typeof AppProjectsProjectSettingsMembersRoute
+  '/projects/$project/settings/service-tokens': typeof AppProjectsProjectSettingsServiceTokensRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
+  '/_app': typeof AppRouteWithChildren
+  '/login': typeof LoginRoute
+  '/setup': typeof SetupRoute
+  '/_app/account': typeof AppAccountRoute
+  '/_app/audit': typeof AppAuditRoute
+  '/_app/users': typeof AppUsersRoute
+  '/_app/': typeof AppIndexRoute
+  '/_app/projects/': typeof AppProjectsIndexRoute
+  '/_app/projects/$project/': typeof AppProjectsProjectIndexRoute
+  '/_app/projects/$project/environments/$env': typeof AppProjectsProjectEnvironmentsEnvRoute
+  '/_app/projects/$project/settings/environments': typeof AppProjectsProjectSettingsEnvironmentsRoute
+  '/_app/projects/$project/settings/members': typeof AppProjectsProjectSettingsMembersRoute
+  '/_app/projects/$project/settings/service-tokens': typeof AppProjectsProjectSettingsServiceTokensRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/setup'
+    | '/account'
+    | '/audit'
+    | '/users'
+    | '/projects/'
+    | '/projects/$project/'
+    | '/projects/$project/environments/$env'
+    | '/projects/$project/settings/environments'
+    | '/projects/$project/settings/members'
+    | '/projects/$project/settings/service-tokens'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/login'
+    | '/setup'
+    | '/account'
+    | '/audit'
+    | '/users'
+    | '/'
+    | '/projects'
+    | '/projects/$project'
+    | '/projects/$project/environments/$env'
+    | '/projects/$project/settings/environments'
+    | '/projects/$project/settings/members'
+    | '/projects/$project/settings/service-tokens'
+  id:
+    | '__root__'
+    | '/_app'
+    | '/login'
+    | '/setup'
+    | '/_app/account'
+    | '/_app/audit'
+    | '/_app/users'
+    | '/_app/'
+    | '/_app/projects/'
+    | '/_app/projects/$project/'
+    | '/_app/projects/$project/environments/$env'
+    | '/_app/projects/$project/settings/environments'
+    | '/_app/projects/$project/settings/members'
+    | '/_app/projects/$project/settings/service-tokens'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
+  LoginRoute: typeof LoginRoute
+  SetupRoute: typeof SetupRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/': {
+      id: '/_app/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/account': {
+      id: '/_app/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AppAccountRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/audit': {
+      id: '/_app/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AppAuditRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/users': {
+      id: '/_app/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof AppUsersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/projects/': {
+      id: '/_app/projects/'
+      path: '/projects'
+      fullPath: '/projects/'
+      preLoaderRoute: typeof AppProjectsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/projects/$project/': {
+      id: '/_app/projects/$project/'
+      path: '/projects/$project'
+      fullPath: '/projects/$project/'
+      preLoaderRoute: typeof AppProjectsProjectIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/projects/$project/environments/$env': {
+      id: '/_app/projects/$project/environments/$env'
+      path: '/projects/$project/environments/$env'
+      fullPath: '/projects/$project/environments/$env'
+      preLoaderRoute: typeof AppProjectsProjectEnvironmentsEnvRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/projects/$project/settings/environments': {
+      id: '/_app/projects/$project/settings/environments'
+      path: '/projects/$project/settings/environments'
+      fullPath: '/projects/$project/settings/environments'
+      preLoaderRoute: typeof AppProjectsProjectSettingsEnvironmentsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/projects/$project/settings/members': {
+      id: '/_app/projects/$project/settings/members'
+      path: '/projects/$project/settings/members'
+      fullPath: '/projects/$project/settings/members'
+      preLoaderRoute: typeof AppProjectsProjectSettingsMembersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/projects/$project/settings/service-tokens': {
+      id: '/_app/projects/$project/settings/service-tokens'
+      path: '/projects/$project/settings/service-tokens'
+      fullPath: '/projects/$project/settings/service-tokens'
+      preLoaderRoute: typeof AppProjectsProjectSettingsServiceTokensRouteImport
+      parentRoute: typeof AppRoute
     }
   }
 }
 
+interface AppRouteChildren {
+  AppAccountRoute: typeof AppAccountRoute
+  AppAuditRoute: typeof AppAuditRoute
+  AppUsersRoute: typeof AppUsersRoute
+  AppIndexRoute: typeof AppIndexRoute
+  AppProjectsIndexRoute: typeof AppProjectsIndexRoute
+  AppProjectsProjectIndexRoute: typeof AppProjectsProjectIndexRoute
+  AppProjectsProjectEnvironmentsEnvRoute: typeof AppProjectsProjectEnvironmentsEnvRoute
+  AppProjectsProjectSettingsEnvironmentsRoute: typeof AppProjectsProjectSettingsEnvironmentsRoute
+  AppProjectsProjectSettingsMembersRoute: typeof AppProjectsProjectSettingsMembersRoute
+  AppProjectsProjectSettingsServiceTokensRoute: typeof AppProjectsProjectSettingsServiceTokensRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppAccountRoute: AppAccountRoute,
+  AppAuditRoute: AppAuditRoute,
+  AppUsersRoute: AppUsersRoute,
+  AppIndexRoute: AppIndexRoute,
+  AppProjectsIndexRoute: AppProjectsIndexRoute,
+  AppProjectsProjectIndexRoute: AppProjectsProjectIndexRoute,
+  AppProjectsProjectEnvironmentsEnvRoute:
+    AppProjectsProjectEnvironmentsEnvRoute,
+  AppProjectsProjectSettingsEnvironmentsRoute:
+    AppProjectsProjectSettingsEnvironmentsRoute,
+  AppProjectsProjectSettingsMembersRoute:
+    AppProjectsProjectSettingsMembersRoute,
+  AppProjectsProjectSettingsServiceTokensRoute:
+    AppProjectsProjectSettingsServiceTokensRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
+  LoginRoute: LoginRoute,
+  SetupRoute: SetupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

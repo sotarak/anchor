@@ -1,4 +1,7 @@
-import { queryOptions } from "@tanstack/react-query";
+import type { UserDto } from "@anchor/shared";
+import { type QueryClient, queryOptions } from "@tanstack/react-query";
+import { redirect } from "@tanstack/react-router";
+import { ApiClientError } from "./api/client";
 import { api } from "./api/endpoints";
 import { qk } from "./api/query-keys";
 
@@ -31,4 +34,25 @@ export function safeRedirect(raw: unknown): string {
     return FALLBACK;
   }
   return raw;
+}
+
+/**
+ * Route guard for the authenticated layout. Signed out: /setup on a fresh instance, else
+ * /login?redirect=<where the user was going>. Other errors propagate to the error boundary.
+ */
+export async function requireUser({
+  context,
+  location,
+}: {
+  context: { queryClient: QueryClient };
+  location: { href: string };
+}): Promise<{ me: UserDto }> {
+  try {
+    return { me: await context.queryClient.ensureQueryData(meQueryOptions) };
+  } catch (e) {
+    if (!(e instanceof ApiClientError && e.status === 401)) throw e;
+    const status = await context.queryClient.fetchQuery(setupStatusQueryOptions).catch(() => null);
+    if (status?.needsSetup) throw redirect({ to: "/setup" });
+    throw redirect({ to: "/login", search: { redirect: location.href } });
+  }
 }

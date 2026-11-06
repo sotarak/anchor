@@ -15,5 +15,11 @@ export type Principal = {
 
 export type AppEnv = {
   Bindings: Bindings;
-  Variables: { principal?: Principal; authVia?: "cookie" | "bearer" };
+  Variables: {
+    principal?: Principal;
+    authVia?: "cookie" | "bearer";
+    requestId: string;
+    clientIp: string | null;
+    userAgent: string | null;
+  };
 };

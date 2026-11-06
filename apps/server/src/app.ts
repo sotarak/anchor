@@ -3,6 +3,7 @@ import { authenticate, checkOrigin } from "./auth/middleware";
 import { authRoutes } from "./auth/routes";
 import type { AppEnv } from "./env";
 import { errorHandler, notFoundHandler } from "./lib/errors";
+import { requestContext } from "./lib/request";
 import { projectRoutes } from "./projects/routes";
 import { secretRoutes } from "./secrets/routes";
 
@@ -14,6 +15,7 @@ export function createApp(): Hono<AppEnv> {
     c.header("Cache-Control", "no-store");
   });
 
+  app.use("/api/*", requestContext);
   app.use("/api/*", authenticate);
   app.use("/api/*", checkOrigin);
 

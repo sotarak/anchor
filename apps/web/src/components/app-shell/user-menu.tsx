@@ -1,7 +1,6 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { RiLogoutBoxRLine, RiUserLine } from "react-icons/ri";
-import { toast } from "sonner";
 import { initials } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -11,28 +10,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ApiClientError } from "@/lib/api/client";
-import { api } from "@/lib/api/endpoints";
 import { meQueryOptions } from "@/lib/auth";
+import { useLogOut } from "@/lib/use-log-out";
 
 export function UserMenu() {
   const { data: me } = useQuery(meQueryOptions);
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-
-  async function logOut() {
-    try {
-      await api.auth.logout();
-    } catch (e) {
-      // An already-expired session is as good as logged out; anything else is reported.
-      if (!(e instanceof ApiClientError && e.status === 401)) {
-        toast.error("Could not log out. Try again.");
-        return;
-      }
-    }
-    await navigate({ to: "/login" });
-    queryClient.clear();
-  }
+  const logOut = useLogOut();
 
   if (!me) return null;
   return (

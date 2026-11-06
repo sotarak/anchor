@@ -25,6 +25,7 @@ async function defaultDeps(partial: Partial<CliDeps>): Promise<CliDeps> {
     spawner: partial.spawner ?? createNodeSpawner(),
     runChild: partial.runChild ?? unavailable("runChild"),
     selectStore: partial.selectStore,
+    createApi: partial.createApi,
   };
 }
 

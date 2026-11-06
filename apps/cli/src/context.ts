@@ -1,3 +1,5 @@
+import type { ApiClient } from "./api/client";
+import type { HttpOptions } from "./api/http";
 import { type ResolvedConfig, resolveConfig } from "./config/resolve";
 import type { CredentialStore } from "./credentials/types";
 import { CliError, EXIT } from "./errors";
@@ -19,6 +21,9 @@ export type RunChild = (
   env: Record<string, string>,
 ) => Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
 
+/** Builds an API client for one origin and (optional) token. */
+export type ApiFactory = (opts: Pick<HttpOptions, "baseUrl" | "token" | "debug">) => ApiClient;
+
 export interface CliDeps {
   io: Io;
   prompts: Prompts;
@@ -27,6 +32,8 @@ export interface CliDeps {
   runChild: RunChild;
   /** Overrides credential-store selection (tests); defaults to selectCredentialStore. */
   selectStore?: () => Promise<CredentialStore>;
+  /** Overrides API client construction (tests); defaults to createApiClient over `fetch`. */
+  createApi?: ApiFactory;
 }
 
 export interface GlobalFlags {

@@ -37,6 +37,11 @@ export class Output {
     this.io.stderr.write(`${msg}\n`);
   }
 
+  /** A status line that is never suppressed (e.g. which server a login targets). */
+  notice(msg: string): void {
+    this.io.stderr.write(`${msg}\n`);
+  }
+
   warn(msg: string): void {
     this.io.stderr.write(`${paint(this.color(), 33, "warning:")} ${msg}\n`);
   }

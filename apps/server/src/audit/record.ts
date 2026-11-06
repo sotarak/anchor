@@ -44,10 +44,26 @@ function assertNoForbiddenKeys(value: unknown): void {
   }
 }
 
-/** Key lists for secret.read: at most 500 names, flagged when more existed. */
+/** Byte budget for the key names, leaving room under MAX_METADATA_BYTES for path and framing. */
+const MAX_KEYS_BYTES = 12_288;
+
+/**
+ * Key lists for secret.read: at most 500 names and at most MAX_KEYS_BYTES of JSON, flagged when
+ * more existed. Without the byte cap, a large folder of long key names would overflow the
+ * metadata limit and every reveal of it would fail closed with a 500.
+ */
 export function capKeys(keys: string[]): { keys: string[]; keysTruncated?: true } {
-  if (keys.length <= MAX_KEYS) return { keys };
-  return { keys: keys.slice(0, MAX_KEYS), keysTruncated: true };
+  const kept: string[] = [];
+  let bytes = 2; // []
+  for (const key of keys) {
+    const size = new TextEncoder().encode(JSON.stringify(key)).byteLength + 1; // name + comma
+    if (kept.length === MAX_KEYS || bytes + size > MAX_KEYS_BYTES) {
+      return { keys: kept, keysTruncated: true };
+    }
+    kept.push(key);
+    bytes += size;
+  }
+  return { keys: kept };
 }
 
 /**

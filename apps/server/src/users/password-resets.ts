@@ -3,6 +3,16 @@ import { newId, newToken, sha256Hex, tokenPrefix } from "../lib/random";
 export const PASSWORD_RESET_TTL_MS = 3_600_000; // 1 h
 const TOKEN_PREFIX = "anc_rst_";
 
+/**
+ * The link's creator could still create it now: active, and an owner, or an admin resetting a
+ * member. Checked at use time, so a target promoted after the link was made (admin → owner
+ * takeover) or a creator disabled, demoted or deleted since, leaves the link dead.
+ */
+const CREATOR_STILL_AUTHORIZED = `EXISTS (SELECT 1 FROM users creator
+  WHERE creator.id = password_resets.created_by AND creator.disabled_at IS NULL
+    AND (creator.role = 'owner' OR (creator.role = 'admin'
+      AND (SELECT target.role FROM users target WHERE target.id = password_resets.user_id) = 'member')))`;
+
 /** Creates a reset link; every earlier unused link of the user stops working (only the newest does). */
 export async function createPasswordReset(
   db: D1Database,
@@ -44,7 +54,8 @@ export async function consumePasswordReset(
       .prepare(
         `UPDATE users SET password_hash = ?, failed_logins = 0, locked_until = NULL, updated_at = ?
          WHERE id = (SELECT user_id FROM password_resets
-                     WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?)
+                     WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?
+                       AND ${CREATOR_STILL_AUTHORIZED})
            AND disabled_at IS NULL
          RETURNING id`,
       )
@@ -53,7 +64,8 @@ export async function consumePasswordReset(
       .prepare(
         `UPDATE password_resets SET used_at = ?
          WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?
-           AND user_id IN (SELECT id FROM users WHERE disabled_at IS NULL)`,
+           AND user_id IN (SELECT id FROM users WHERE disabled_at IS NULL)
+           AND ${CREATOR_STILL_AUTHORIZED}`,
       )
       .bind(now, tokenHash, now),
   ]);

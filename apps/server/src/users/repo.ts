@@ -134,7 +134,8 @@ export async function updateUserGuarded(
   targetId: string,
   patch: { role?: InstanceRole; disabledAt?: number | null },
   now: number,
-): Promise<"ok" | "last_owner" | "not_found"> {
+  actor: { actorIsOwner: boolean },
+): Promise<"ok" | "last_owner" | "not_found" | "forbidden"> {
   const setDisabled = patch.disabledAt !== undefined ? 1 : 0;
   const result = await db
     .prepare(
@@ -145,24 +146,41 @@ export async function updateUserGuarded(
        WHERE id = ?5 AND (
          (COALESCE(?1, role) = 'owner' AND (CASE WHEN ?2 = 1 THEN ?3 ELSE disabled_at END) IS NULL)
          OR ${KEEPS_AN_ACTIVE_OWNER}
-       )`,
+       )
+         AND (?6 = 1 OR (role != 'owner' AND COALESCE(?1, role) != 'owner'))`,
     )
-    .bind(patch.role ?? null, setDisabled, patch.disabledAt ?? null, now, targetId)
+    .bind(
+      patch.role ?? null,
+      setDisabled,
+      patch.disabledAt ?? null,
+      now,
+      targetId,
+      actor.actorIsOwner ? 1 : 0,
+    )
     .run();
   if (result.meta.changes === 1) return "ok";
-  return (await findUserById(db, targetId)) ? "last_owner" : "not_found";
+  const row = await findUserById(db, targetId);
+  if (!row) return "not_found";
+  if (!actor.actorIsOwner && (row.role === "owner" || patch.role === "owner")) return "forbidden";
+  return "last_owner";
 }
 
 /** Deletes the user (sessions and memberships cascade) unless they are the last active owner. */
 export async function deleteUserGuarded(
   db: D1Database,
   targetId: string,
-): Promise<"ok" | "last_owner" | "not_found"> {
+  actor: { actorIsOwner: boolean },
+): Promise<"ok" | "last_owner" | "not_found" | "forbidden"> {
   const result = await db
     // RETURNING, not meta.changes: D1 counts the cascaded sessions/memberships as changes.
-    .prepare(`DELETE FROM users WHERE id = ? AND ${KEEPS_AN_ACTIVE_OWNER} RETURNING id`)
-    .bind(targetId)
+    .prepare(
+      `DELETE FROM users WHERE id = ? AND ${KEEPS_AN_ACTIVE_OWNER}
+         AND (? = 1 OR role != 'owner') RETURNING id`,
+    )
+    .bind(targetId, actor.actorIsOwner ? 1 : 0)
     .first<{ id: string }>();
   if (result) return "ok";
-  return (await findUserById(db, targetId)) ? "last_owner" : "not_found";
+  const row = await findUserById(db, targetId);
+  if (!row) return "not_found";
+  return !actor.actorIsOwner && row.role === "owner" ? "forbidden" : "last_owner";
 }

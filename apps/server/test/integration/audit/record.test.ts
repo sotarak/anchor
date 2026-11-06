@@ -99,6 +99,16 @@ describe("recordAudit", () => {
     expect(JSON.parse(row?.metadata ?? "")).toEqual({ path: "/", keys: ["DB_URL"] });
   });
 
+  it("capKeys also stops before the key names exceed the byte budget", () => {
+    const keys = Array.from({ length: 500 }, (_, i) => `K${i}_${"X".repeat(250)}`);
+    const capped = capKeys(keys);
+    expect(capped.keysTruncated).toBe(true);
+    expect(capped.keys).toEqual(keys.slice(0, capped.keys.length));
+    expect(new TextEncoder().encode(JSON.stringify(capped)).byteLength).toBeLessThanOrEqual(12_288);
+    const small = Array.from({ length: 10 }, (_, i) => `K${i}`);
+    expect(capKeys(small)).toEqual({ keys: small });
+  });
+
   it("capKeys truncates at 500", () => {
     const keys = Array.from({ length: 501 }, (_, i) => `K${i}`);
     const capped = capKeys(keys);

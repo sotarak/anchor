@@ -104,6 +104,15 @@ Audit events are kept for **365 days**. The table is append-only: a database tri
 `UPDATE`, and rejects `DELETE` of any row younger than 365 days. The daily Cron Trigger deletes the
 older rows and logs an `audit_purged` line with the count.
 
+### Rate-limit the public auth endpoints
+
+Every failed login, including one for an email that does not exist, writes an audit row that
+cannot be deleted for 365 days. Anchor itself does not rate-limit by IP yet. Without a limit,
+anonymous traffic can grow the database until audit inserts fail, and because secret reads fail
+closed when they cannot be audited, secret reads then fail too. Add a Cloudflare rate-limiting rule
+(dashboard → Security → WAF → Rate limiting rules) for `POST /api/v1/auth/*` and
+`POST /api/v1/invites/*`, for example 20 requests per minute per IP, and watch the D1 size.
+
 ## Break-glass: lost owner recovery
 
 If no active owner can sign in (for example, the only owner was disabled or forgot their password

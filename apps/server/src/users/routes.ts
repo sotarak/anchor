@@ -21,6 +21,7 @@ import {
 export const userRoutes = new Hono<AppEnv>();
 
 const LAST_OWNER = "An instance must keep at least one active owner";
+const OWNERS_ONLY = "Only an owner can manage owners";
 
 async function userManager(c: Context<AppEnv>): Promise<UserPrincipal> {
   const principal = requireUser(c);
@@ -37,7 +38,7 @@ async function targetUser(c: Context<AppEnv>): Promise<UserRow> {
 /** Only owners may touch an owner account or grant the owner role. */
 function assertMayManage(actor: UserPrincipal, target: UserRow, newRole?: string): void {
   if (actor.role !== "owner" && (target.role === "owner" || newRole === "owner")) {
-    throw new ApiError(403, "forbidden", "Only an owner can manage owners");
+    throw new ApiError(403, "forbidden", OWNERS_ONLY);
   }
 }
 
@@ -57,13 +58,16 @@ userRoutes.patch("/:id", async (c) => {
   assertMayManage(actor, target, body.role);
   const now = Date.now();
   const disabledAt = body.disabled === undefined ? undefined : body.disabled ? now : null;
+  // The guard re-checks the owner rule in SQL: the target may have been promoted since the read.
   const outcome = await updateUserGuarded(
     c.env.DB,
     target.id,
     { role: body.role, disabledAt },
     now,
+    { actorIsOwner: actor.role === "owner" },
   );
   if (outcome === "not_found") throw new ApiError(404, "not_found", "User not found");
+  if (outcome === "forbidden") throw new ApiError(403, "forbidden", OWNERS_ONLY);
   if (outcome === "last_owner") throw new ApiError(409, "conflict", LAST_OWNER);
   if (body.disabled === true) await revokeUserSessions(c.env.DB, target.id);
   await recordAudit(c, {
@@ -85,8 +89,11 @@ userRoutes.delete("/:id", async (c) => {
   const target = await targetUser(c);
   if (target.id === actor.userId) throw new ApiError(409, "conflict", "You cannot delete yourself");
   assertMayManage(actor, target);
-  const outcome = await deleteUserGuarded(c.env.DB, target.id);
+  const outcome = await deleteUserGuarded(c.env.DB, target.id, {
+    actorIsOwner: actor.role === "owner",
+  });
   if (outcome === "not_found") throw new ApiError(404, "not_found", "User not found");
+  if (outcome === "forbidden") throw new ApiError(403, "forbidden", OWNERS_ONLY);
   if (outcome === "last_owner") throw new ApiError(409, "conflict", LAST_OWNER);
   await recordAudit(c, {
     action: "user.deleted",

@@ -162,6 +162,30 @@ describe("invites", () => {
     expect((await json<LoginResponse>(await accept(token))).user.role).toBe("owner");
   });
 
+  it("a pending invite dies when its creator is disabled, demoted or deleted", async () => {
+    const admins = await Promise.all(
+      [1, 2, 3].map((i) =>
+        createUserWithSession({ role: "admin", kind: "cli", email: `admin${i}@example.test` }),
+      ),
+    );
+    const links = [];
+    for (const [i, a] of admins.entries())
+      links.push((await invited(`new${i}@example.test`, "admin", a.token)).token);
+    const [a1, a2, a3] = admins;
+    const opts = { token: owner.token };
+    await api(`/api/v1/users/${a1?.userId}`, jsonInit("PATCH", { disabled: true }, opts));
+    await api(`/api/v1/users/${a2?.userId}`, jsonInit("PATCH", { role: "member" }, opts));
+    await api(`/api/v1/users/${a3?.userId}`, jsonInit("DELETE", undefined, opts));
+    for (const link of links) {
+      expect((await inspect(link)).status).toBe(404);
+      expect((await accept(link)).status).toBe(404);
+    }
+    const n = await env.DB.prepare(
+      "SELECT count(*) AS n FROM users WHERE email LIKE 'new%'",
+    ).first<{ n: number }>();
+    expect(n?.n).toBe(0);
+  });
+
   it("invite for an existing user's email -> 409", async () => {
     await createUserWithSession({ role: "member", email: "taken@example.test" });
     const res = await invite(owner.token, { email: "TAKEN@example.test", role: "member" });

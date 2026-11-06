@@ -194,6 +194,24 @@ describe("secret events", () => {
     ]);
   });
 
+  it("a reveal list of a large folder is audited (key names capped by bytes), not a 500", async () => {
+    await createAppProject();
+    const keys = Array.from(
+      { length: 400 },
+      (_, i) => `K${String(i).padStart(3, "0")}_${"X".repeat(40)}`,
+    );
+    for (const key of keys) expect((await put(key, "v")).status).toBe(201);
+    const res = await api(secrets("?reveal=true"), bearer(owner.token));
+    expect(res.status).toBe(200);
+    expect((await json<{ secrets: unknown[] }>(res)).secrets).toHaveLength(400);
+    const [row] = await auditRows("secret.read");
+    const metadata = meta(row) as { path: string; keys: string[]; keysTruncated?: true };
+    expect(metadata.keysTruncated).toBe(true);
+    expect(metadata.keys.length).toBeGreaterThan(100);
+    expect(metadata.keys).toEqual(keys.slice(0, metadata.keys.length));
+    expect(new TextEncoder().encode(row?.metadata ?? "").byteLength).toBeLessThanOrEqual(16_384);
+  });
+
   it("service-token reads are audited with actor service_token and its name", async () => {
     await createAppProject();
     await put("A", "1");

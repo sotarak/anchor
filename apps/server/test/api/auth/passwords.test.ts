@@ -220,6 +220,41 @@ describe("password reset links", () => {
     expect((await createReset(m.token, admin.userId)).status).toBe(403);
   });
 
+  it("a reset link stops working when its target is promoted beyond the creator's authority", async () => {
+    const admin = await user("admin", "admin@example.test");
+    const m = await user("member", "m@example.test");
+    const token = await resetLink(admin.token, m.userId);
+    const promote = await api(
+      `/api/v1/users/${m.userId}`,
+      jsonInit("PATCH", { role: "owner" }, { token: owner.token }),
+    );
+    expect(promote.status).toBe(200);
+    expect((await useReset(token)).status).toBe(404);
+    expect((await login("m@example.test")).status).toBe(200);
+  });
+
+  it("a reset link dies with its creator's authority", async () => {
+    const admin = await user("admin", "admin@example.test");
+    const m1 = await user("member", "m1@example.test");
+    const m2 = await user("member", "m2@example.test");
+    const disabledCreator = await resetLink(admin.token, m1.userId);
+    const admin2 = await user("admin", "admin2@example.test");
+    const demotedCreator = await resetLink(admin2.token, m2.userId);
+    await api(
+      `/api/v1/users/${admin.userId}`,
+      jsonInit("PATCH", { disabled: true }, { token: owner.token }),
+    );
+    await api(
+      `/api/v1/users/${admin2.userId}`,
+      jsonInit("PATCH", { role: "member" }, { token: owner.token }),
+    );
+    expect((await useReset(disabledCreator)).status).toBe(404);
+    expect((await useReset(demotedCreator)).status).toBe(404);
+    // An owner's link for an admin keeps working.
+    const admin3 = await user("admin", "admin3@example.test");
+    expect((await useReset(await resetLink(owner.token, admin3.userId))).status).toBe(204);
+  });
+
   it("self reset -> 409; unknown user -> 404", async () => {
     const self = await createReset(owner.token, owner.userId);
     expect(self.status).toBe(409);

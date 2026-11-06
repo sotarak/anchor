@@ -18,8 +18,15 @@ export type InviteRow = {
 export const INVITE_TTL_MS = 259_200_000; // 72 h
 const TOKEN_PREFIX = "anc_inv_";
 
-/** Live = not accepted, not revoked, not expired. Parameter ?now must be bound by the caller. */
-const LIVE = "accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?";
+/**
+ * Live = not accepted, not revoked, not expired, and its creator could still issue it now
+ * (active; an owner, or an admin for a non-owner role). So disabling, demoting or deleting an
+ * admin kills their pending invites. Parameter ?now must be bound by the caller.
+ */
+const LIVE = `accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
+  AND EXISTS (SELECT 1 FROM users creator
+    WHERE creator.id = invites.created_by AND creator.disabled_at IS NULL
+      AND (creator.role = 'owner' OR (creator.role = 'admin' AND invites.role != 'owner')))`;
 
 /**
  * Inserts the invite unless a live invite for the same email exists (409), atomically: the

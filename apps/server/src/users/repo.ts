@@ -90,6 +90,64 @@ export async function updateLoginState(
     .run();
 }
 
-export function toUserDto(u: Pick<UserRow, "id" | "email" | "name" | "role">): UserDto {
-  return { id: u.id, email: u.email, name: u.name, role: u.role };
+/** disabledAt is included only when the caller has it (a full row); principals omit it. */
+export function toUserDto(
+  u: Pick<UserRow, "id" | "email" | "name" | "role"> & { disabled_at?: number | null },
+): UserDto {
+  const dto: UserDto = { id: u.id, email: u.email, name: u.name, role: u.role };
+  if (u.disabled_at !== undefined) dto.disabledAt = u.disabled_at;
+  return dto;
+}
+
+export async function listUsers(db: D1Database): Promise<UserRow[]> {
+  const { results } = await db
+    .prepare(`SELECT ${COLUMNS} FROM users ORDER BY email`)
+    .all<UserRow>();
+  return results;
+}
+
+/** True unless the row is an active owner and no other active owner exists (SQL fragment). */
+const KEEPS_AN_ACTIVE_OWNER = `(NOT (role = 'owner' AND disabled_at IS NULL)
+  OR (SELECT count(*) FROM users o WHERE o.role = 'owner' AND o.disabled_at IS NULL AND o.id != users.id) > 0)`;
+
+/**
+ * Applies the patch in one conditional UPDATE. Refuses ("last_owner") when the target is the
+ * only active owner and the patch would demote or disable them.
+ */
+export async function updateUserGuarded(
+  db: D1Database,
+  targetId: string,
+  patch: { role?: InstanceRole; disabledAt?: number | null },
+  now: number,
+): Promise<"ok" | "last_owner" | "not_found"> {
+  const setDisabled = patch.disabledAt !== undefined ? 1 : 0;
+  const result = await db
+    .prepare(
+      `UPDATE users
+       SET role = COALESCE(?1, role),
+           disabled_at = CASE WHEN ?2 = 1 THEN ?3 ELSE disabled_at END,
+           updated_at = ?4
+       WHERE id = ?5 AND (
+         (COALESCE(?1, role) = 'owner' AND (CASE WHEN ?2 = 1 THEN ?3 ELSE disabled_at END) IS NULL)
+         OR ${KEEPS_AN_ACTIVE_OWNER}
+       )`,
+    )
+    .bind(patch.role ?? null, setDisabled, patch.disabledAt ?? null, now, targetId)
+    .run();
+  if (result.meta.changes === 1) return "ok";
+  return (await findUserById(db, targetId)) ? "last_owner" : "not_found";
+}
+
+/** Deletes the user (sessions and memberships cascade) unless they are the last active owner. */
+export async function deleteUserGuarded(
+  db: D1Database,
+  targetId: string,
+): Promise<"ok" | "last_owner" | "not_found"> {
+  const result = await db
+    // RETURNING, not meta.changes: D1 counts the cascaded sessions/memberships as changes.
+    .prepare(`DELETE FROM users WHERE id = ? AND ${KEEPS_AN_ACTIVE_OWNER} RETURNING id`)
+    .bind(targetId)
+    .first<{ id: string }>();
+  if (result) return "ok";
+  return (await findUserById(db, targetId)) ? "last_owner" : "not_found";
 }

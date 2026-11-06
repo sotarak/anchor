@@ -8,6 +8,7 @@ import { memberRoutes } from "./members/routes";
 import { projectRoutes } from "./projects/routes";
 import { secretRoutes } from "./secrets/routes";
 import { serviceTokenRoutes } from "./service-tokens/routes";
+import { userRoutes } from "./users/routes";
 
 export function createApp(): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -27,6 +28,7 @@ export function createApp(): Hono<AppEnv> {
   app.route("/api/v1/projects/:project/service-tokens", serviceTokenRoutes);
   app.route("/api/v1/projects/:project/members", memberRoutes);
   app.route("/api/v1/projects", projectRoutes);
+  app.route("/api/v1/users", userRoutes);
 
   app.onError(errorHandler);
   app.notFound(notFoundHandler);

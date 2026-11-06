@@ -38,7 +38,7 @@ export async function findPrincipalBySessionToken(
     .prepare(
       `SELECT s.id AS session_id, u.id AS user_id, u.email, u.name, u.role
        FROM sessions s JOIN users u ON u.id = s.user_id
-       WHERE s.id = ? AND s.expires_at > ?`,
+       WHERE s.id = ? AND s.expires_at > ? AND u.disabled_at IS NULL`,
     )
     .bind(id, now)
     .first<{
@@ -58,6 +58,18 @@ export async function findPrincipalBySessionToken(
     role: row.role,
     sessionId: row.session_id,
   };
+}
+
+/** Deletes every session of the user, optionally keeping one (the caller's own). */
+export async function revokeUserSessions(
+  db: D1Database,
+  userId: string,
+  exceptSessionId?: string,
+): Promise<void> {
+  await db
+    .prepare("DELETE FROM sessions WHERE user_id = ? AND id != ?")
+    .bind(userId, exceptSessionId ?? "")
+    .run();
 }
 
 export async function revokeSession(db: D1Database, token: string): Promise<void> {

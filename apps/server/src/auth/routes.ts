@@ -102,6 +102,8 @@ authRoutes.post("/auth/login", async (c) => {
   if (!(await verifyPassword(body.password, user.password_hash))) {
     throw new ApiError(401, "invalid_credentials", INVALID_CREDENTIALS);
   }
+  // Only after the password checks out, so a disabled account is not revealed to guessers.
+  if (user.disabled_at !== null) throw new ApiError(403, "forbidden", "Account disabled");
   await updateLoginState(c.env.DB, user.id, { failedLogins: 0, lockedUntil: null });
   const { token, expiresAt } = await createSession(
     c.env.DB,

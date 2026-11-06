@@ -3,6 +3,7 @@ import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { act } from "react";
+import { Toaster } from "@/components/ui/sonner";
 import { wireSessionExpiry } from "@/lib/session";
 import { createAppRouter } from "@/router";
 
@@ -24,6 +25,7 @@ export async function renderApp(url: string, opts: { queryClient?: QueryClient }
   render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
+      <Toaster />
     </QueryClientProvider>,
   );
   await act(() => router.load());

@@ -31,7 +31,7 @@ export type SecretContext = {
 const CONFLICT = "Secret was modified concurrently, retry";
 
 /** Unwrapped KEKs live only for the duration of one service call. */
-type KekCache = Map<number, CryptoKey>;
+export type KekCache = Map<number, CryptoKey>;
 
 async function kekFor(ctx: SecretContext, cache: KekCache, version: number): Promise<CryptoKey> {
   let kek = cache.get(version);
@@ -51,7 +51,7 @@ function aadFor(ctx: SecretContext, secretId: string, version: number): string {
   });
 }
 
-async function decryptVersion(
+export async function decryptVersion(
   ctx: SecretContext,
   cache: KekCache,
   secretId: string,
@@ -117,7 +117,7 @@ async function batchOrConflict(db: D1Database, statements: D1PreparedStatement[]
   }
 }
 
-async function requireSecret(
+export async function requireSecret(
   ctx: SecretContext,
   path: string,
   key: string,

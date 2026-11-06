@@ -1,8 +1,11 @@
 import {
   putSecretBodySchema,
+  rollbackBodySchema,
   type SecretDto,
+  type SecretVersionDto,
   secretKeySchema,
   secretQuerySchema,
+  secretVersionParamSchema,
 } from "@anchor/shared";
 import { type Context, Hono } from "hono";
 import { capKeys, recordAudit } from "../audit/record";
@@ -19,6 +22,7 @@ import {
   type ProjectRow,
 } from "../projects/repo";
 import { deleteSecret, getSecret, listSecrets, putSecret, type SecretContext } from "./service";
+import { getVersionValue, listVersions, rollbackSecret } from "./versions";
 
 /** Mounted at /api/v1/projects/:project/environments/:env/secrets. */
 export const secretRoutes = new Hono<AppEnv>();
@@ -79,6 +83,64 @@ secretRoutes.get("/", async (c) => {
     });
   }
   return c.json<{ secrets: SecretDto[] }>({ secrets });
+});
+
+function versionParam(c: Context<AppEnv>): number {
+  const parsed = secretVersionParamSchema.safeParse(c.req.param("version"));
+  if (!parsed.success)
+    throw new ApiError(400, "bad_request", "invalid fields: version (invalid_format)");
+  return parsed.data;
+}
+
+secretRoutes.get("/:key/versions", async (c) => {
+  const target = await resolveTarget(c);
+  const key = keyParam(c);
+  const { path } = parseQuery(c, secretQuerySchema);
+  const ctx = await secretContext(c, target, "secret:read", path);
+  const versions = await listVersions(ctx, { path, key });
+  return c.json<{ versions: SecretVersionDto[] }>({ versions });
+});
+
+secretRoutes.get("/:key/versions/:version", async (c) => {
+  const target = await resolveTarget(c);
+  const key = keyParam(c);
+  const versionNumber = versionParam(c);
+  const { path } = parseQuery(c, secretQuerySchema);
+  const ctx = await secretContext(c, target, "secret:read", path);
+  const version = await getVersionValue(ctx, { path, key, version: versionNumber });
+  await recordAudit(c, {
+    action: "secret.version_read",
+    projectId: target.project.id,
+    environmentId: target.environment.id,
+    target: key,
+    metadata: { path, key, version: versionNumber },
+  });
+  return c.json<{ version: SecretVersionDto & { value: string } }>({ version });
+});
+
+secretRoutes.post("/:key/rollback", async (c) => {
+  const target = await resolveTarget(c);
+  const key = keyParam(c);
+  const body = await parseJson(c, rollbackBodySchema);
+  const ctx = await secretContext(c, target, "secret:write", body.path);
+  const { secret, changed, fromVersion } = await rollbackSecret(ctx, { key, ...body });
+  if (changed) {
+    await recordAudit(c, {
+      action: "secret.rolled_back",
+      projectId: target.project.id,
+      environmentId: target.environment.id,
+      target: key,
+      metadata: {
+        path: body.path,
+        key,
+        fromVersion,
+        toVersion: body.version,
+        newVersion: secret.version,
+      },
+    });
+  }
+  const { value: _omit, ...withoutValue } = secret;
+  return c.json<{ secret: SecretDto }>({ secret: withoutValue });
 });
 
 secretRoutes.get("/:key", async (c) => {

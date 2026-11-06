@@ -49,6 +49,14 @@ export type SecretDto = {
   value?: string;
 };
 
+/** One stored version of a secret, without its value (spec §13.5). */
+export type SecretVersionDto = {
+  version: number;
+  comment: string;
+  createdAt: number;
+  createdBy: { id: string; label: string } | null;
+};
+
 /** A direct child folder (spec §13.5). */
 export type FolderDto = { path: string; name: string };
 

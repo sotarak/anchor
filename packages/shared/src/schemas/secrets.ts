@@ -54,3 +54,14 @@ export const secretQuerySchema = z.object({
     .default("false")
     .transform((v) => v === "true"),
 });
+
+/** A version number in a URL: a positive integer without sign or leading zeros. */
+export const secretVersionParamSchema = z
+  .string()
+  .regex(/^[1-9][0-9]{0,9}$/)
+  .transform(Number);
+
+export const rollbackBodySchema = z.object({
+  path: secretPathSchema.default("/"),
+  version: z.number().int().min(1),
+});

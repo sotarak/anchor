@@ -181,6 +181,9 @@ importers:
       hono:
         specifier: ^4.13.16
         version: 4.13.16
+      zod:
+        specifier: ^4.6.6
+        version: 4.6.6
     devDependencies:
       '@cloudflare/vitest-plugin':
         specifier: ^1.6.0

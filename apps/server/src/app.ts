@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "./env";
+import { errorHandler, notFoundHandler } from "./lib/errors";
 
 export function createApp(): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -10,6 +11,9 @@ export function createApp(): Hono<AppEnv> {
   });
 
   app.get("/api/v1/health", (c) => c.json({ status: "ok" }));
+
+  app.onError(errorHandler);
+  app.notFound(notFoundHandler);
 
   return app;
 }

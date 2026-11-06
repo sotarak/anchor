@@ -31,3 +31,17 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter ./apps/cli test:e2e
+
+  # `anchor run` on Windows: PATHEXT lookup and .cmd shims (npm, npx, pnpm) through cross-spawn.
+  cli-windows-run:
+    needs: check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter ./apps/cli exec vitest run test/integration/process/run-child.test.ts

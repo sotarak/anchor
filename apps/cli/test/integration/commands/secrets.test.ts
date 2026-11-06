@@ -31,6 +31,28 @@ describe("anchor secrets set", () => {
     ]);
   });
 
+  it("set with empty stdin (</dev/null, a bare newline) exits 2 and never overwrites the secret", async () => {
+    for (const stdin of ["", "\n"]) {
+      const cli = await loggedIn({ stdin });
+      const r = await cli.run(["secrets", "set", "API_KEY", ...P], {});
+      expect(r.code).toBe(2);
+      expect(r.err).toContain("error: No value on stdin for API_KEY");
+      expect(r.err).toContain("hint: Pipe the value, or use --from-file <path> for an empty value");
+      expect(r.fake.calls).toEqual([]);
+    }
+  });
+
+  it("set --from-file with an empty file sets an empty value", async () => {
+    const cli = await loggedIn();
+    await writeFile(join(cli.dir, "empty"), "");
+    const r = await cli.run(["secrets", "set", "EMPTY", "--from-file", "empty", ...P], {
+      listSecrets: async () => [],
+      putSecret: async () => ({ secret: meta("EMPTY"), created: true }),
+    });
+    expect(r.code).toBe(0);
+    expect(r.fake.called("putSecret")[0]?.args[3]).toHaveProperty("value", "");
+  });
+
   it("set --from-file keeps exact bytes including trailing newline", async () => {
     const cli = await loggedIn();
     const pem = "-----BEGIN KEY-----\nabc\n-----END KEY-----\n";

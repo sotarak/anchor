@@ -103,6 +103,23 @@ describe("anchor run", () => {
     }
   });
 
+  it("a command without -- exits 2 before any fetch, so its flags are never taken as Anchor's", async () => {
+    for (const args of [
+      ["run", "--project", "app", "node", "app.js", "--env", "prod"],
+      ["--env", "dev", "run", "node", "app.js"],
+      ["run", "--project", "app", "node", "--", "x"],
+    ]) {
+      const cli = await loggedIn();
+      const child = fakeRunChild();
+      const r = await cli.run(args, { listSecrets: async () => [] }, { runChild: child.runChild });
+      expect(r.code).toBe(2);
+      expect(r.err).toContain("error: Put the command after --");
+      expect(r.err).toContain("hint: Usage: anchor run [options] -- <command> [args...]");
+      expect(child.calls).toEqual([]);
+      expect(r.fake.calls).toEqual([]);
+    }
+  });
+
   it("flags after -- are passed to the child verbatim", async () => {
     const cli = await loggedIn();
     const child = fakeRunChild();

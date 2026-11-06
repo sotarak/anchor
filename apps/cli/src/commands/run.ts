@@ -1,4 +1,5 @@
 import type { SecretDto } from "@anchor/shared";
+import { positionals } from "../argv";
 import { authedApi } from "../auth";
 import { type CommandContext, requireProject } from "../context";
 import { CliError, EXIT } from "../errors";
@@ -19,6 +20,20 @@ export function buildChildEnv(
   return env;
 }
 
+const RUN_USAGE = "Usage: anchor run [options] -- <command> [args...]";
+
+/**
+ * `anchor run` takes its command only after `--`. Without it, flags meant for the child
+ * (`--env prod`) would silently be parsed as Anchor's own, so this exits 2 instead.
+ */
+export function assertRunSeparator(argv: string[]): void {
+  const [first, ...rest] = positionals(argv);
+  if (first?.value !== "run" || first.afterDashDash) return;
+  if (rest.some((p) => !p.afterDashDash)) {
+    throw new CliError(EXIT.USAGE, "Put the command after --", RUN_USAGE);
+  }
+}
+
 /**
  * Fetches secrets, then runs the command with them in its environment. Any fetch failure is
  * thrown before the child starts (fail closed). Returns the child's exit code.
@@ -30,11 +45,7 @@ export async function runCommand(
 ): Promise<number> {
   const [cmd, ...args] = argv;
   if (!cmd) {
-    throw new CliError(
-      EXIT.USAGE,
-      "Missing command",
-      "Usage: anchor run [options] -- <command> [args...]",
-    );
+    throw new CliError(EXIT.USAGE, "Missing command", RUN_USAGE);
   }
   const project = requireProject(ctx);
   const { api } = await authedApi(ctx);

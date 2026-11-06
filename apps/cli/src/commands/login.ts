@@ -26,10 +26,27 @@ export async function login(
     }
     apiUrl = normalizeApiUrl(await prompts.input({ message: "API URL" }));
   }
-  if (ctx.config.apiUrl?.source === "project" && ctx.config.userApiUrl !== apiUrl) {
+  // A cloned repository's .anchor.json must not be able to collect a password unnoticed, nor
+  // become the user's default server (which would make ANCHOR_TOKEN eligible for it).
+  const fromProject = ctx.config.apiUrl?.source === "project";
+  if (fromProject && ctx.config.userApiUrl !== apiUrl) {
     ctx.out.warn(
       `.anchor.json points to ${apiUrl}, which differs from your configured ${ctx.config.userApiUrl ?? "(none)"}`,
     );
+    if (!ctx.flags.yes) {
+      if (!interactive) {
+        throw new CliError(
+          EXIT.USAGE,
+          `Not logging in to ${apiUrl}: it comes only from .anchor.json`,
+          `Pass --api-url ${apiUrl} (or --yes) if you trust this server`,
+        );
+      }
+      if (
+        !(await prompts.confirm({ message: `Send your password to ${apiUrl}?`, default: false }))
+      ) {
+        throw new CliError(EXIT.ERROR, "Aborted");
+      }
+    }
   }
   ctx.out.notice(`Logging in to ${apiUrl}`);
 
@@ -76,7 +93,7 @@ export async function login(
   const store = await credentialStore(ctx);
   await store.set({ apiUrl, token: res.token, email: res.user.email, expiresAt: res.expiresAt });
   const userConfig = await readUserConfig(io);
-  if (!userConfig.apiUrl) await writeUserConfig(io, { ...userConfig, apiUrl });
+  if (!userConfig.apiUrl && !fromProject) await writeUserConfig(io, { ...userConfig, apiUrl });
 
   ctx.out.data(
     { apiUrl, user: res.user, expiresAt: res.expiresAt, credentialStore: store.kind },

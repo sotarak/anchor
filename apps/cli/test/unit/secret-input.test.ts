@@ -29,9 +29,25 @@ describe("assertNoSecretInArgv", () => {
     }
   });
 
+  it("rejects near-miss forms of 'secrets set' without echoing the value", () => {
+    for (const argv of [
+      ["secrets", "set", "KEY", "hunter2"],
+      ["secrets", "--env", "dev", "set", "KEY=hunter2"],
+      ["--json", "secrets", "--path", "/api", "set", "KEY", "hunter2"],
+      ["secrets", "set", "--", "KEY=hunter2"],
+      ["secrets", "set", "KEY", "--", "hunter2"],
+    ]) {
+      const e = rejects(argv);
+      expect(e.exitCode).toBe(EXIT.USAGE);
+      expect(`${e.message}${e.hint}`).not.toContain("hunter2");
+    }
+  });
+
   it("allows normal invocations, '=' in option values, and anything after --", () => {
     for (const argv of [
       ["secrets", "set", "KEY"],
+      ["secrets", "--env", "dev", "set", "KEY"],
+      ["secrets", "set", "--", "KEY"],
       ["secrets", "set", "KEY", "--comment", "a=b"],
       ["secrets", "set", "--comment=a=b", "KEY"],
       ["secrets", "get", "KEY"],

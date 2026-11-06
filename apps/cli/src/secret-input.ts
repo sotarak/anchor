@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { MAX_SECRET_VALUE_BYTES, secretValueSchema } from "@anchor/shared";
+import { positionals } from "./argv";
 import type { CommandContext } from "./context";
 import { CliError, EXIT } from "./errors";
 import { stripOneNewline } from "./interactive";
@@ -8,43 +9,31 @@ import { stripOneNewline } from "./interactive";
 const ARGV_ERROR = "Secret values are not accepted as command-line arguments";
 const ARGV_HINT = "Pipe the value on stdin or use --from-file <path>";
 
-/** Options that consume the next argument, so it is not mistaken for the KEY positional. */
-const VALUE_OPTIONS = new Set([
-  "--api-url",
-  "--project",
-  "--env",
-  "--path",
-  "--comment",
-  "--from-file",
-  "--format",
-  "--output",
-]);
-
 /**
- * Rejects argv that carries a secret value: `--value[=...]` anywhere, or `secrets set KEY=value`.
- * Arguments after `--` belong to a child command and are not inspected. Never echoes the input.
+ * Rejects argv that carries a secret value: `--value[=...]` before `--`, or for `secrets set`
+ * any positional containing `=` or more than one positional (also after `--`, which belongs to
+ * `set` there). For other commands, arguments after `--` belong to a child command and are not
+ * inspected. Never echoes the input.
  */
 export function assertNoSecretInArgv(argv: string[]): void {
   const end = argv.indexOf("--");
-  const args = end === -1 ? argv : argv.slice(0, end);
-  if (args.some((a) => a === "--value" || a.startsWith("--value="))) {
+  const head = end === -1 ? argv : argv.slice(0, end);
+  if (head.some((a) => a === "--value" || a.startsWith("--value="))) {
     throw new CliError(EXIT.USAGE, ARGV_ERROR, ARGV_HINT);
   }
-  const set = args.findIndex((a, i) => a === "secrets" && args[i + 1] === "set");
-  if (set === -1) return;
-  for (let i = set + 2; i < args.length; i++) {
-    const a = args[i] as string;
-    if (VALUE_OPTIONS.has(a)) {
-      i++;
-      continue;
-    }
-    if (a.startsWith("-")) continue;
-    if (a.includes("=")) throw new CliError(EXIT.USAGE, ARGV_ERROR, ARGV_HINT);
-    return; // The first positional is the KEY; anything else is a usage error for Commander.
+  const pos = positionals(argv);
+  const [first, second, ...rest] = pos;
+  if (first?.value !== "secrets" || first.afterDashDash) return;
+  if (second?.value !== "set" || second.afterDashDash) return;
+  if (rest.length > 1 || rest.some((p) => p.value.includes("="))) {
+    throw new CliError(EXIT.USAGE, ARGV_ERROR, ARGV_HINT);
   }
 }
 
-/** Reads a secret value from --from-file (exact bytes), piped stdin, or a hidden prompt. */
+/**
+ * Reads a secret value from --from-file (exact bytes), piped stdin (non-empty), or a hidden
+ * prompt.
+ */
 export async function readSecretValue(
   ctx: CommandContext,
   key: string,
@@ -60,6 +49,14 @@ export async function readSecretValue(
     }
   } else if (!io.stdinIsTTY) {
     value = stripOneNewline(await io.readStdin());
+    // Nothing piped (</dev/null, a hook or IDE task) must not silently blank the secret.
+    if (value === "") {
+      throw new CliError(
+        EXIT.USAGE,
+        `No value on stdin for ${key}`,
+        "Pipe the value, or use --from-file <path> for an empty value",
+      );
+    }
   } else {
     value = await prompts.password({ message: `Value for ${key}` });
   }

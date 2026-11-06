@@ -144,24 +144,85 @@ describe("anchor login", () => {
     expect(r.fake.clients[0]?.baseUrl).toBe(API);
   });
 
-  it("login warns when .anchor.json apiUrl differs from user config and always names the target origin", async () => {
-    const { io, dir, xdg } = await env({ stdin: PASSWORD });
+  async function projectPointsTo(dir: string, xdg: string, userApiUrl?: string) {
     await writeFile(
       join(dir, ".anchor.json"),
       JSON.stringify({ version: 1, project: "app", apiUrl: "https://other.example" }),
     );
-    const { mkdir } = await import("node:fs/promises");
-    await mkdir(join(xdg, "anchor"), { recursive: true });
-    await writeFile(join(xdg, "anchor", "config.json"), JSON.stringify({ apiUrl: API }));
-    const r = run(io, ["login", "--quiet", "--email", user.email, "--password-stdin"], {
+    if (userApiUrl) {
+      const { mkdir } = await import("node:fs/promises");
+      await mkdir(join(xdg, "anchor"), { recursive: true });
+      await writeFile(join(xdg, "anchor", "config.json"), JSON.stringify({ apiUrl: userApiUrl }));
+    }
+  }
+
+  it("non-TTY login to an apiUrl that comes only from .anchor.json exits 2 without sending the password", async () => {
+    for (const userApiUrl of [API, undefined]) {
+      const { io, dir, xdg } = await env({ stdin: PASSWORD });
+      await projectPointsTo(dir, xdg, userApiUrl);
+      const r = run(io, ["login", "--email", user.email, "--password-stdin"], { login: loginOk });
+      expect(await r.code).toBe(2);
+      expect(r.fake.called("login")).toEqual([]);
+      expect(io.err()).toContain(
+        "error: Not logging in to https://other.example: it comes only from .anchor.json",
+      );
+      expect(io.err()).toContain(
+        "hint: Pass --api-url https://other.example (or --yes) if you trust this server",
+      );
+      expect(io.err()).not.toContain(PASSWORD);
+    }
+  });
+
+  it("with --yes it warns, names the target, logs in, and never saves a project-sourced URL to user config", async () => {
+    const { io, dir, xdg } = await env({ stdin: PASSWORD });
+    await projectPointsTo(dir, xdg);
+    const r = run(io, ["login", "--quiet", "--yes", "--email", user.email, "--password-stdin"], {
       login: loginOk,
     });
     expect(await r.code).toBe(0);
     expect(io.err()).toContain(
-      `warning: .anchor.json points to https://other.example, which differs from your configured ${API}`,
+      "warning: .anchor.json points to https://other.example, which differs from your configured (none)",
     );
     expect(io.err()).toContain("Logging in to https://other.example");
     expect(r.fake.clients[0]?.baseUrl).toBe("https://other.example");
+    const saved = await readFile(join(xdg, "anchor", "config.json"), "utf8").catch(() => "{}");
+    expect(JSON.parse(saved).apiUrl).toBeUndefined();
+  });
+
+  it("at a terminal it asks before sending the password; 'no' aborts without a login call", async () => {
+    for (const answer of [false, true]) {
+      const { io, dir, xdg } = await env({ tty: true });
+      await projectPointsTo(dir, xdg, API);
+      const prompts = fakePrompts({ confirm: [answer], password: [PASSWORD] });
+      const r = run(
+        io,
+        ["login", "--email", user.email],
+        { login: loginOk },
+        {
+          prompts: prompts.prompts,
+        },
+      );
+      expect(await r.code).toBe(answer ? 0 : 1);
+      expect(prompts.calls[0]).toEqual({
+        kind: "confirm",
+        message: "Send your password to https://other.example?",
+      });
+      expect(r.fake.called("login").length > 0).toBe(answer);
+    }
+  });
+
+  it("an .anchor.json apiUrl equal to the user config logs in without asking", async () => {
+    const { io, dir, xdg } = await env({ stdin: PASSWORD });
+    await writeFile(
+      join(dir, ".anchor.json"),
+      JSON.stringify({ version: 1, project: "app", apiUrl: API }),
+    );
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(xdg, "anchor"), { recursive: true });
+    await writeFile(join(xdg, "anchor", "config.json"), JSON.stringify({ apiUrl: API }));
+    const r = run(io, ["login", "--email", user.email, "--password-stdin"], { login: loginOk });
+    expect(await r.code).toBe(0);
+    expect(io.err()).not.toContain("warning:");
   });
 
   it("login invalid credentials -> exit 3 'Invalid email or password'", async () => {

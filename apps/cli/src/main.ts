@@ -1,5 +1,6 @@
 import { CommanderError } from "commander";
 import { configureProxyFromEnv } from "./api/proxy";
+import { assertRunSeparator } from "./commands/run";
 import type { CliDeps } from "./context";
 import { CliError, EXIT } from "./errors";
 import { createNodeIo } from "./io";
@@ -19,7 +20,12 @@ async function defaultDeps(partial: Partial<CliDeps>): Promise<CliDeps> {
     prompts: partial.prompts ?? createInquirerPrompts(),
     fetch: partial.fetch ?? (await configureProxyFromEnv(io.env)) ?? globalThis.fetch,
     spawner: partial.spawner ?? createNodeSpawner(),
-    runChild: partial.runChild ?? createNodeRunChild(),
+    runChild:
+      partial.runChild ??
+      createNodeRunChild(process, {
+        // A terminal (or the Windows console) already delivers Ctrl-C to the child.
+        forwardSigint: !io.stdinIsTTY && process.platform !== "win32",
+      }),
     selectStore: partial.selectStore,
     createApi: partial.createApi,
   };
@@ -44,6 +50,7 @@ export async function main(argv: string[], partial: Partial<CliDeps> = {}): Prom
   const state: RunState = { exitCode: EXIT.OK };
   try {
     assertNoSecretInArgv(argv.slice(2));
+    assertRunSeparator(argv.slice(2));
     await buildProgram(deps, state).parseAsync(argv);
     return state.exitCode;
   } catch (e) {

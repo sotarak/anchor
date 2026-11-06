@@ -56,16 +56,21 @@ Run `anchor <command> --help` for the options and examples of each command.
 - Values are never accepted as command-line arguments. `anchor secrets set KEY=value` and any
   `--value` flag are rejected (exit 2) without echoing the value. `set` reads the value from
   `--from-file` (exact bytes), from piped stdin (one trailing newline removed), or from a hidden
-  prompt.
+  prompt. Any second positional or `=` after `secrets set` (also after `--`) is rejected the same
+  way. An empty stdin exits 2 so `</dev/null` cannot blank a secret; set an empty value with
+  `--from-file` and an empty file.
 - `secrets get` prints the raw value (no added newline) when stdout is a pipe or a file. In a
   terminal it shows the value masked unless you pass `--reveal`; a masked view does not read the
   value from the server, so it is not recorded as a secret read.
 - `anchor run` fetches secrets before starting the command. If the fetch fails (network error,
-  expired session, missing permission) the command is **not** started. Signals (`SIGINT`, `SIGTERM`,
-  `SIGHUP`) are forwarded to the command, and `anchor` exits with the command's exit code (127 when
-  the command is not found, 128 + N when it was killed by signal N). By default Anchor values
-  replace existing environment variables; `--no-override` keeps existing ones. Everything after `--`
-  is passed to the command unchanged.
+  expired session, missing permission) the command is **not** started. `SIGTERM` and `SIGHUP` are
+  forwarded to the command; `SIGINT` is forwarded only when there is no terminal (at a terminal,
+  Ctrl-C already reaches the command, and a second one would force-quit many tools). `anchor`
+  exits with the command's exit code (127 when the command is not found, 128 + N when it was
+  killed by signal N). By default Anchor values replace existing environment variables;
+  `--no-override` keeps existing ones. The command must follow `--` (exit 2 otherwise, so a
+  child's `--env prod` is never read as Anchor's); everything after `--` is passed unchanged. On
+  Windows, `.cmd` shims such as `npm` are resolved through `PATHEXT`.
 - `anchor export` refuses to print to a terminal. With `--output` it writes the file with mode 0600
   (also when it replaces an existing file), asks before overwriting (`--yes` in scripts), and warns
   when the file is not gitignored. `--format dotenv` fails with a hint when a value cannot be written
@@ -132,8 +137,10 @@ starting with `anc_` (a token): remove it and rotate the token.
 ### API URL
 
 The URL is reduced to its origin. `https://` is required, except for `localhost`, `127.0.0.1` and
-`[::1]`. `anchor login` always prints the server it is logging in to, and warns when `.anchor.json`
-points somewhere other than your user config.
+`[::1]`. `anchor login` always prints the server it is logging in to. When the URL comes only from
+`.anchor.json` and differs from your user config, it warns and asks before sending your password
+(without a terminal it exits 2 unless you pass `--api-url` or `--yes`), and it never saves that URL
+as your user config.
 
 ### Environment variables
 

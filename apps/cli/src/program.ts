@@ -37,7 +37,7 @@ export function actionFor(program: Command, deps: CliDeps, state: RunState) {
     handler: (ctx: CommandContext, ...args: A) => Promise<number | undefined>,
   ) =>
     async (...args: A) => {
-      const code = await handler(createContext(deps, program.opts<GlobalFlags>()), ...args);
+      const code = await handler(await createContext(deps, program.opts<GlobalFlags>()), ...args);
       if (typeof code === "number") state.exitCode = code;
     };
 }

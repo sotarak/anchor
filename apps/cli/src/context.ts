@@ -1,3 +1,5 @@
+import { type ResolvedConfig, resolveConfig } from "./config/resolve";
+import { CliError, EXIT } from "./errors";
 import type { Io } from "./io";
 import { Output } from "./output";
 import type { Prompts } from "./prompts";
@@ -40,14 +42,26 @@ export interface CommandContext {
   deps: CliDeps;
   out: Output;
   flags: GlobalFlags;
+  config: ResolvedConfig;
 }
 
-export function createContext(deps: CliDeps, flags: GlobalFlags): CommandContext {
+export async function createContext(deps: CliDeps, flags: GlobalFlags): Promise<CommandContext> {
   const out = new Output(deps.io, {
     json: flags.json,
     quiet: flags.quiet,
     noColor: !flags.color,
     debug: flags.debug,
   });
-  return { deps, out, flags };
+  return { deps, out, flags, config: await resolveConfig(deps.io, flags) };
+}
+
+export function requireProject(ctx: Pick<CommandContext, "config">): string {
+  if (!ctx.config.project) {
+    throw new CliError(
+      EXIT.USAGE,
+      "No project selected",
+      "Run 'anchor init' or pass --project <slug>",
+    );
+  }
+  return ctx.config.project.value;
 }

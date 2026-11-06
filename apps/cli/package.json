@@ -22,6 +22,7 @@
     "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
     "vitest": "^5.1.0",
+    "wrangler": "^4.158.0",
     "yaml": "^2.9.1"
   },
   "dependencies": {

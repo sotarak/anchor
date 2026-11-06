@@ -2,7 +2,15 @@ import type { ProjectDto, SecretDto } from "@anchor/shared";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
-import { apiError, fixtures, projectExists, renderApp, server, signedInAs } from "#test/support";
+import {
+  apiError,
+  fixtures,
+  foldersAre,
+  projectExists,
+  renderApp,
+  server,
+  signedInAs,
+} from "#test/support";
 
 const CANARY = "SECRETS-VIEW-CANARY-7f3";
 const MASK = "••••••••";
@@ -17,6 +25,7 @@ function secretsAre(env: string, secrets: SecretDto[] = fixtures.secrets) {
       ? HttpResponse.json({ secret: { ...found, value: CANARY } })
       : apiError(404, "not_found", "Secret not found");
   });
+  foldersAre(env);
   server.use(
     http.get(`${base}/${env}/secrets`, ({ request }) => {
       listUrls.push(new URL(request.url));
@@ -244,6 +253,7 @@ describe("/projects/$project/environments/$env", () => {
     let row0 = { ...(fixtures.secrets[0] as SecretDto) };
     let value = CANARY;
     const get = vi.fn(() => HttpResponse.json({ secret: { ...row0, value } }));
+    foldersAre("dev");
     server.use(
       http.get(`${base}/dev/secrets`, () =>
         HttpResponse.json({ secrets: [row0, ...fixtures.secrets.slice(1)] }),
@@ -347,7 +357,7 @@ describe("/projects/$project/environments/$env", () => {
   it("empty state at a path offers Add secret", async () => {
     setup({ secrets: [] });
     const { user } = await renderApp("/projects/app/environments/dev?path=%2Fapi");
-    expect(await screen.findByText("No secrets in /api")).toBeInTheDocument();
+    expect(await screen.findByText("No secrets or folders in /api")).toBeInTheDocument();
     const add = screen.getAllByRole("button", { name: "Add secret" });
     expect(add).toHaveLength(1);
     await user.click(add[0] as HTMLElement);

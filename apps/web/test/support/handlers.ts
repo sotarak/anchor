@@ -1,4 +1,4 @@
-import type { EnvironmentDto, ProjectDto, UserDto } from "@anchor/shared";
+import type { EnvironmentDto, FolderDto, ProjectDto, UserDto } from "@anchor/shared";
 import { HttpResponse, http } from "msw";
 import { fixtures } from "./fixtures";
 import { apiError, server } from "./msw";
@@ -30,4 +30,24 @@ export function projectExists(
     ),
     http.get("/api/v1/projects", () => HttpResponse.json({ projects: [project] })),
   );
+}
+
+/**
+ * GET /folders for one env: `byPath` maps a path to its child folders (missing path → none).
+ * Records each requested URL.
+ */
+export function foldersAre(
+  env: string,
+  byPath: Record<string, FolderDto[]> = {},
+  project = fixtures.project.slug,
+) {
+  const urls: URL[] = [];
+  server.use(
+    http.get(`/api/v1/projects/${project}/environments/${env}/folders`, ({ request }) => {
+      const url = new URL(request.url);
+      urls.push(url);
+      return HttpResponse.json({ folders: byPath[url.searchParams.get("path") ?? "/"] ?? [] });
+    }),
+  );
+  return { urls };
 }

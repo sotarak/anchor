@@ -2,6 +2,7 @@ import type {
   AuditAction,
   AuditEventDto,
   EnvironmentDto,
+  FolderDto,
   InstanceRole,
   InviteDto,
   LoginResponse,
@@ -125,6 +126,20 @@ export const api = {
       ).secret,
     remove: (p: string, env: string, key: string, path: string) =>
       apiFetch<void>(`${envUrl(p, env)}/secrets/${e(key)}`, { method: "DELETE", query: { path } }),
+  },
+  folders: {
+    list: async (p: string, env: string, path: string) =>
+      (await apiFetch<{ folders: FolderDto[] }>(`${envUrl(p, env)}/folders`, { query: { path } }))
+        .folders,
+    create: async (p: string, env: string, path: string) =>
+      (
+        await apiFetch<{ folder: FolderDto }>(`${envUrl(p, env)}/folders`, {
+          method: "POST",
+          body: { path },
+        })
+      ).folder,
+    remove: (p: string, env: string, path: string, force: boolean) =>
+      apiFetch<void>(`${envUrl(p, env)}/folders`, { method: "DELETE", query: { path, force } }),
   },
   members: {
     list: async (p: string) =>

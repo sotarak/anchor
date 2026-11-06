@@ -1,8 +1,8 @@
-import type { SecretDto } from "@anchor/shared";
+import type { FolderDto, SecretDto } from "@anchor/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type ReactNode, useMemo, useState } from "react";
-import { RiAddLine, RiKey2Line } from "react-icons/ri";
+import { RiAddLine, RiFolderAddLine, RiKey2Line } from "react-icons/ri";
 import { toast } from "sonner";
 import { useSetHeader } from "@/components/app-shell/header";
 import { SearchChip } from "@/components/data/search-chip";
@@ -15,10 +15,14 @@ import {
   ForbiddenState,
 } from "@/components/data/table-states";
 import { useClientPages } from "@/components/data/use-client-pages";
+import { DeleteFolderDialog } from "@/components/folders/delete-folder-dialog";
+import { NewFolderSheet } from "@/components/folders/new-folder-sheet";
+import { useFolders } from "@/components/folders/use-folders";
 import { ConfirmDialog } from "@/components/overlays/confirm-dialog";
 import { GoToPathChip } from "@/components/secrets/go-to-path-chip";
 import { PathBreadcrumb } from "@/components/secrets/path-breadcrumb";
-import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { SplitButton } from "@/components/ui/split-button";
 import { TableContainer } from "@/components/ui/table";
 import { ApiClientError } from "@/lib/api/client";
 import { api } from "@/lib/api/endpoints";
@@ -51,9 +55,12 @@ function SecretsPage() {
     queryKey: qk.secrets(project, env, path),
     queryFn: () => api.secrets.list(project, env, path),
   });
+  const folders = useFolders(project, env, path);
   const [search, setSearch] = useState("");
   const [sheet, setSheet] = useState<SheetState>(null);
   const [deleting, setDeleting] = useState<SecretDto | null>(null);
+  const [newFolder, setNewFolder] = useState(false);
+  const [deletingFolder, setDeletingFolder] = useState<FolderDto | null>(null);
 
   const envName = envQuery.data?.find((e) => e.slug === env)?.name ?? env;
   const projectName = projectQuery.data?.name;
@@ -65,39 +72,63 @@ function SecretsPage() {
     access.role !== "viewer" &&
     (access.environments === null || access.environments.includes(env));
 
-  const filtered = useMemo(() => {
+  type Row = { folder: FolderDto } | { secret: SecretDto };
+  const filtered = useMemo((): Row[] => {
     const needle = search.trim().toLowerCase();
-    return (secrets.data ?? []).filter((s) => !needle || s.key.toLowerCase().includes(needle));
-  }, [secrets.data, search]);
+    const match = (s: string) => !needle || s.toLowerCase().includes(needle);
+    return [
+      ...(folders.data ?? []).filter((f) => match(f.name)).map((folder) => ({ folder })),
+      ...(secrets.data ?? []).filter((s) => match(s.key)).map((secret) => ({ secret })),
+    ];
+  }, [folders.data, secrets.data, search]);
   const page = useClientPages(filtered, 25);
+  const pageFolders = page.rows.flatMap((r) => ("folder" in r ? [r.folder] : []));
+  const pageSecrets = page.rows.flatMap((r) => ("secret" in r ? [r.secret] : []));
+  const loaded = secrets.data && folders.data;
+  const isEmpty = !!loaded && secrets.data.length === 0 && folders.data.length === 0;
+  const error = secrets.error ?? folders.error;
   const setPath = (next: string) => void navigate({ search: next === "/" ? {} : { path: next } });
 
   const addButton = canWrite ? (
-    <Button variant="primary" size="sm" onClick={() => setSheet({ mode: "add" })}>
+    <SplitButton
+      onClick={() => setSheet({ mode: "add" })}
+      menuLabel="More create options"
+      menu={
+        <DropdownMenuItem onSelect={() => setNewFolder(true)}>
+          <RiFolderAddLine aria-hidden />
+          New folder
+        </DropdownMenuItem>
+      }
+    >
       <RiAddLine aria-hidden />
       Add secret
-    </Button>
+    </SplitButton>
   ) : null;
 
   let body: ReactNode;
-  if (secrets.error instanceof ApiClientError && secrets.error.status === 403) {
+  if (error instanceof ApiClientError && error.status === 403) {
     body = <ForbiddenState what="this environment" />;
-  } else if (secrets.isError) {
-    body = <ErrorState error={secrets.error} onRetry={() => void secrets.refetch()} />;
-  } else if (secrets.data?.length === 0) {
+  } else if (error) {
+    body = (
+      <ErrorState
+        error={error}
+        onRetry={() => void Promise.all([secrets.refetch(), folders.refetch()])}
+      />
+    );
+  } else if (isEmpty) {
     body = (
       <EmptyState
         icon={RiKey2Line}
-        title={`No secrets in ${path}`}
+        title={`No secrets or folders in ${path}`}
         description={
           canWrite
-            ? "Add the first secret at this path, or pick another path."
+            ? "Add the first secret or folder at this path, or pick another path."
             : "There is nothing at this path yet."
         }
         action={addButton}
       />
     );
-  } else if (secrets.data && filtered.length === 0) {
+  } else if (loaded && filtered.length === 0) {
     body = <FilteredEmptyState what="your search" onClear={() => setSearch("")} />;
   } else {
     body = (
@@ -108,13 +139,16 @@ function SecretsPage() {
           project={project}
           env={env}
           path={path}
-          secrets={page.rows}
-          loading={secrets.isPending}
+          folders={pageFolders}
+          secrets={pageSecrets}
+          loading={!loaded}
           canWrite={canWrite}
           onEdit={(secret) => setSheet({ mode: "edit", secret })}
           onDelete={setDeleting}
+          onOpenFolder={(f) => setPath(f.path)}
+          onDeleteFolder={setDeletingFolder}
         />
-        {secrets.data ? <TableFooter {...page.footer} /> : null}
+        {loaded ? <TableFooter {...page.footer} /> : null}
       </TableContainer>
     );
   }
@@ -139,7 +173,7 @@ function SecretsPage() {
         <SearchChip value={search} onChange={setSearch} placeholder="Search keys" />
         <GoToPathChip onGo={setPath} />
         <PathBreadcrumb path={path} onNavigate={setPath} />
-        <div className="ml-auto">{secrets.data?.length === 0 ? null : addButton}</div>
+        <div className="ml-auto">{isEmpty ? null : addButton}</div>
       </div>
       <h2 className="text-paragraph-sm text-text-soft">{`Secrets in ${path}`}</h2>
       {body}
@@ -155,6 +189,22 @@ function SecretsPage() {
           existingKeys={(secrets.data ?? []).map((s) => s.key)}
         />
       ) : null}
+      {newFolder ? (
+        <NewFolderSheet
+          open
+          onOpenChange={setNewFolder}
+          project={project}
+          env={env}
+          parent={path}
+        />
+      ) : null}
+      <DeleteFolderDialog
+        folder={deletingFolder}
+        onClose={() => setDeletingFolder(null)}
+        project={project}
+        env={env}
+        envName={envName}
+      />
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(open) => !open && setDeleting(null)}

@@ -12,6 +12,9 @@ export const qk = {
   secrets: (p: string, env: string, path: string) =>
     ["projects", p, "environments", env, "secrets", path] as const,
   secretsAll: (p: string, env: string) => ["projects", p, "environments", env, "secrets"] as const,
+  folders: (p: string, env: string, path: string) =>
+    ["projects", p, "environments", env, "folders", path] as const,
+  foldersAll: (p: string, env: string) => ["projects", p, "environments", env, "folders"] as const,
   members: (p: string) => ["projects", p, "members"] as const,
   serviceTokens: (p: string) => ["projects", p, "service-tokens"] as const,
   users: ["users"] as const,

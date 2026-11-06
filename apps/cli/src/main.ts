@@ -7,6 +7,7 @@ import type { CliDeps } from "./context";
 import { CliError, EXIT } from "./errors";
 import { createNodeIo } from "./io";
 import { Output } from "./output";
+import { createNodeRunChild } from "./process/run-child";
 import { createNodeSpawner } from "./process/spawner";
 import { buildProgram, type RunState } from "./program";
 import { createInquirerPrompts } from "./prompts";
@@ -15,16 +16,13 @@ import { assertNoSecretInArgv } from "./secret-input";
 const UNEXPECTED = "Unexpected error (run with --debug for details)";
 
 async function defaultDeps(partial: Partial<CliDeps>): Promise<CliDeps> {
-  const unavailable = (what: string) => () => {
-    throw new Error(`${what} is not available yet`);
-  };
   const io = partial.io ?? createNodeIo();
   return {
     io,
     prompts: partial.prompts ?? createInquirerPrompts(),
     fetch: partial.fetch ?? (await configureProxyFromEnv(io.env)) ?? globalThis.fetch,
     spawner: partial.spawner ?? createNodeSpawner(),
-    runChild: partial.runChild ?? unavailable("runChild"),
+    runChild: partial.runChild ?? createNodeRunChild(),
     selectStore: partial.selectStore,
     createApi: partial.createApi,
   };

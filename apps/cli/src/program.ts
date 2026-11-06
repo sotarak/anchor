@@ -4,6 +4,7 @@ import { init } from "./commands/init";
 import { login } from "./commands/login";
 import { logout } from "./commands/logout";
 import { projectsList } from "./commands/projects";
+import { runCommand } from "./commands/run";
 import { secretsDelete, secretsGet, secretsList, secretsSet } from "./commands/secrets";
 import { whoami } from "./commands/whoami";
 import { type CliDeps, type CommandContext, createContext, type GlobalFlags } from "./context";
@@ -134,6 +135,20 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
       examples("anchor secrets delete OLD_KEY", "anchor secrets delete OLD_KEY --yes"),
     )
     .action(act((ctx, key: string) => secretsDelete(ctx, key)));
+
+  program
+    .command("run")
+    .description("Run a command with the environment's secrets injected as environment variables")
+    .argument("[command...]", "the command to run, after --")
+    .option("--no-override", "keep existing environment variables instead of Anchor values")
+    .usage("[options] -- <command> [args...]")
+    .addHelpText(
+      "after",
+      examples("anchor run -- npm start", "anchor run --env prod --path /api -- node server.js"),
+    )
+    .action(
+      act((ctx, command: string[], opts: { override: boolean }) => runCommand(ctx, command, opts)),
+    );
 
   return program;
 }

@@ -1,0 +1,112 @@
+import type {
+  EnvironmentDto,
+  LoginResponse,
+  ProjectDto,
+  SecretDto,
+  ServiceTokenDto,
+  UserDto,
+} from "@anchor/shared";
+import { type HttpOptions, type Method, request } from "./http";
+
+export type CreateServiceTokenBody = {
+  name: string;
+  permission: "read" | "read-write";
+  scopes: { environment: string; path: string }[];
+  expiresInDays: number;
+};
+
+export interface ApiClient {
+  login(email: string, password: string): Promise<LoginResponse>;
+  logout(): Promise<void>;
+  me(): Promise<{ user?: UserDto; serviceToken?: ServiceTokenDto }>;
+  listProjects(): Promise<ProjectDto[]>;
+  getProject(slug: string): Promise<ProjectDto>;
+  listEnvironments(project: string): Promise<EnvironmentDto[]>;
+  listSecrets(
+    project: string,
+    env: string,
+    q: { path: string; reveal: boolean },
+  ): Promise<SecretDto[]>;
+  getSecret(project: string, env: string, key: string, q: { path: string }): Promise<SecretDto>;
+  putSecret(
+    project: string,
+    env: string,
+    key: string,
+    body: { value: string; comment?: string; path: string },
+  ): Promise<{ secret: SecretDto; created: boolean }>;
+  deleteSecret(project: string, env: string, key: string, q: { path: string }): Promise<void>;
+  listServiceTokens(project: string): Promise<ServiceTokenDto[]>;
+  createServiceToken(
+    project: string,
+    body: CreateServiceTokenBody,
+  ): Promise<{ serviceToken: ServiceTokenDto; token: string }>;
+  revokeServiceToken(project: string, id: string): Promise<void>;
+}
+
+const seg = encodeURIComponent;
+
+export function createApiClient(opts: HttpOptions): ApiClient {
+  const call = async <T>(method: Method, path: string, body?: unknown) =>
+    request<T>(opts, method, `/api/v1${path}`, body);
+  const data = async <T>(method: Method, path: string, body?: unknown) =>
+    (await call<T>(method, path, body)).data;
+  const secretsPath = (project: string, env: string) =>
+    `/projects/${seg(project)}/environments/${seg(env)}/secrets`;
+  const query = (q: Record<string, string>) => `?${new URLSearchParams(q)}`;
+
+  return {
+    login: (email, password) =>
+      data<LoginResponse>("POST", "/auth/login", { email, password, client: "cli" }),
+    logout: async () => {
+      await call("POST", "/auth/logout");
+    },
+    me: () => data("GET", "/auth/me"),
+    listProjects: async () => (await data<{ projects: ProjectDto[] }>("GET", "/projects")).projects,
+    getProject: async (slug) =>
+      (await data<{ project: ProjectDto }>("GET", `/projects/${seg(slug)}`)).project,
+    listEnvironments: async (project) =>
+      (
+        await data<{ environments: EnvironmentDto[] }>(
+          "GET",
+          `/projects/${seg(project)}/environments`,
+        )
+      ).environments,
+    listSecrets: async (project, env, q) =>
+      (
+        await data<{ secrets: SecretDto[] }>(
+          "GET",
+          secretsPath(project, env) + query({ path: q.path, reveal: String(q.reveal) }),
+        )
+      ).secrets,
+    getSecret: async (project, env, key, q) =>
+      (
+        await data<{ secret: SecretDto }>(
+          "GET",
+          `${secretsPath(project, env)}/${seg(key)}${query({ path: q.path })}`,
+        )
+      ).secret,
+    putSecret: async (project, env, key, body) => {
+      const res = await call<{ secret: SecretDto }>(
+        "PUT",
+        `${secretsPath(project, env)}/${seg(key)}`,
+        body,
+      );
+      return { secret: res.data.secret, created: res.status === 201 };
+    },
+    deleteSecret: async (project, env, key, q) => {
+      await call("DELETE", `${secretsPath(project, env)}/${seg(key)}${query({ path: q.path })}`);
+    },
+    listServiceTokens: async (project) =>
+      (
+        await data<{ serviceTokens: ServiceTokenDto[] }>(
+          "GET",
+          `/projects/${seg(project)}/service-tokens`,
+        )
+      ).serviceTokens,
+    createServiceToken: (project, body) =>
+      data("POST", `/projects/${seg(project)}/service-tokens`, body),
+    revokeServiceToken: async (project, id) => {
+      await call("DELETE", `/projects/${seg(project)}/service-tokens/${seg(id)}`);
+    },
+  };
+}

@@ -2,6 +2,7 @@
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { CommanderError } from "commander";
+import { configureProxyFromEnv } from "./api/proxy";
 import type { CliDeps } from "./context";
 import { CliError, EXIT } from "./errors";
 import { createNodeIo } from "./io";
@@ -11,14 +12,15 @@ import { createInquirerPrompts } from "./prompts";
 
 const UNEXPECTED = "Unexpected error (run with --debug for details)";
 
-function defaultDeps(partial: Partial<CliDeps>): CliDeps {
+async function defaultDeps(partial: Partial<CliDeps>): Promise<CliDeps> {
   const unavailable = (what: string) => () => {
     throw new Error(`${what} is not available yet`);
   };
+  const io = partial.io ?? createNodeIo();
   return {
-    io: partial.io ?? createNodeIo(),
+    io,
     prompts: partial.prompts ?? createInquirerPrompts(),
-    fetch: partial.fetch ?? globalThis.fetch,
+    fetch: partial.fetch ?? (await configureProxyFromEnv(io.env)) ?? globalThis.fetch,
     spawner: partial.spawner ?? unavailable("spawner"),
     runChild: partial.runChild ?? unavailable("runChild"),
   };
@@ -32,7 +34,7 @@ function hasFlag(argv: string[], flag: string): boolean {
 
 /** Runs the CLI and returns the process exit code. Never throws. */
 export async function main(argv: string[], partial: Partial<CliDeps> = {}): Promise<number> {
-  const deps = defaultDeps(partial);
+  const deps = await defaultDeps(partial);
   const debug = hasFlag(argv, "--debug");
   const out = new Output(deps.io, {
     json: false,

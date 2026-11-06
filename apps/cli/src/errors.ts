@@ -1,3 +1,5 @@
+import { ApiRequestError } from "./api/http";
+
 export const EXIT = {
   OK: 0,
   ERROR: 1,
@@ -20,4 +22,36 @@ export class CliError extends Error {
     super(message);
     this.name = "CliError";
   }
+}
+
+export function exitCodeForApiError(e: ApiRequestError): number {
+  switch (e.code) {
+    case "unauthenticated":
+    case "invalid_credentials":
+      return EXIT.AUTH;
+    case "forbidden":
+      return EXIT.FORBIDDEN;
+    case "not_found":
+      return EXIT.NOT_FOUND;
+    case "conflict":
+      return EXIT.CONFLICT;
+    default:
+      return EXIT.ERROR;
+  }
+}
+
+/** Turns an API failure into a user-facing error. Anything unexpected is rethrown. */
+export function toCliError(
+  e: unknown,
+  ctx: { apiUrl: string; authSource?: "ANCHOR_TOKEN" | "stored" },
+): CliError {
+  if (e instanceof CliError) return e;
+  if (!(e instanceof ApiRequestError)) throw e;
+  if (e.code === "unauthenticated" && ctx.authSource === "stored") {
+    return new CliError(EXIT.AUTH, "Your session has expired or was revoked", "Run 'anchor login'");
+  }
+  if (e.code === "unauthenticated" && ctx.authSource === "ANCHOR_TOKEN") {
+    return new CliError(EXIT.AUTH, "ANCHOR_TOKEN was rejected (expired, revoked or invalid)");
+  }
+  return new CliError(exitCodeForApiError(e), e.message);
 }

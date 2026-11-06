@@ -49,7 +49,7 @@ describe("projects", () => {
     )
       .bind(project.id)
       .all();
-    expect(keys.results).toEqual([{ version: 1, root_key_id: "rk1" }]);
+    expect(keys.results).toEqual([{ version: 1, root_key_id: env.ANCHOR_ROOT_KEY_ID }]);
   });
 
   it("KEK row never contains raw key material", async () => {

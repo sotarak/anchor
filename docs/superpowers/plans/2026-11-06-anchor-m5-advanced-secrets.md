@@ -131,6 +131,28 @@ apps/web/test/            no tests inside src/; support/ holds the render helper
 - [ ] **Step 4: Map the web feature folders** to the M4 layout and update the paths in Tasks 13–17.
 - [ ] **Step 5: Run the full suite.** Run `pnpm lint && pnpm typecheck && pnpm test`. Expected: green before any M5 change. Commit the plan edits with `git commit -m "docs(plan): reconcile M5 plan with merged code"`.
 
+#### Task 0 findings (2026-11-07, against main 7da2ece)
+
+Every consumed server name exists. Real signatures, which later tasks use:
+
+- **Crypto (`apps/server/src/crypto/`):** `getRootKey(env): Promise<CryptoKey>`, `createWrappedKek(rootKey, projectId, version)`, `unwrapKek(rootKey, w: WrappedKek)` (rejects `rootKeyId !== ROOT_KEY_ID`), `kekAad`, `secretAad({ projectId, environmentId, secretId, version })`, `seal(key, bytes, aad)`, `open(key, { iv, ciphertext }, aad)`, `AEAD_ALG`, `importAesKey`.
+- **Projects (`src/projects/repo.ts`):** `getProjectKek(db, rootKey, project, version = project.current_key_version)`, `getProjectBySlug(db, slug)`, `getEnvironmentBySlug(db, projectId, slug)`, `ProjectRow`, `EnvironmentRow`, `listEnvironments(db, projectId)`.
+- **Secrets (`src/secrets/`):** `SecretContext = { db, rootKey, project, environment, actorId, now }`. `putSecret(ctx, { path, key, value, comment })` returns `{ secret, created, changed }`. `listSecrets(ctx, { path, reveal })` lists the exact path only. `getSecret(ctx, { path, key })` and `deleteSecret(ctx, { path, key })`. The repo has `findSecretWithVersion`, `listSecretsWithVersions`, and `insertSecretStatement`/`insertVersionStatement`/`setCurrentVersionStatement` (statements for one `db.batch`). Routes build the context in `secretContext(c, target, action, path)` in `src/secrets/routes.ts`.
+- **Authz and audit:** `authorize(db, principal, action, { projectId, environmentId, path })` is async and throws 403. "Project admin" is the action `project:update`; instance owners and admins pass every check. `requirePrincipal(c)`, `requireUser(c)`. `recordAudit(c, { action, projectId, environmentId, target, metadata })` and `capKeys(keys)` live in `src/audit/record.ts`. Metadata keys `value`, `rawValue`, ... are rejected.
+- **Shared:** `AUDIT_ACTIONS` is in `packages/shared/src/audit.ts` and pinned by `packages/shared/test/audit.test.ts`. `utf8ByteLength` is in `schemas/common.ts`. `normalizeSecretPath`, `secretPathSchema`, `secretKeySchema` and `secretQuerySchema` are in `schemas/secrets.ts`.
+- **Cron:** `handleScheduled` is in `src/audit/scheduled.ts`; `src/index.ts` exports `{ fetch, scheduled }`.
+- **Server test helpers (`#test/support`):** `api(path, init)` (the real Worker fetch), `json`, `jsonInit(method, body, { token | cookie })`, `resetDb`, `TABLES_CHILD_FIRST`, `createUserWithSession({ role, kind })`, `createMember(projectSlug, { role, environments })` (env slugs), `createServiceToken(projectSlug, { permission, scopes: [{ environment, path }], name? })`, `auditRows(action?)`. `createApp().request(path, init, envOverrides)` works for tests that need different bindings (as in `test/api/audit/wiring.test.ts`).
+- **`secret_versions.created_by`** holds a user id for user writes and `NULL` for service-token writes (the routes pass `actorId: null` for tokens). Task 3 therefore resolves `createdBy` with a `LEFT JOIN users`, giving `{ id, label: email }` or `null` when the column is null or the user is gone. A token's name cannot be recovered from the row.
+- **CLI (`apps/cli`):** `ApiClient` and `createApiClient` are in `src/api/client.ts`. `EXIT` (`USAGE` 2, `FORBIDDEN` 4, `CONFLICT` 6) and `CliError` are in `src/errors.ts`. `confirmDestructive(ctx, message)` is in `src/confirm.ts`. Commands are registered in `src/program.ts`. Tests use `fakeApi`, `apiError` and `runCli` from `#test/support`. The help snapshot is `test/unit/__snapshots__/help.test.ts.snap`, and the e2e suite is `test/e2e/cli.e2e.test.ts` with `harness.ts`.
+- **Web layout (M4 has no `features/` folder).** Every `apps/web/src/features/<x>/` path in Tasks 13–17 means `apps/web/src/components/<x>/` with kebab-case file names, as in M4 (`folder-rows.tsx`, `secret-history-sheet.tsx`, ...).
+  - Endpoint functions go into `src/lib/api/endpoints.ts` (`api.*`), with keys in `src/lib/api/query-keys.ts`. Hooks live beside the components.
+  - Tests go in `apps/web/test/components/<x>/`. MSW handlers and fixtures are in `test/support/handlers.ts` and `test/support/fixtures.ts`.
+  - The environment view is `src/routes/_app/projects/$project/environments/$env.tsx` with `-components/secrets-table.tsx` and `-components/secret-sheet.tsx`.
+  - `PathBreadcrumb` already exists (`src/components/secrets/path-breadcrumb.tsx`); Task 13 reuses it instead of creating one.
+  - Project settings are separate routes under `settings/`, so Task 17 adds `settings/encryption.tsx` and a sidebar link.
+  - Write permission is computed inline from `ProjectDto.access`.
+- **No secret value in the query cache.** M4's rule (`query-keys.ts`: "No key and no cached query ever holds a secret value") means value fetches go through plain `api.*` calls into component state (`MaskedValue`'s `reveal`), not through `useQuery`. That covers past versions (Task 14) and the resolved preview (Task 15).
+
 ---
 
 ### Task 1: Migration 0003 and path helpers

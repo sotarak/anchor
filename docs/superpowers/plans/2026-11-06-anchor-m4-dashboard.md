@@ -120,7 +120,7 @@ apps/web/
 - Test: `apps/server/test/api/projects/overview.test.ts` (imports `#src/...` and `#test/support`)
 
 **Interfaces:**
-- Consumes: M2 `authorize(db, principal, action, resource)`, membership and env-restriction lookups (names from Task 0), `getProjectBySlug`, `listEnvironments`.
+- Consumes: M2 `authorize(db, principal, action, resource)` and `visibleEnvironmentIds(db, principal, projectId)` (`src/authz/policy.ts`), `getMembership(db, projectId, userId)` → `MembershipRow { role, environment_ids: string[] | null }` (`src/members/repo.ts`; `environment_ids` holds environment **ids**, mapped to slugs through `listEnvironments`), `getProjectBySlug(db, slug)`, `listEnvironments(db, projectId)` (`src/projects/repo.ts`).
 - Produces (shared):
   - `ProjectAccessDto { role: "admin" | "developer" | "viewer"; environments: string[] | null }`. Instance owners and admins map to `"admin"` with `null`. `environments` holds env slugs.
   - `ProjectDto.access?: ProjectAccessDto`. This is additive and present on `GET /projects` and `GET /projects/:project` for user principals.
@@ -560,7 +560,7 @@ apps/web/
 - Produces:
   - Title "Members". Toolbar: `SearchChip` (name or email) and `FilterChip` "Role". Primary "Add member" button.
   - Table columns: Member (initials circle, name, email second line), Role (`Tag`), Environments (`Tag` per env slug, or "All environments" neutral tag), `⋮` (Edit, Remove).
-  - The add/edit Sheet has Email (add only), Role (Select: Admin, Developer, Viewer, with a one-line hint each) and Environments. The Environments field is a "All environments" checkbox; when unchecked, it shows one checkbox per environment, and at least one must be checked.
+  - The add/edit Sheet has Email (add only), Role (Select: Admin, Developer, Viewer, with a one-line hint each) and Environments. The Environments field is a "All environments" checkbox; when unchecked, it shows one checkbox per environment, and at least one must be checked. A project admin cannot be restricted (`addMemberBodySchema` refine), so with role Admin the field is fixed to "All environments" and `environments: null` is sent.
   - The add flow handles 404 from the server (user not found): field error "No user with this email. Invite them from Users first."
   - Remove uses `ConfirmDialog` ("Remove {name} from {project}").
   - The members query returning 403 renders `ForbiddenState`.
@@ -628,7 +628,7 @@ apps/web/
     - A 409 last-owner response shows the server message toast.
   - Invites table columns: Email, Role, Status (`inviteStatus`), Expires, `⋮` Revoke (pending only).
   - The invite Sheet has Email and Role (Admin/Member, plus Owner for owners). On success, `OneTimeSecretDialog` shows the invite URL, notice "Share this link with {email}. It works once and expires in 72 hours."
-  - A user cannot change their own role or disable or delete themself: those items are hidden for `me.id`.
+  - A user cannot change their own role, disable or delete themself, or create a reset link for themself (the server answers 409): those items are hidden for `me.id`.
 
 - [ ] **Step 1: Write the failing tests:**
   - `non-admin is redirected to /projects`
@@ -654,7 +654,7 @@ apps/web/
 **Interfaces:**
 - Consumes: `api.audit.list/listForProject`, `AUDIT_ACTIONS` (shared), `api.users.list` (actor options, for admins), `api.projects.list`.
 - Produces:
-  - Title "Audit log". Search params: `{ projectId?: string; actorId?: string; action?: string[]; limit: 25 | 50 | 100 = 50 }`, validated with zod and kept in the URL so links are shareable.
+  - Title "Audit log". Search params: `{ projectId?: string; actorId?: string; action?: AuditAction; limit: 25 | 50 | 100 = 50 }`, validated with zod and kept in the URL so links are shareable. The API filters by one `action` (`auditQuerySchema.action` is a single enum), so the Action `FilterChip` keeps only the most recently picked value.
   - Toolbar: `FilterChip` "Action" (options from `AUDIT_ACTIONS`), "Actor", "Project". No search chip.
   - Table columns: Time (absolute, with relative tooltip), Actor (initials, label, type tag for service tokens), Action (`Tag` with `text-code-xs`), Target (`text-code-xs`), Project (slug or `–`), IP (`text-code-xs`). The row is clickable and opens a Sheet with read-only detail: all fields plus the metadata JSON in a `bg-bg-weak rounded-lg text-code-xs` pre block.
   - Cursor pagination: keep a stack of `before` cursors in component state. Next uses `nextCursor`; Prev pops. `TableFooter` gets `total = null` (label "{n} shown"), and the page size maps to `limit`.

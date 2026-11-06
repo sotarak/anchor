@@ -3,6 +3,13 @@ import type { Bindings } from "../env";
 import { log } from "../lib/log";
 import { processRotationBatch, type ReencryptMessage } from "./rotation";
 
+/**
+ * wrangler.jsonc sets max_retries 10 for anchor-reencrypt. The 10th failing attempt marks the
+ * rotation failed and acks: a rotation must not stay "running" forever while its message cycles
+ * through the dead letter queue and the daily sweep (whether the platform delivers 10 or 11 times).
+ */
+export const REENCRYPT_MAX_ATTEMPTS = 10;
+
 /** A running rotation untouched for this long is assumed to have lost its message. */
 export const STALE_ROTATION_MS = 15 * 60_000;
 
@@ -19,8 +26,8 @@ function isReencryptMessage(body: unknown): body is ReencryptMessage {
 
 /**
  * Consumer for anchor-reencrypt (max_batch_size 1). Each message re-encrypts one batch: "more"
- * sends the next message before acking, "done"/"failed" ack, and a thrown error retries (the
- * platform moves the message to anchor-reencrypt-dlq after max_retries).
+ * sends the next message before acking, "done"/"failed" ack, and a thrown error retries until
+ * REENCRYPT_MAX_ATTEMPTS, where the rotation is marked failed ("retries_exhausted") and acked.
  */
 export async function handleReencryptBatch(
   batch: MessageBatch<unknown>,
@@ -43,7 +50,21 @@ export async function handleReencryptBatch(
         attempts: msg.attempts,
         name: err instanceof Error ? err.name : "unknown",
       });
-      msg.retry();
+      if (msg.attempts < REENCRYPT_MAX_ATTEMPTS) {
+        msg.retry();
+        continue;
+      }
+      // If this write fails too, the platform redelivers (the message is not acked).
+      await env.DB.prepare(
+        "UPDATE key_rotations SET status = 'failed', error = 'retries_exhausted', updated_at = ? WHERE id = ? AND status = 'running'",
+      )
+        .bind(Date.now(), msg.body.rotationId)
+        .run();
+      log("error", "reencrypt_rotation_failed", {
+        rotationId: msg.body.rotationId,
+        error: "retries_exhausted",
+      });
+      msg.ack();
     }
   }
 }

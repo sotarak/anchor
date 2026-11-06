@@ -8,7 +8,7 @@ import { env } from "cloudflare:workers";
 import type { KeyRotationDto } from "@anchor/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleScheduled } from "#src/audit/scheduled";
-import { handleReencryptBatch, sweepStaleRotations } from "#src/keys/queue";
+import { handleReencryptBatch, REENCRYPT_MAX_ATTEMPTS, sweepStaleRotations } from "#src/keys/queue";
 import type { ReencryptMessage } from "#src/keys/rotation";
 import { api, createUserWithSession, json, jsonInit, resetDb } from "#test/support";
 
@@ -47,9 +47,9 @@ async function runningRotation(id: string, updatedAt: number): Promise<Reencrypt
   return { type: "reencrypt", rotationId: id, projectId: project?.id ?? "", toVersion: 1 };
 }
 
-async function deliver(body: ReencryptMessage) {
+async function deliver(body: ReencryptMessage, attempts = 1) {
   const batch = createMessageBatch<ReencryptMessage>("anchor-reencrypt", [
-    { id: "m1", timestamp: Date.now(), attempts: 1, body },
+    { id: "m1", timestamp: Date.now(), attempts, body },
   ]);
   const ctx = createExecutionContext();
   await handleReencryptBatch(batch, envWith());
@@ -115,6 +115,29 @@ describe("re-encryption queue consumer", () => {
     const result = await deliver(msg);
     expect(result.explicitAcks).toEqual([]);
     expect(result.retryMessages.map((m) => m.msgId)).toEqual(["m1"]);
+  });
+
+  it("the last attempt of a failing batch marks the rotation failed instead of running forever", async () => {
+    await seed(2);
+    const msg = await startRotation();
+    await db
+      .prepare("UPDATE project_keys SET wrapped_key = randomblob(48) WHERE version = 1")
+      .run();
+    const early = await deliver(msg, REENCRYPT_MAX_ATTEMPTS - 1);
+    expect(early.retryMessages.map((m) => m.msgId)).toEqual(["m1"]);
+    expect(await db.prepare("SELECT status FROM key_rotations").first()).toEqual({
+      status: "running",
+    });
+    const last = await deliver(msg, REENCRYPT_MAX_ATTEMPTS);
+    expect(last.explicitAcks).toEqual(["m1"]);
+    expect(last.retryMessages).toEqual([]);
+    expect(await db.prepare("SELECT status, error FROM key_rotations").first()).toEqual({
+      status: "failed",
+      error: "retries_exhausted",
+    });
+    // The cron sweep no longer re-sends it.
+    fakeQueue.send.mockClear();
+    expect(await sweepStaleRotations(db, envWith().REENCRYPT_QUEUE, Date.now() + 60 * MIN)).toBe(0);
   });
 
   it("failed -> ack, rotation failed", async () => {

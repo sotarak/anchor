@@ -57,6 +57,14 @@ export type SecretVersionDto = {
   createdBy: { id: string; label: string } | null;
 };
 
+/** A folder that imports the secrets stored directly at another (environment, path). */
+export type FolderImportDto = {
+  id: string;
+  path: string;
+  source: { environment: string; path: string };
+  position: number;
+};
+
 /** A direct child folder (spec §13.5). */
 export type FolderDto = { path: string; name: string };
 

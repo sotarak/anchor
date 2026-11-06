@@ -1,16 +1,17 @@
 import { DropdownMenu as MenuPrimitive } from "radix-ui";
 import type { ComponentProps } from "react";
-import { RiArrowRightSLine } from "react-icons/ri";
+import { RiArrowRightSLine, RiCheckLine } from "react-icons/ri";
 import { cn } from "@/lib/cn";
 
 export const DropdownMenu = MenuPrimitive.Root;
 export const DropdownMenuTrigger = MenuPrimitive.Trigger;
 export const DropdownMenuSub = MenuPrimitive.Sub;
 export const DropdownMenuGroup = MenuPrimitive.Group;
+export const DropdownMenuRadioGroup = MenuPrimitive.RadioGroup;
 
 const content = "z-50 min-w-40 rounded-lg border bg-bg-white p-1 shadow-md";
 const item =
-  "flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-label-sm text-text-sub outline-none " +
+  "relative flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-label-sm text-text-sub outline-none " +
   "focus:bg-neutral-alpha-100 focus:text-text-strong data-[disabled]:pointer-events-none data-[disabled]:text-text-disabled [&_svg]:size-4";
 
 export function DropdownMenuContent({
@@ -105,5 +106,25 @@ export function DropdownMenuSubContent({
         {...props}
       />
     </MenuPrimitive.Portal>
+  );
+}
+
+/** A single choice inside a DropdownMenuRadioGroup (e.g. a role); the current one is checked. */
+export function DropdownMenuRadioItem({
+  className,
+  children,
+  ...props
+}: ComponentProps<typeof MenuPrimitive.RadioItem>) {
+  return (
+    <MenuPrimitive.RadioItem
+      data-slot="dropdown-menu-radio-item"
+      className={cn(item, "pr-8", className)}
+      {...props}
+    >
+      {children}
+      <MenuPrimitive.ItemIndicator className="absolute right-2">
+        <RiCheckLine aria-hidden />
+      </MenuPrimitive.ItemIndicator>
+    </MenuPrimitive.RadioItem>
   );
 }

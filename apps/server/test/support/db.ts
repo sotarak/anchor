@@ -7,6 +7,9 @@ import { AUDIT_RETENTION_TRIGGER_DDL } from "./audit";
  */
 export const TABLES_CHILD_FIRST = [
   "audit_events",
+  "key_rotations",
+  "folder_imports",
+  "folders",
   "service_tokens",
   "project_members",
   "password_resets",

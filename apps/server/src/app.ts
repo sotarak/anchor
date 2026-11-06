@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { instanceAuditRoutes, projectAuditRoutes } from "./audit/routes";
 import { authenticate, checkOrigin } from "./auth/middleware";
 import { authRoutes } from "./auth/routes";
 import type { AppEnv } from "./env";
@@ -28,9 +29,11 @@ export function createApp(): Hono<AppEnv> {
   app.route("/api/v1/projects/:project/environments/:env/secrets", secretRoutes);
   app.route("/api/v1/projects/:project/service-tokens", serviceTokenRoutes);
   app.route("/api/v1/projects/:project/members", memberRoutes);
+  app.route("/api/v1/projects/:project/audit", projectAuditRoutes);
   app.route("/api/v1/projects", projectRoutes);
   app.route("/api/v1/users", userRoutes);
   app.route("/api/v1/invites", inviteRoutes);
+  app.route("/api/v1/audit", instanceAuditRoutes);
 
   app.onError(errorHandler);
   app.notFound(notFoundHandler);

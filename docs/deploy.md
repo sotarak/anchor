@@ -63,6 +63,10 @@ Keep the printed value for step 6. It is only needed once.
 pnpm exec wrangler deploy
 ```
 
+The deploy also registers the daily Cron Trigger (`0 3 * * *`, from `triggers.crons` in
+`wrangler.jsonc`). There is nothing to set up by hand: it purges audit events past retention (see
+[Audit retention](#audit-retention)).
+
 ## 6. Create the first owner
 
 ```sh
@@ -87,6 +91,33 @@ pnpm exec wrangler secret delete ANCHOR_SETUP_TOKEN
 
 With the token unset, `POST /api/v1/setup` returns `503 setup_disabled`.
 
+## 8. Manage users
+
+The first owner manages everyone else through the API at `/api/v1/users` (list, change role,
+disable, delete, create password-reset links) and `/api/v1/invites` (invite links, valid 72 hours).
+The dashboard UI for this arrives in M4. An instance always keeps at least one active owner: the
+API refuses to demote, disable or delete the last one.
+
+## Audit retention
+
+Audit events are kept for **365 days**. The table is append-only: a database trigger rejects every
+`UPDATE`, and rejects `DELETE` of any row younger than 365 days. The daily Cron Trigger deletes the
+older rows and logs an `audit_purged` line with the count.
+
+## Break-glass: lost owner recovery
+
+If no active owner can sign in (for example, the only owner was disabled or forgot their password
+and no other owner exists), re-enable and promote a known account directly in D1:
+
+```sh
+pnpm exec wrangler d1 execute anchor --remote \
+  --command "UPDATE users SET disabled_at = NULL, role = 'owner' WHERE email = '...'"
+```
+
+Then send that person a password-reset link from the API, or let them sign in if they know their
+password. **This bypasses the API, so it leaves no audit event.** Record who ran it, when and why
+in your own change log, and review the instance's users and audit log right after.
+
 ## Local development
 
 ```sh
@@ -94,3 +125,6 @@ cp .dev.vars.example .dev.vars   # then fill in both values with openssl rand -b
 pnpm exec wrangler d1 migrations apply anchor --local
 pnpm dev
 ```
+
+To exercise the Cron Trigger locally, run `pnpm exec wrangler dev --test-scheduled` and request
+`http://localhost:8787/__scheduled?cron=0+3+*+*+*`; the console shows an `audit_purged` line.

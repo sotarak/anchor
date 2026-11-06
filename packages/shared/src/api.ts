@@ -12,9 +12,33 @@ export type UserDto = {
 
 export type ProjectRole = "admin" | "developer" | "viewer";
 
-export type ProjectDto = { id: string; slug: string; name: string; createdAt: number };
+/** The calling user's effective access to a project. Instance owners/admins map to admin/null. */
+export type ProjectAccessDto = {
+  role: ProjectRole;
+  /** Environment slugs the user may read, or null for every environment. */
+  environments: string[] | null;
+};
+
+export type ProjectDto = {
+  id: string;
+  slug: string;
+  name: string;
+  createdAt: number;
+  /** Present for user principals on GET /projects and GET /projects/:project. */
+  access?: ProjectAccessDto;
+};
 
 export type EnvironmentDto = { id: string; slug: string; name: string; position: number };
+
+/** Which keys exist in which environments at one path. Never carries values. */
+export type OverviewDto = {
+  environments: EnvironmentDto[];
+  keys: {
+    key: string;
+    /** Keyed by environment slug; null when the key is absent there. */
+    cells: Record<string, { version: number; updatedAt: number } | null>;
+  }[];
+};
 
 export type SecretDto = {
   key: string;

@@ -24,7 +24,12 @@ export async function loggedIn(
   const dir = await tmpDir();
   const io = createTestIo({
     cwd: dir,
-    env: { XDG_CONFIG_HOME: join(dir, ".xdg"), ANCHOR_API_URL: TEST_API, ...opts.env },
+    env: {
+      XDG_CONFIG_HOME: join(dir, ".xdg"),
+      ANCHOR_API_URL: TEST_API,
+      NO_COLOR: "1",
+      ...opts.env,
+    },
     stdinIsTTY: opts.tty ?? false,
     stdoutIsTTY: opts.stdoutTTY ?? opts.tty ?? false,
     stdin: opts.stdin,

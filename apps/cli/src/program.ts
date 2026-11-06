@@ -4,6 +4,7 @@ import { init } from "./commands/init";
 import { login } from "./commands/login";
 import { logout } from "./commands/logout";
 import { projectsList } from "./commands/projects";
+import { secretsDelete, secretsGet, secretsList, secretsSet } from "./commands/secrets";
 import { whoami } from "./commands/whoami";
 import { type CliDeps, type CommandContext, createContext, type GlobalFlags } from "./context";
 import { CLI_VERSION } from "./version";
@@ -82,6 +83,57 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     .description("List the environments of the current project")
     .addHelpText("after", examples("anchor envs list", "anchor envs list --project my-app --json"))
     .action(act((ctx) => envsList(ctx)));
+
+  const secrets = program
+    .command("secrets")
+    .description("Manage secrets in the current project, environment and path");
+  secrets
+    .command("list")
+    .description("List secret names and metadata (values only with --reveal)")
+    .option("--reveal", "include values", false)
+    .addHelpText(
+      "after",
+      examples("anchor secrets list", "anchor secrets list --env prod --path /api --json"),
+    )
+    .action(act((ctx, opts: { reveal: boolean }) => secretsList(ctx, opts)));
+  secrets
+    .command("get")
+    .description("Print one secret (the value is masked in a terminal unless --reveal)")
+    .argument("<key>", "secret key")
+    .option("--reveal", "show the value in a terminal", false)
+    .addHelpText(
+      "after",
+      examples("anchor secrets get DB_URL --reveal", "anchor secrets get DB_URL > db-url.txt"),
+    )
+    .action(act((ctx, key: string, opts: { reveal: boolean }) => secretsGet(ctx, key, opts)));
+  secrets
+    .command("set")
+    .description("Create or update a secret; the value comes from stdin, --from-file or a prompt")
+    .argument("<key>", "secret key")
+    .option("--from-file <path>", "read the value from a file (exact bytes)")
+    .option("--comment <text>", "comment stored with the secret")
+    .addHelpText(
+      "after",
+      examples(
+        "anchor secrets set DB_URL            # prompts for the value",
+        "printf '%s' \"$DB_URL\" | anchor secrets set DB_URL",
+        "anchor secrets set TLS_KEY --from-file key.pem",
+      ),
+    )
+    .action(
+      act((ctx, key: string, opts: { fromFile?: string; comment?: string }) =>
+        secretsSet(ctx, key, opts),
+      ),
+    );
+  secrets
+    .command("delete")
+    .description("Delete a secret (asks for confirmation; --yes in scripts)")
+    .argument("<key>", "secret key")
+    .addHelpText(
+      "after",
+      examples("anchor secrets delete OLD_KEY", "anchor secrets delete OLD_KEY --yes"),
+    )
+    .action(act((ctx, key: string) => secretsDelete(ctx, key)));
 
   return program;
 }

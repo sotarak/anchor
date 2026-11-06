@@ -10,6 +10,7 @@ import { Output } from "./output";
 import { createNodeSpawner } from "./process/spawner";
 import { buildProgram, type RunState } from "./program";
 import { createInquirerPrompts } from "./prompts";
+import { assertNoSecretInArgv } from "./secret-input";
 
 const UNEXPECTED = "Unexpected error (run with --debug for details)";
 
@@ -47,6 +48,7 @@ export async function main(argv: string[], partial: Partial<CliDeps> = {}): Prom
   });
   const state: RunState = { exitCode: EXIT.OK };
   try {
+    assertNoSecretInArgv(argv.slice(2));
     await buildProgram(deps, state).parseAsync(argv);
     return state.exitCode;
   } catch (e) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ancestors, childSegment, isWithin, likePrefix } from "#src/secrets/paths";
+import { ancestors, childSegment, isWithin } from "#src/secrets/paths";
 
 describe("ancestors", () => {
   it.each([
@@ -38,15 +38,5 @@ describe("childSegment", () => {
     ["/a/b", "/a", null],
   ])("childSegment(%s, %s) = %s", (parent, path, expected) => {
     expect(childSegment(parent, path)).toBe(expected);
-  });
-});
-
-describe("likePrefix", () => {
-  it.each([
-    ["/api", "/api"],
-    ["/a_b%", "/a\\_b\\%"],
-    ["/x\\y", "/x\\\\y"],
-  ])("%s", (path, expected) => {
-    expect(likePrefix(path)).toBe(expected);
   });
 });

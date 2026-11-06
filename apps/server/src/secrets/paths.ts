@@ -26,8 +26,3 @@ export function childSegment(parent: string, path: string): string | null {
   const rest = parent === "/" ? path.slice(1) : path.slice(parent.length + 1);
   return rest.split("/")[0] || null;
 }
-
-/** Escapes `\`, `%` and `_` for a SQL LIKE pattern used with ESCAPE '\'. */
-export function likePrefix(path: string): string {
-  return path.replace(/[\\%_]/g, (c) => `\\${c}`);
-}

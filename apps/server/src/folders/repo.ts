@@ -1,20 +1,22 @@
 import type { FolderDto } from "@anchor/shared";
 import { newId } from "../lib/random";
-import { ancestors, childSegment, likePrefix } from "../secrets/paths";
+import { ancestors, childSegment } from "../secrets/paths";
 
-/**
- * SQL for "column is `path` or inside it". Binds (path, likePrefix(path)). Never used for "/",
- * which contains everything and is handled by callers.
+/*
+ * Prefix tests use GLOB, not LIKE: SQLite's LIKE ignores ASCII case, so `/api` would match
+ * `/API/x`. GLOB is case-sensitive, and a normalized path ([A-Za-z0-9_-] segments joined by "/")
+ * never contains a GLOB metacharacter (`*`, `?`, `[`), so the path is used as the pattern as is.
  */
-const WITHIN = (column: string) => `(${column} = ? OR ${column} LIKE ? || '/%' ESCAPE '\\')`;
-/** Same as WITHIN with numbered parameters: ?2 = path, ?3 = likePrefix(path). */
-const WITHIN_NUMBERED = (column: string) =>
-  `(${column} = ?2 OR ${column} LIKE ?3 || '/%' ESCAPE '\\')`;
-/** Strictly inside `path`. Binds (likePrefix(path)), or matches every non-root path for "/". */
-const BELOW = (column: string) => `${column} LIKE ? || '/%' ESCAPE '\\'`;
+
+/** SQL for "column is `path` or inside it". Binds (path, path). Never used for "/". */
+const WITHIN = (column: string) => `(${column} = ? OR ${column} GLOB ? || '/*')`;
+/** Same as WITHIN with numbered parameters: ?2 = path. */
+const WITHIN_NUMBERED = (column: string) => `(${column} = ?2 OR ${column} GLOB ?2 || '/*')`;
+/** Strictly inside `path`. Binds (belowBinding(path)); for "/" it matches every non-root path. */
+const BELOW = (column: string) => `${column} GLOB ? || '/*'`;
 
 function belowBinding(path: string): string {
-  return path === "/" ? "" : likePrefix(path);
+  return path === "/" ? "" : path;
 }
 
 function joinPath(parent: string, name: string): string {
@@ -88,20 +90,19 @@ export async function deleteFolder(
   path: string,
   force: boolean,
 ): Promise<DeleteFolderResult> {
-  const like = likePrefix(path);
   if (force) {
     const [secrets, folders, imports] = await db.batch([
       db
         .prepare(`DELETE FROM secrets WHERE environment_id = ? AND ${WITHIN("path")} RETURNING id`)
-        .bind(environmentId, path, like),
+        .bind(environmentId, path, path),
       db
         .prepare(`DELETE FROM folders WHERE environment_id = ? AND ${WITHIN("path")} RETURNING id`)
-        .bind(environmentId, path, like),
+        .bind(environmentId, path, path),
       db
         .prepare(
           `DELETE FROM folder_imports WHERE environment_id = ? AND ${WITHIN("path")} RETURNING id`,
         )
-        .bind(environmentId, path, like),
+        .bind(environmentId, path, path),
     ]);
     // RETURNING counts the rows themselves; meta.changes would include cascaded version rows.
     const secretsDeleted = secrets?.results.length ?? 0;
@@ -117,10 +118,10 @@ export async function deleteFolder(
     .prepare(
       `DELETE FROM folders WHERE environment_id = ?1 AND path = ?2
          AND NOT EXISTS (SELECT 1 FROM secrets WHERE environment_id = ?1 AND ${WITHIN_NUMBERED("path")})
-         AND NOT EXISTS (SELECT 1 FROM folders WHERE environment_id = ?1 AND path LIKE ?3 || '/%' ESCAPE '\\')
+         AND NOT EXISTS (SELECT 1 FROM folders WHERE environment_id = ?1 AND path GLOB ?2 || '/*')
          AND NOT EXISTS (SELECT 1 FROM folder_imports WHERE environment_id = ?1 AND ${WITHIN_NUMBERED("path")})`,
     )
-    .bind(environmentId, path, like)
+    .bind(environmentId, path)
     .run();
   if (result.meta.changes === 1) return deleted(0, 1);
   // Nothing deleted: either it never existed, or content appeared after the check.
@@ -134,15 +135,14 @@ function deleted(secretsDeleted: number, foldersDeleted: number): DeleteFolderRe
 
 /** Secrets, subfolders or imports inside `path` (the folder row itself does not count). */
 async function hasContent(db: D1Database, environmentId: string, path: string): Promise<boolean> {
-  const like = likePrefix(path);
   const row = await db
     .prepare(
       `SELECT
          EXISTS (SELECT 1 FROM secrets WHERE environment_id = ?1 AND ${WITHIN_NUMBERED("path")}) AS s,
-         EXISTS (SELECT 1 FROM folders WHERE environment_id = ?1 AND path LIKE ?3 || '/%' ESCAPE '\\') AS f,
+         EXISTS (SELECT 1 FROM folders WHERE environment_id = ?1 AND path GLOB ?2 || '/*') AS f,
          EXISTS (SELECT 1 FROM folder_imports WHERE environment_id = ?1 AND ${WITHIN_NUMBERED("path")}) AS i`,
     )
-    .bind(environmentId, path, like)
+    .bind(environmentId, path)
     .first<{ s: number; f: number; i: number }>();
   return !!row && (row.s === 1 || row.f === 1 || row.i === 1);
 }

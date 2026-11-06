@@ -137,6 +137,23 @@ describe("folders API", () => {
     expect(results).toEqual([]);
   });
 
+  it("paths are case-sensitive: /api never lists, blocks or force-deletes /API", async () => {
+    await putSecret("/API/db", "PASSWORD", "upper-canary");
+    await create("/api");
+    expect(await names(await list("/api"))).toEqual([]);
+    // Empty /api deletes without force although /API/db has content.
+    expect((await remove("/api")).status).toBe(204);
+    await putSecret("/api", "K");
+    // A read-write token scoped to /api force-deletes /api only.
+    const { token: st } = await createServiceToken("app", {
+      permission: "read-write",
+      scopes: [{ environment: "dev", path: "/api" }],
+    });
+    expect((await remove("/api", true, st)).status).toBe(204);
+    expect(await secretPaths()).toEqual(["/API/db:PASSWORD"]);
+    expect(await folderRows()).toEqual(["/API", "/API/db"]);
+  });
+
   it("delete / -> 400, invalid path -> 400", async () => {
     expect((await remove("/", true)).status).toBe(400);
     expect((await create("/")).status).toBe(400);

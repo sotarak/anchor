@@ -7,6 +7,7 @@ import { logout } from "./commands/logout";
 import { projectsList } from "./commands/projects";
 import { runCommand } from "./commands/run";
 import { secretsDelete, secretsGet, secretsList, secretsSet } from "./commands/secrets";
+import { tokensCreate, tokensList, tokensRevoke } from "./commands/tokens";
 import { whoami } from "./commands/whoami";
 import { type CliDeps, type CommandContext, createContext, type GlobalFlags } from "./context";
 import { CLI_VERSION } from "./version";
@@ -168,6 +169,57 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     .action(
       act((ctx, opts: { format: ExportFormat; output?: string }) => exportCommand(ctx, opts)),
     );
+
+  const tokens = program.command("tokens").description("Manage service tokens for CI and servers");
+  tokens
+    .command("create")
+    .description("Create a service token (printed once on stdout)")
+    .requiredOption("--name <name>", "token name")
+    .option(
+      "--scope <env[:path]>",
+      "environment and optional path prefix; repeatable (default: current env, /)",
+      (value: string, previous: string[] = []) => [...previous, value],
+    )
+    .addOption(
+      new Option("--permission <permission>", "access level")
+        .choices(["read", "read-write"])
+        .default("read"),
+    )
+    .option("--expires-in <days>", "lifetime in days (1-365)", "90")
+    .addHelpText(
+      "after",
+      examples(
+        "anchor tokens create --name ci --scope prod --permission read",
+        "anchor tokens create --name deploy --scope prod:/api --expires-in 30 --json",
+      ),
+    )
+    .action(
+      act(
+        (
+          ctx,
+          opts: {
+            name: string;
+            scope?: string[];
+            permission: "read" | "read-write";
+            expiresIn: string;
+          },
+        ) => tokensCreate(ctx, opts),
+      ),
+    );
+  tokens
+    .command("list")
+    .description("List the project's service tokens")
+    .addHelpText("after", examples("anchor tokens list", "anchor tokens list --json"))
+    .action(act((ctx) => tokensList(ctx)));
+  tokens
+    .command("revoke")
+    .description("Revoke a service token (asks for confirmation; --yes in scripts)")
+    .argument("<id>", "token id (see 'anchor tokens list')")
+    .addHelpText(
+      "after",
+      examples("anchor tokens revoke tok_123", "anchor tokens revoke tok_123 --yes"),
+    )
+    .action(act((ctx, id: string) => tokensRevoke(ctx, id)));
 
   return program;
 }

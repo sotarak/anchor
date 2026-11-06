@@ -15,7 +15,9 @@
 
 ## Project-authored skills
 
-`building-cli`, `secrets-crypto`. These are not vendored and are edited directly.
+`building-cli`, `secrets-crypto`, `dashboard-ui`. These are not vendored and are edited directly.
+`dashboard-ui` token values and class recipes are adapted from the open-source Novu dashboard
+(`novuhq/novu`, `apps/dashboard`, branch `next`, read 2026-11-06).
 
 ## Updating
 

@@ -16,6 +16,8 @@ Status: greenfield. No stack decisions are final until recorded in `docs/`.
 - Domain skills:
   - `secrets-crypto` — anything touching secret storage, encryption, tokens, authorization, audit
   - `building-cli` — anything touching the CLI
+  - `dashboard-ui` — any dashboard screen, component, or style (Novu-like look; tokens + primitive
+    recipes). Path-scoped rule in `.claude/rules/dashboard-ui.md`.
   - `cloudflare`, `workers-best-practices`, `wrangler` / `cf-cli`, `durable-objects`,
     `workers-profiling` — platform work. Prefer retrieving current Cloudflare docs over memory.
 - The Cloudflare MCP server is configured in `.mcp.json` (docs search + account API).

@@ -1,0 +1,260 @@
+/*
+ * Anchor dashboard design tokens (Tailwind CSS v4 + shadcn/ui).
+ *
+ * Copy this file to the dashboard's global stylesheet (e.g. src/styles/globals.css).
+ * Values are adapted from Novu's open-source dashboard (AlignUI-style semantic tokens).
+ * Light theme only. Change the brand hue in ONE place: --brand-*.
+ *
+ * Utilities this produces (use these, not raw Tailwind palette colors):
+ *   bg-bg-white / bg-bg-weak / bg-bg-soft / bg-bg-strong
+ *   text-text-strong / text-text-sub / text-text-soft / text-text-disabled
+ *   border-stroke-soft / ring-stroke-soft / border-stroke-weak
+ *   bg-primary-base / hover:bg-primary-darker / bg-primary-alpha-10 / text-primary-base
+ *   {bg,text}-{success,warning,error,information,feature,faded,away}-{base,light,lighter,dark}
+ *   text-label-{2xs,xs,sm,md,lg} / text-paragraph-{2xs,xs,sm,md} / text-subheading-{2xs,xs}
+ *   text-code-xs / text-code-2xs   (JetBrains Mono)
+ *   rounded-4 / 6 / 8 / 10 / 12 / 16    shadow-xs / shadow-sm / shadow-md / shadow-box-xs
+ */
+@import "tailwindcss";
+
+:root {
+  /* Neutral scale (cool gray) */
+  --neutral-0: hsl(210 10% 100%);
+  --neutral-50: hsl(0 0% 98%);
+  --neutral-75: hsl(210 10% 96%);
+  --neutral-100: hsl(210 30% 96%);
+  --neutral-200: hsl(220 18% 90%);
+  --neutral-300: hsl(219 15% 82%);
+  --neutral-400: hsl(220 11% 64%);
+  --neutral-500: hsl(221 8% 48%);
+  --neutral-600: hsl(222 11% 36%);
+  --neutral-700: hsl(221 16% 20%);
+  --neutral-800: hsl(227 17% 16%);
+  --neutral-900: hsl(226 21% 12%);
+  --neutral-950: hsl(222 32% 8%);
+
+  /* Translucent neutrals: borders, hover fills, selected nav items */
+  --neutral-alpha-50: hsl(0 0% 69% / 0.05);
+  --neutral-alpha-100: hsl(210 30% 61% / 0.1);
+  --neutral-alpha-200: hsl(220 18% 50% / 0.2);
+  --neutral-alpha-400: hsl(220 100% 10% / 0.4);
+
+  /* Brand (Novu-like crimson). Swap these three to rebrand. */
+  --brand-base: hsl(346 73% 50%);
+  --brand-darker: hsl(346 70% 50%);
+  --brand-dark: hsl(346 72% 42%);
+
+  /* Semantic surfaces */
+  --bg-white: var(--neutral-0);
+  --bg-weak: var(--neutral-50);
+  --bg-muted: var(--neutral-75);
+  --bg-soft: var(--neutral-200);
+  --bg-sub: var(--neutral-300);
+  --bg-strong: var(--neutral-950);
+
+  --text-strong: var(--neutral-950);
+  --text-sub: var(--neutral-600);
+  --text-soft: var(--neutral-400);
+  --text-disabled: var(--neutral-300);
+
+  --stroke-strong: var(--neutral-950);
+  --stroke-sub: var(--neutral-300);
+  --stroke-soft: var(--neutral-200);
+  --stroke-weak: var(--neutral-100);
+}
+
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* ---- Colors ---- */
+  --color-neutral-0: var(--neutral-0);
+  --color-neutral-50: var(--neutral-50);
+  --color-neutral-75: var(--neutral-75);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-300: var(--neutral-300);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-600: var(--neutral-600);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-800: var(--neutral-800);
+  --color-neutral-900: var(--neutral-900);
+  --color-neutral-950: var(--neutral-950);
+  --color-neutral-alpha-50: var(--neutral-alpha-50);
+  --color-neutral-alpha-100: var(--neutral-alpha-100);
+  --color-neutral-alpha-200: var(--neutral-alpha-200);
+  --color-neutral-alpha-400: var(--neutral-alpha-400);
+
+  --color-bg-white: var(--bg-white);
+  --color-bg-weak: var(--bg-weak);
+  --color-bg-muted: var(--bg-muted);
+  --color-bg-soft: var(--bg-soft);
+  --color-bg-sub: var(--bg-sub);
+  --color-bg-strong: var(--bg-strong);
+
+  --color-text-strong: var(--text-strong);
+  --color-text-sub: var(--text-sub);
+  --color-text-soft: var(--text-soft);
+  --color-text-disabled: var(--text-disabled);
+
+  --color-stroke-strong: var(--stroke-strong);
+  --color-stroke-sub: var(--stroke-sub);
+  --color-stroke-soft: var(--stroke-soft);
+  --color-stroke-weak: var(--stroke-weak);
+
+  --color-primary-base: var(--brand-base);
+  --color-primary-darker: var(--brand-darker);
+  --color-primary-dark: var(--brand-dark);
+  --color-primary-alpha-10: hsl(346 73% 50% / 0.1);
+  --color-primary-alpha-16: hsl(346 73% 50% / 0.16);
+
+  /* State colors: base = text/icon, lighter = pill background, light = stronger fill, dark = text on light */
+  --color-success-base: hsl(148 72% 44%);
+  --color-success-dark: hsl(148 73% 16%);
+  --color-success-light: hsl(148 72% 44% / 0.4);
+  --color-success-lighter: hsl(148 72% 44% / 0.1);
+
+  --color-warning-base: hsl(20 100% 64%);
+  --color-warning-dark: hsl(20 70% 24%);
+  --color-warning-light: hsl(20 100% 64% / 0.4);
+  --color-warning-lighter: hsl(20 100% 64% / 0.1);
+
+  --color-error-base: hsl(355 96% 60%);
+  --color-error-dark: hsl(355 70% 24%);
+  --color-error-light: hsl(355 96% 60% / 0.4);
+  --color-error-lighter: hsl(355 96% 60% / 0.1);
+
+  --color-information-base: hsl(228 100% 60%);
+  --color-information-dark: hsl(228 70% 24%);
+  --color-information-light: hsl(220 100% 87.65%);
+  --color-information-lighter: hsl(222 100% 96.08%);
+
+  --color-feature-base: hsl(256 88% 64%);
+  --color-feature-dark: hsl(258 64% 28%);
+  --color-feature-light: hsl(256 88% 64% / 0.4);
+  --color-feature-lighter: hsl(256 88% 64% / 0.1);
+
+  --color-away-base: hsl(42 92% 54%);
+  --color-away-dark: hsl(42 61% 24%);
+  --color-away-light: hsl(42 92% 54% / 0.4);
+  --color-away-lighter: hsl(42 92% 54% / 0.1);
+
+  --color-faded-base: var(--neutral-500);
+  --color-faded-dark: var(--neutral-800);
+  --color-faded-light: var(--neutral-200);
+  --color-faded-lighter: var(--neutral-100);
+
+  /* ---- shadcn/ui variable bridge: stock shadcn components pick up this look ---- */
+  --color-background: var(--bg-white);
+  --color-foreground: var(--text-strong);
+  --color-card: var(--bg-white);
+  --color-card-foreground: var(--text-strong);
+  --color-popover: var(--bg-white);
+  --color-popover-foreground: var(--text-strong);
+  --color-primary: var(--brand-base);
+  --color-primary-foreground: var(--neutral-0);
+  --color-secondary: var(--bg-weak);
+  --color-secondary-foreground: var(--text-strong);
+  --color-muted: var(--bg-weak);
+  --color-muted-foreground: var(--text-sub);
+  --color-accent: var(--neutral-alpha-100);
+  --color-accent-foreground: var(--text-strong);
+  --color-destructive: hsl(355 96% 60%);
+  --color-border: var(--neutral-alpha-200);
+  --color-input: var(--stroke-soft);
+  --color-ring: var(--brand-base);
+
+  /* ---- Radius ---- */
+  --radius-4: 0.25rem;
+  --radius-6: 0.375rem;
+  --radius-8: 0.5rem;
+  --radius-10: 0.625rem;
+  --radius-12: 0.75rem;
+  --radius-16: 1rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  /* ---- Shadows (barely-there) ---- */
+  --shadow-xs: 0px 1px 2px 0px rgba(10, 13, 20, 0.03);
+  --shadow-sm: 0px 1px 2px 0px #1018280f, 0px 1px 3px 0px #1018281a;
+  --shadow-md: 0px 16px 32px -12px rgba(14, 18, 27, 0.1);
+  --shadow-box-xs: 0 0 0 1px rgba(25, 28, 33, 0.04), 0 1px 2px 0 rgba(25, 28, 33, 0.06);
+  --shadow-button-primary-focus: 0 0 0 2px var(--bg-white), 0 0 0 4px hsl(346 73% 50% / 0.1);
+  --shadow-button-error-focus: 0 0 0 2px var(--bg-white), 0 0 0 4px hsl(355 96% 60% / 0.1);
+
+  /* ---- Typography scale: label = UI text (500), paragraph = prose (400) ---- */
+  --text-label-2xs: 0.625rem;
+  --text-label-2xs--line-height: 0.875rem;
+  --text-label-2xs--font-weight: 400;
+  --text-label-xs: 0.75rem;
+  --text-label-xs--line-height: 1rem;
+  --text-label-xs--font-weight: 500;
+  --text-label-sm: 0.875rem;
+  --text-label-sm--line-height: 1.25rem;
+  --text-label-sm--letter-spacing: -0.00525em;
+  --text-label-sm--font-weight: 500;
+  --text-label-md: 1rem;
+  --text-label-md--line-height: 1.5rem;
+  --text-label-md--letter-spacing: -0.011em;
+  --text-label-md--font-weight: 500;
+  --text-label-lg: 1.125rem;
+  --text-label-lg--line-height: 1.5rem;
+  --text-label-lg--letter-spacing: -0.015em;
+  --text-label-lg--font-weight: 500;
+
+  --text-paragraph-2xs: 0.625rem;
+  --text-paragraph-2xs--line-height: 0.875rem;
+  --text-paragraph-xs: 0.75rem;
+  --text-paragraph-xs--line-height: 1rem;
+  --text-paragraph-sm: 0.875rem;
+  --text-paragraph-sm--line-height: 1.25rem;
+  --text-paragraph-sm--letter-spacing: -0.00525em;
+  --text-paragraph-md: 1rem;
+  --text-paragraph-md--line-height: 1.5rem;
+  --text-paragraph-md--letter-spacing: -0.011em;
+
+  --text-subheading-2xs: 0.6875rem;
+  --text-subheading-2xs--line-height: 0.75rem;
+  --text-subheading-2xs--letter-spacing: 0.01375em;
+  --text-subheading-2xs--font-weight: 500;
+  --text-subheading-xs: 0.75rem;
+  --text-subheading-xs--line-height: 1rem;
+  --text-subheading-xs--letter-spacing: 0.03em;
+  --text-subheading-xs--font-weight: 500;
+}
+
+/* Code text is a utility (not a theme size) so it can carry the mono font family. */
+@utility text-code-xs {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: -0.0125em;
+}
+@utility text-code-2xs {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  line-height: 0.9375rem;
+  letter-spacing: -0.0125em;
+}
+
+@layer base {
+  * {
+    border-color: var(--neutral-alpha-200);
+  }
+  html {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background: var(--bg-white);
+    color: var(--text-strong);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+  :focus-visible {
+    outline-color: var(--brand-base);
+  }
+}

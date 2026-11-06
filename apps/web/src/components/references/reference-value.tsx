@@ -16,19 +16,23 @@ export function ReferenceValue({
   env,
   path,
   secretKey,
+  importedFrom,
 }: {
   project: string;
   env: string;
   path: string;
   secretKey: string;
+  /** Set for a row composed from an import: read through the import, chips relative to it. */
+  importedFrom?: { environment: string; path: string };
 }) {
+  const read = { includeImports: importedFrom ? true : undefined };
   const [resolved, setResolved] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function resolve() {
     setBusy(true);
     try {
-      const s = await api.secrets.get(project, env, secretKey, path, { expand: true });
+      const s = await api.secrets.get(project, env, secretKey, path, { ...read, expand: true });
       setResolved(s.value ?? "");
     } catch (e) {
       toast.error(errorMessage(e));
@@ -39,9 +43,17 @@ export function ReferenceValue({
 
   return (
     <MaskedValue
-      reveal={async () => (await api.secrets.get(project, env, secretKey, path)).value ?? ""}
+      reveal={async () => (await api.secrets.get(project, env, secretKey, path, read)).value ?? ""}
       onHide={() => setResolved(null)}
-      render={(v) => resolved ?? <ReferenceText value={v} env={env} path={path} />}
+      render={(v) =>
+        resolved ?? (
+          <ReferenceText
+            value={v}
+            env={importedFrom?.environment ?? env}
+            path={importedFrom?.path ?? path}
+          />
+        )
+      }
       actions={(v) =>
         hasReferences(v) ? (
           <Button

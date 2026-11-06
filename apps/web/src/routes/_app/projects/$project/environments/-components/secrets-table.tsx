@@ -27,11 +27,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tag } from "@/components/ui/tag";
 import { Tooltip } from "@/components/ui/tooltip";
 import { formatDate, formatRelative } from "@/lib/format";
 
+const source = (f: { environment: string; path: string }) => `${f.environment}:${f.path}`;
+
 /**
- * Folders, then secrets, at one env + path. Values are masked; Reveal/Copy fetch the one value directly (never a
+ * Folders, then secrets, at one env + path. Rows composed from imports carry a "from" tag and
+ * are read-only. Values are masked; Reveal/Copy fetch the one value directly (never a
  * query) and keep it in the row's state only. Render with `key={env + path}` so a different
  * env or path remounts every row and nothing revealed carries over.
  */
@@ -100,7 +104,14 @@ export function SecretsTable({
                   <div className="flex items-center gap-2">
                     <RiKey2Line aria-hidden className="size-4 shrink-0 text-text-soft" />
                     <div className="flex min-w-0 flex-col">
-                      <span className="truncate">{s.key}</span>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate">{s.key}</span>
+                        {s.importedFrom ? (
+                          <Tooltip content={`Edit in ${source(s.importedFrom)}`}>
+                            <Tag tabIndex={0}>{`from ${source(s.importedFrom)}`}</Tag>
+                          </Tooltip>
+                        ) : null}
+                      </span>
                       {s.comment ? (
                         <span className="truncate text-paragraph-xs text-text-soft">
                           {s.comment}
@@ -118,6 +129,7 @@ export function SecretsTable({
                     env={env}
                     path={path}
                     secretKey={s.key}
+                    importedFrom={s.importedFrom}
                   />
                 </TableCell>
                 <TableCell className="text-paragraph-sm">{`v${s.version}`}</TableCell>
@@ -134,21 +146,24 @@ export function SecretsTable({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
-                      {canWrite ? (
+                      {/* An imported row is read-only here: it is edited in its source folder. */}
+                      {canWrite && !s.importedFrom ? (
                         <DropdownMenuItem onSelect={() => onEdit(s)}>
                           <RiPencilLine aria-hidden />
                           Edit
                         </DropdownMenuItem>
                       ) : null}
-                      <DropdownMenuItem onSelect={() => onHistory(s)}>
-                        <RiHistoryLine aria-hidden />
-                        History
-                      </DropdownMenuItem>
+                      {s.importedFrom ? null : (
+                        <DropdownMenuItem onSelect={() => onHistory(s)}>
+                          <RiHistoryLine aria-hidden />
+                          History
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onSelect={() => void copyKey(s.key)}>
                         <RiFileCopyLine aria-hidden />
                         Copy key
                       </DropdownMenuItem>
-                      {canWrite ? (
+                      {canWrite && !s.importedFrom ? (
                         <>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem destructive onSelect={() => onDelete(s)}>

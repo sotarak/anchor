@@ -62,13 +62,25 @@ function createReadSession(ctx: ComposeContext) {
     const out: Source[] = [{ environment: ctx.environment, path }];
     if (!includeImports) return out;
     for (const row of await listImports(ctx.db, ctx.environment.id, path)) {
-      await authorize(ctx.db, ctx.principal, "secret:read", {
-        projectId: ctx.project.id,
-        environmentId: row.source_environment_id,
-        path: row.source_path,
-      });
       const environment = await byId(row.source_environment_id);
       if (!environment) continue; // deleted concurrently; its import row cascades away
+      try {
+        await authorize(ctx.db, ctx.principal, "secret:read", {
+          projectId: ctx.project.id,
+          environmentId: row.source_environment_id,
+          path: row.source_path,
+        });
+      } catch (e) {
+        // The caller can list this folder's imports, so naming the source reveals nothing new.
+        if (e instanceof ApiError && e.status === 403) {
+          throw new ApiError(
+            403,
+            "forbidden",
+            `You do not have permission to read the import ${environment.slug}:${row.source_path} of ${ctx.environment.slug}:${path}`,
+          );
+        }
+        throw e;
+      }
       out.push({
         environment,
         path: row.source_path,

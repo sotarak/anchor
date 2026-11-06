@@ -33,7 +33,7 @@ export function projectExists(
 }
 
 /**
- * GET /folders for one env: `byPath` maps a path to its child folders (missing path → none).
+ * GET /folders for one env (and an empty GET /imports, which a test can override): `byPath` maps a path to its child folders (missing path → none).
  * Records each requested URL.
  */
 export function foldersAre(
@@ -48,6 +48,9 @@ export function foldersAre(
       urls.push(url);
       return HttpResponse.json({ folders: byPath[url.searchParams.get("path") ?? "/"] ?? [] });
     }),
+    http.get(`/api/v1/projects/${project}/environments/${env}/imports`, () =>
+      HttpResponse.json({ imports: [] }),
+    ),
   );
   return { urls };
 }

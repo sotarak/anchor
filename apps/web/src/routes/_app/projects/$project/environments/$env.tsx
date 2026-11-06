@@ -2,7 +2,13 @@ import type { FolderDto, SecretDto } from "@anchor/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type ReactNode, useMemo, useState } from "react";
-import { RiAddLine, RiFolderAddLine, RiKey2Line } from "react-icons/ri";
+import {
+  RiAddLine,
+  RiFolderAddLine,
+  RiForbidLine,
+  RiInboxArchiveLine,
+  RiKey2Line,
+} from "react-icons/ri";
 import { toast } from "sonner";
 import { useSetHeader } from "@/components/app-shell/header";
 import { SearchChip } from "@/components/data/search-chip";
@@ -19,6 +25,8 @@ import { DeleteFolderDialog } from "@/components/folders/delete-folder-dialog";
 import { NewFolderSheet } from "@/components/folders/new-folder-sheet";
 import { useFolders } from "@/components/folders/use-folders";
 import { SecretHistorySheet } from "@/components/history/secret-history-sheet";
+import { AddImportSheet } from "@/components/imports/add-import-sheet";
+import { ImportsSection } from "@/components/imports/imports-section";
 import { ConfirmDialog } from "@/components/overlays/confirm-dialog";
 import { GoToPathChip } from "@/components/secrets/go-to-path-chip";
 import { PathBreadcrumb } from "@/components/secrets/path-breadcrumb";
@@ -37,6 +45,9 @@ export const Route = createFileRoute("/_app/projects/$project/environments/$env"
   component: SecretsPage,
 });
 
+/** The server's 403 when one of the folder's import sources is not readable. */
+const IMPORT_DENIED = /^You do not have permission to read the import /;
+
 type SheetState = { mode: "add" } | { mode: "edit"; secret: SecretDto } | null;
 
 function SecretsPage() {
@@ -54,13 +65,15 @@ function SecretsPage() {
   });
   const secrets = useQuery({
     queryKey: qk.secrets(project, env, path),
-    queryFn: () => api.secrets.list(project, env, path),
+    // Composed with the folder's imports; a source the caller cannot read fails the whole list.
+    queryFn: () => api.secrets.list(project, env, path, { includeImports: true }),
   });
   const folders = useFolders(project, env, path);
   const [search, setSearch] = useState("");
   const [sheet, setSheet] = useState<SheetState>(null);
   const [deleting, setDeleting] = useState<SecretDto | null>(null);
   const [newFolder, setNewFolder] = useState(false);
+  const [addImport, setAddImport] = useState(false);
   const [deletingFolder, setDeletingFolder] = useState<FolderDto | null>(null);
   // By key: after a rollback the list refetches and the sheet sees the new current version.
   const [historyKey, setHistoryKey] = useState<string | null>(null);
@@ -98,10 +111,16 @@ function SecretsPage() {
       onClick={() => setSheet({ mode: "add" })}
       menuLabel="More create options"
       menu={
-        <DropdownMenuItem onSelect={() => setNewFolder(true)}>
-          <RiFolderAddLine aria-hidden />
-          New folder
-        </DropdownMenuItem>
+        <>
+          <DropdownMenuItem onSelect={() => setNewFolder(true)}>
+            <RiFolderAddLine aria-hidden />
+            New folder
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setAddImport(true)}>
+            <RiInboxArchiveLine aria-hidden />
+            Add import
+          </DropdownMenuItem>
+        </>
       }
     >
       <RiAddLine aria-hidden />
@@ -110,7 +129,19 @@ function SecretsPage() {
   ) : null;
 
   let body: ReactNode;
-  if (error instanceof ApiClientError && error.status === 403) {
+  if (
+    error instanceof ApiClientError &&
+    error.status === 403 &&
+    IMPORT_DENIED.test(error.message)
+  ) {
+    body = (
+      <EmptyState
+        icon={RiForbidLine}
+        title="You cannot read an imported folder"
+        description={error.message}
+      />
+    );
+  } else if (error instanceof ApiClientError && error.status === 403) {
     body = <ForbiddenState what="this environment" />;
   } else if (error) {
     body = (
@@ -180,6 +211,7 @@ function SecretsPage() {
         <PathBreadcrumb path={path} onNavigate={setPath} />
         <div className="ml-auto">{isEmpty ? null : addButton}</div>
       </div>
+      <ImportsSection project={project} env={env} path={path} canWrite={canWrite} />
       <h2 className="text-paragraph-sm text-text-soft">{`Secrets in ${path}`}</h2>
       {body}
       {sheet ? (
@@ -191,7 +223,8 @@ function SecretsPage() {
           project={project}
           env={env}
           path={path}
-          existingKeys={(secrets.data ?? []).map((s) => s.key)}
+          // Imported keys may be shadowed by a local one, so only local keys conflict.
+          existingKeys={(secrets.data ?? []).filter((s) => !s.importedFrom).map((s) => s.key)}
         />
       ) : null}
       {historySecret ? (
@@ -203,6 +236,16 @@ function SecretsPage() {
           secret={historySecret}
           canWrite={canWrite}
           onOpenChange={(open) => !open && setHistoryKey(null)}
+        />
+      ) : null}
+      {addImport ? (
+        <AddImportSheet
+          open
+          onOpenChange={setAddImport}
+          project={project}
+          env={env}
+          path={path}
+          environments={envQuery.data ?? []}
         />
       ) : null}
       {newFolder ? (

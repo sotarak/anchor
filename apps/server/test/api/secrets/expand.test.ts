@@ -178,7 +178,11 @@ describe("reference expansion", () => {
     expect(await expanded.text()).not.toContain("BILLING-CANARY");
     const imported = await list("dev", "path=/api&reveal=true&includeImports=true", token);
     expect(imported.status).toBe(403);
-    expect(await imported.text()).not.toContain("BILLING-CANARY");
+    const body = await imported.text();
+    expect(body).not.toContain("BILLING-CANARY");
+    expect(JSON.parse(body).error.message).toBe(
+      "You do not have permission to read the import dev:/billing of dev:/api",
+    );
     const single = await get("dev", "OWN", "path=/api&includeImports=true", token);
     expect(single.status).toBe(403);
     expect((await get("dev", "OWN", "path=/api", token)).status).toBe(200);

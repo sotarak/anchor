@@ -3,6 +3,7 @@ import type {
   AuditEventDto,
   EnvironmentDto,
   FolderDto,
+  FolderImportDto,
   InstanceRole,
   InviteDto,
   LoginResponse,
@@ -106,20 +107,23 @@ export const api = {
   },
   secrets: {
     /** Metadata only: never sends reveal=true. */
-    list: async (p: string, env: string, path: string) =>
-      (await apiFetch<{ secrets: SecretDto[] }>(`${envUrl(p, env)}/secrets`, { query: { path } }))
-        .secrets,
+    list: async (p: string, env: string, path: string, opts: { includeImports?: boolean } = {}) =>
+      (
+        await apiFetch<{ secrets: SecretDto[] }>(`${envUrl(p, env)}/secrets`, {
+          query: { path, includeImports: opts.includeImports },
+        })
+      ).secrets,
     /** The one value-returning call. Never wrap it in useQuery. */
     get: async (
       p: string,
       env: string,
       key: string,
       path: string,
-      opts: { expand?: boolean } = {},
+      opts: { expand?: boolean; includeImports?: boolean } = {},
     ) =>
       (
         await apiFetch<{ secret: SecretDto }>(`${envUrl(p, env)}/secrets/${e(key)}`, {
-          query: { path, expand: opts.expand },
+          query: { path, expand: opts.expand, includeImports: opts.includeImports },
         })
       ).secret,
     put: async (
@@ -171,6 +175,27 @@ export const api = {
       ).folder,
     remove: (p: string, env: string, path: string, force: boolean) =>
       apiFetch<void>(`${envUrl(p, env)}/folders`, { method: "DELETE", query: { path, force } }),
+  },
+  imports: {
+    list: async (p: string, env: string, path: string) =>
+      (
+        await apiFetch<{ imports: FolderImportDto[] }>(`${envUrl(p, env)}/imports`, {
+          query: { path },
+        })
+      ).imports,
+    create: async (
+      p: string,
+      env: string,
+      body: { path: string; source: { environment: string; path: string } },
+    ) =>
+      (
+        await apiFetch<{ import: FolderImportDto }>(`${envUrl(p, env)}/imports`, {
+          method: "POST",
+          body,
+        })
+      ).import,
+    remove: (p: string, env: string, id: string) =>
+      apiFetch<void>(`${envUrl(p, env)}/imports/${e(id)}`, { method: "DELETE" }),
   },
   members: {
     list: async (p: string) =>

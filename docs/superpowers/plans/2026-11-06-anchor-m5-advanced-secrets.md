@@ -66,7 +66,10 @@
 ```
 packages/shared/src/
   references.ts           tokenizeValue(), formatReference(), REFERENCE limits (pure; used by server + web)
-  schemas.ts              + folder/import/rollback/rotation body schemas, expand/includeImports query
+  schemas/folders.ts      folder body/query schemas (new domain file)
+  schemas/imports.ts      import body schema (new domain file)
+  schemas/secrets.ts      + rollback body schema, expand/includeImports query
+  schemas/index.ts        + re-exports folders and imports
   api.ts                  + FolderDto, SecretVersionDto, FolderImportDto, KeyRotationDto, SecretDto fields
   audit.ts (or errors.ts) + M5 audit actions (where M2 put AUDIT_ACTIONS)
 apps/server/
@@ -93,6 +96,26 @@ apps/web/src/             (exact folders follow the M4 layout; Task 0 maps them)
   features/imports/       ImportsSection, AddImportSheet
   features/settings/      EncryptionSection (KEK status + rotate)
 docs/deploy.md            + key rotation runbook
+
+apps/server/test/         layers per docs/testing.md; imports via #src/* and #test/support
+  support/db.ts           (modify) TABLES_CHILD_FIRST + folder_imports, folders, key_rotations
+  unit/secrets/paths.test.ts
+  unit/references/resolve.test.ts
+  integration/db/migration-0003.test.ts
+  integration/keys/{rotation,queue}.test.ts
+  api/folders/folders.test.ts
+  api/imports/imports.test.ts
+  api/secrets/{versions,expand}.test.ts
+  api/admin/root-keyring.test.ts
+  api/no-leak.test.ts     (modify) referenced + imported canaries
+packages/shared/test/
+  references.test.ts      mirrors src/references.ts
+apps/cli/test/            support/ holds the helpers and fakes; imports via #test/support and #src/*
+  integration/commands/{secrets-history,expand,folders}.test.ts
+  e2e/m5.e2e.test.ts
+apps/web/test/            no tests inside src/; support/ holds the render helpers and MSW handlers
+  features/{folders,history,references,imports,settings}/*.test.tsx
+  e2e/m5.spec.ts
 ```
 
 ---
@@ -102,7 +125,7 @@ docs/deploy.md            + key rotation runbook
 **Files:**
 - Modify: this plan, and only this plan
 
-- [ ] **Step 1: List the consumed names.** Every name in an **Interfaces → Consumes** block below must exist in the merged code. Check each one: `createApp`, `AppEnv`, `Principal` (M2 union), `authorize(db, principal, action, resource)` (M2 async), `requireUser`/`requirePrincipal`, `ApiError`, `IntegrityError`, `ConfigError`, `log`, `parseJson`, `parseQuery`, `getRootKey`, `createWrappedKek`, `unwrapKek`, `kekAad`, `secretAad`, `seal`, `open`, `AEAD_ALG`, `getProjectKek`, `getProjectBySlug`, `getEnvironmentBySlug`, `putSecret`, `getSecret`, `listSecrets`, `deleteSecret`, `SecretContext`, `recordAudit` (M2 name), the test helpers `api`, `jsonInit`, `resetDb` and `createUserWithSession`, plus the M2 helpers for creating members and service tokens. On the client side: the CLI API client, its output and exit-code helpers, and the web `AppShell`, the query client, MSW handlers and the primitives `Button`, `Sheet`, `Dialog`, `StatusBadge`, `Tag`.
+- [ ] **Step 1: List the consumed names.** Every name in an **Interfaces → Consumes** block below must exist in the merged code. Check each one: `createApp`, `AppEnv`, `Principal` (M2 union), `authorize(db, principal, action, resource)` (M2 async), `requireUser`/`requirePrincipal`, `ApiError`, `IntegrityError`, `ConfigError`, `log`, `parseJson`, `parseQuery`, `getRootKey`, `createWrappedKek`, `unwrapKek`, `kekAad`, `secretAad`, `seal`, `open`, `AEAD_ALG`, `getProjectKek`, `getProjectBySlug`, `getEnvironmentBySlug`, `putSecret`, `getSecret`, `listSecrets`, `deleteSecret`, `SecretContext`, `recordAudit` (M2 name), the test helpers `api`, `jsonInit`, `resetDb` and `createUserWithSession` (exported from `#test/support`, in `apps/server/test/support/`), plus the M2 helpers for creating members and service tokens (also under `test/support/factories/`). On the client side: the CLI API client, its output and exit-code helpers, and the web `AppShell`, the query client, MSW handlers and the primitives `Button`, `Sheet`, `Dialog`, `StatusBadge`, `Tag`.
 - [ ] **Step 2: Grep each name and record its real signature.** Run `grep -rn "export .*<name>" apps packages`. Where it differs from this plan, edit this plan so later tasks use the real name. Never rename merged code to match this plan.
 - [ ] **Step 3: Check what `secret_versions.created_by` holds after M2** (user id only, or a typed id) and rewrite Task 3's `createdBy` lookup to match.
 - [ ] **Step 4: Map the web feature folders** to the M4 layout and update the paths in Tasks 13–17.
@@ -114,8 +137,8 @@ docs/deploy.md            + key rotation runbook
 
 **Files:**
 - Create: `apps/server/migrations/0003_folders_imports.sql`, `apps/server/src/secrets/paths.ts`
-- Modify: `apps/server/test/helpers.ts` (`resetDb` covers the new tables)
-- Test: `apps/server/test/paths.test.ts`, `apps/server/test/schema-m5.test.ts`
+- Modify: `apps/server/test/support/db.ts` (add `folder_imports`, `folders` and `key_rotations` to `TABLES_CHILD_FIRST`, children before parents, so `resetDb` covers the new tables and `test/integration/db/reset.test.ts` stays green)
+- Test: `apps/server/test/unit/secrets/paths.test.ts`, `apps/server/test/integration/db/migration-0003.test.ts`
 
 **Interfaces:**
 - Produces: these tables (spec §13.3) plus the internal columns `key_rotations.updated_at INTEGER NOT NULL` and `key_rotations.error TEXT`:
@@ -165,8 +188,8 @@ CREATE INDEX secret_versions_key_version ON secret_versions(key_version);
 
 - [ ] **Step 1: Write the failing tests.**
   - Table-driven tests for all four helpers, including `isWithin("/apix", "/api") === false`, `isWithin("/a_b/c", "/a_b") === true`, `likePrefix("/a_b%") === "/a\\_b\\%"` and `childSegment("/", "/a/b") === "a"`.
-  - `schema-m5.test.ts` checks that the tables exist, that `project_keys.status` defaults to `active`, and that deleting a source environment cascades its imports.
-- [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter ./apps/server test -- paths schema-m5`.
+  - `migration-0003.test.ts` checks that the tables exist, that `project_keys.status` defaults to `active`, and that deleting a source environment cascades its imports.
+- [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter ./apps/server test:unit -- paths` and `pnpm --filter ./apps/server test:integration -- migration-0003 reset`.
 - [ ] **Step 3: Implement the migration and the helpers.** Apply the migration locally with `wrangler d1 migrations apply anchor --local`.
 - [ ] **Step 4: Run the tests and confirm they pass.**
 - [ ] **Step 5: Commit** with `git commit -m "feat(server): M5 schema and folder path helpers"`.
@@ -177,8 +200,9 @@ CREATE INDEX secret_versions_key_version ON secret_versions(key_version);
 
 **Files:**
 - Create: `apps/server/src/folders/repo.ts`, `apps/server/src/folders/routes.ts`
-- Modify: `apps/server/src/secrets/service.ts` (`putSecret` ensures folder rows), `apps/server/src/app.ts`, `packages/shared/src/{schemas,api}.ts`, plus the audit action list
-- Test: `apps/server/test/folders.test.ts`
+- Modify: `apps/server/src/secrets/service.ts` (`putSecret` ensures folder rows), `apps/server/src/app.ts`, `packages/shared/src/schemas/index.ts` (re-export), `packages/shared/src/api.ts`, plus the audit action list
+- Create (shared): `packages/shared/src/schemas/folders.ts`
+- Test: `apps/server/test/api/folders/folders.test.ts`
 
 **Interfaces:**
 - Consumes: `ancestors`, `isWithin`, `childSegment`, `likePrefix` (Task 1); `authorize`; `recordAudit`.
@@ -202,7 +226,7 @@ CREATE INDEX secret_versions_key_version ON secret_versions(key_version);
   - `putSecret at /x/y creates folder rows /x and /x/y`
   - `delete non-empty -> 409; force deletes subtree only` (Review Focus 4): create `/api`, `/apix` and `/a_b`/`/axb` with secrets, force-delete `/api` and `/a_b`, then expect `/apix` and `/axb` and their secrets intact
   - `delete / -> 400`, `invalid path -> 400`
-  - `service token scoped to /api: list ?path=/ -> 403, list ?path=/api -> 200` (uses the M2 token helper)
+  - `service token scoped to /api: list ?path=/ -> 403, list ?path=/api -> 200` (uses the M2 token helper from `#test/support`)
   - `viewer -> 403 on create/delete`
   - `audit records folder.deleted with counts`
 - [ ] **Step 2: Run the tests and confirm they fail.**
@@ -216,8 +240,8 @@ CREATE INDEX secret_versions_key_version ON secret_versions(key_version);
 
 **Files:**
 - Create: `apps/server/src/secrets/versions.ts`
-- Modify: `apps/server/src/secrets/routes.ts`, `packages/shared/src/{schemas,api}.ts`
-- Test: `apps/server/test/versions.test.ts`
+- Modify: `apps/server/src/secrets/routes.ts`, `packages/shared/src/schemas/secrets.ts`, `packages/shared/src/api.ts`
+- Test: `apps/server/test/api/secrets/versions.test.ts`
 
 **Interfaces:**
 - Consumes: `SecretContext`, `getProjectKek(db, rootKey|keyring, project, version)`, `secretAad`, `open`, `putSecret`, `IntegrityError`, `recordAudit`.
@@ -298,7 +322,7 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
 
 **Files:**
 - Create: `apps/server/src/references/resolve.ts`
-- Test: `apps/server/test/resolve.test.ts` (pure unit tests with in-memory loaders; no D1)
+- Test: `apps/server/test/unit/references/resolve.test.ts` (pure unit tests with in-memory loaders; no D1)
 
 **Interfaces:**
 - Consumes: `tokenizeValue`, `REFERENCE_LIMITS`, `utf8ByteLength`, `ApiError`.
@@ -342,9 +366,9 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
 ### Task 6: Folder imports — storage and API
 
 **Files:**
-- Create: `apps/server/src/imports/repo.ts`, `apps/server/src/imports/routes.ts`
-- Modify: `apps/server/src/app.ts`, `packages/shared/src/{schemas,api}.ts`, plus the audit actions
-- Test: `apps/server/test/imports.test.ts`
+- Create: `apps/server/src/imports/repo.ts`, `apps/server/src/imports/routes.ts`, `packages/shared/src/schemas/imports.ts`
+- Modify: `apps/server/src/app.ts`, `packages/shared/src/schemas/index.ts` (re-export), `packages/shared/src/api.ts`, plus the audit actions
+- Test: `apps/server/test/api/imports/imports.test.ts`
 
 **Interfaces:**
 - Produces (shared): `FolderImportDto { id; path; source: { environment: string; path: string }; position: number }`, `createImportBodySchema { path: secretPathSchema = "/", source: { environment: slugSchema, path: secretPathSchema } }`.
@@ -375,8 +399,8 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
 
 **Files:**
 - Create: `apps/server/src/secrets/view.ts`
-- Modify: `apps/server/src/secrets/routes.ts`, `packages/shared/src/{schemas,api}.ts` (`secretQuerySchema` gets `expand` and `includeImports` booleans, default false; `SecretDto` gets `rawValue?: string` and `importedFrom?: { environment: string; path: string }`)
-- Test: `apps/server/test/secrets-expand.test.ts`
+- Modify: `apps/server/src/secrets/routes.ts`, `packages/shared/src/schemas/secrets.ts` (`secretQuerySchema` gets `expand` and `includeImports` booleans, default false; and `packages/shared/src/api.ts` (`SecretDto` gets `rawValue?: string` and `importedFrom?: { environment: string; path: string }`)
+- Test: `apps/server/test/api/secrets/expand.test.ts`
 
 **Interfaces:**
 - Consumes: `createResolver` (Task 5), `listImports` (Task 6), `listSecrets`/`getSecret` (M1), `authorize`, `recordAudit`.
@@ -400,7 +424,7 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
   - `service token scoped to /api: ${dev:/billing/KEY} -> 403; includeImports from /billing -> 403` (Review Focus 1)
   - `value "echo ${HOME}" with expand -> 400 naming secret, reference and $${ hint; without expand -> 200` (Review Focus 2)
   - `audit secret.read lists referenced addresses and no values`
-  - `no-leak`: extend the M1 canary test with a referenced canary value and an imported one, and assert neither appears in logs
+  - `no-leak`: extend the M1 canary test in `apps/server/test/api/no-leak.test.ts` with a referenced canary value and an imported one, and assert neither appears in logs
 - [ ] **Step 2: Run the tests and confirm they fail.**
 - [ ] **Step 3: Implement `view.ts` and wire up the routes.**
 - [ ] **Step 4: Run the tests and confirm they pass.** Then run the full server suite.
@@ -413,7 +437,7 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
 **Files:**
 - Modify: `apps/server/src/crypto/keyring.ts`, `apps/server/src/env.ts` (bindings), `apps/server/src/projects/repo.ts` (callers), `apps/server/vitest.config.ts` (test binding `ANCHOR_ROOT_KEY_ID: "rk-test"`), `apps/server/.dev.vars.example`, `docs/deploy.md`
 - Create: `apps/server/src/admin/routes.ts`
-- Test: `apps/server/test/root-keyring.test.ts`
+- Test: `apps/server/test/api/admin/root-keyring.test.ts`
 
 **Interfaces:**
 - Produces:
@@ -455,7 +479,7 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
 **Files:**
 - Create: `apps/server/src/keys/rotation.ts`, `apps/server/src/keys/routes.ts`
 - Modify: `apps/server/src/projects/repo.ts` (`getProjectKek` accepts the keyring and allows decrypting with `retiring`/`retired` KEKs, logging `retired_kek_used` for retired ones), `apps/server/src/env.ts` (`REENCRYPT_QUEUE: Queue<ReencryptMessage>`), `packages/shared/src/api.ts`
-- Test: `apps/server/test/rotation.test.ts`
+- Test: `apps/server/test/integration/keys/rotation.test.ts`
 
 **Interfaces:**
 - Produces (shared): `KeyRotationDto` (spec §13.5) and `ProjectKeyDto { version: number; status: "active" | "retiring" | "retired"; rootKeyId: string; createdAt: number }`.
@@ -501,7 +525,7 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
 **Files:**
 - Create: `apps/server/src/keys/queue.ts`
 - Modify: `apps/server/src/index.ts`, `apps/server/wrangler.jsonc`, the M2 cron handler file, `docs/deploy.md`
-- Test: `apps/server/test/rotation-queue.test.ts`
+- Test: `apps/server/test/integration/keys/queue.test.ts`
 
 **Interfaces:**
 - Produces: `handleReencryptBatch(batch: MessageBatch<ReencryptMessage>, env: Bindings): Promise<void>`. For each message it calls `processRotationBatch`:
@@ -529,10 +553,10 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
 
 **Files:**
 - Modify: `apps/cli/src/commands/secrets.ts`, `apps/cli/src/commands/run.ts`, `apps/cli/src/commands/export.ts`, the CLI API client
-- Test: `apps/cli/test/secrets-history.test.ts`, `apps/cli/test/expand.test.ts`, help snapshots
+- Test: `apps/cli/test/integration/commands/secrets-history.test.ts`, `apps/cli/test/integration/commands/expand.test.ts` (both run through `runCli` with the fakes from `#test/support`), help snapshots
 
 **Interfaces:**
-- Consumes: the M3 API client, the output and exit-code helpers, the confirm helper, and the fake API client used in tests.
+- Consumes: the M3 API client, the output and exit-code helpers, the confirm helper, and the fake API client used in tests (`apps/cli/test/support/fakes.ts`).
 - Produces:
   - `run` and `export`: `--expand` (default) and `--no-expand`. Requests send `reveal=true&expand=<bool>&includeImports=true`.
   - `secrets get KEY`: `--expand` defaults on, plus `--no-expand` and `--version <n>`. `--version` calls the versions endpoint and keeps M3's reveal rules (`--plain`/non-TTY).
@@ -551,7 +575,7 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
   - `rollback non-TTY without --yes -> exit 2 and no API call`
   - `rollback --yes prints the new version to stderr; --json prints to stdout`
   - Update the `--help` snapshots.
-- [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter ./apps/cli test`.
+- [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter ./apps/cli test:integration`.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run the tests and confirm they pass.**
 - [ ] **Step 5: Commit** with `git commit -m "feat(cli): reference expansion flags, history and rollback"`.
@@ -563,7 +587,7 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
 **Files:**
 - Create: `apps/cli/src/commands/folders.ts`
 - Modify: the CLI command registry and API client
-- Test: `apps/cli/test/folders.test.ts`, help snapshots
+- Test: `apps/cli/test/integration/commands/folders.test.ts`, help snapshots
 
 **Interfaces:**
 - Produces:
@@ -592,8 +616,8 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
 
 **Files:**
 - Create: `apps/web/src/features/folders/{FolderRows,PathBreadcrumb,NewFolderSheet,DeleteFolderDialog}.tsx`, `apps/web/src/features/folders/api.ts`
-- Modify: the M4 environment secrets route (path in the URL search param `path`), the MSW handlers
-- Test: `apps/web/src/features/folders/*.test.tsx`
+- Modify: the M4 environment secrets route (path in the URL search param `path`), the MSW handlers (`apps/web/test/support/`)
+- Test: `apps/web/test/features/folders/*.test.tsx`
 
 **Interfaces:**
 - Consumes: the M4 `AppShell`, the query client and the primitives (`Button` variants, `Sheet`, `Dialog`, the table container).
@@ -623,7 +647,7 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
 **Files:**
 - Create: `apps/web/src/features/history/{SecretHistorySheet,RollbackDialog}.tsx`, `apps/web/src/features/history/api.ts`
 - Modify: the secret row `⋮` menu (adds "History")
-- Test: `apps/web/src/features/history/*.test.tsx`
+- Test: `apps/web/test/features/history/*.test.tsx`
 
 **Interfaces:**
 - Produces: `useSecretVersions(...)`, `useSecretVersionValue(..., version, { enabled })` (fetched only on reveal, with `gcTime: 0`, so values are not kept in the cache), and `useRollback()`.
@@ -651,7 +675,7 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
 **Files:**
 - Create: `apps/web/src/features/references/{ReferenceText,ResolvedPreview}.tsx`
 - Modify: the M4 secret value editor (Sheet) and the revealed-value cell
-- Test: `apps/web/src/features/references/*.test.tsx`
+- Test: `apps/web/test/features/references/*.test.tsx`
 
 **Interfaces:**
 - Consumes: `tokenizeValue`, `formatReference` from `@anchor/shared`.
@@ -678,7 +702,7 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
 **Files:**
 - Create: `apps/web/src/features/imports/{ImportsSection,AddImportSheet}.tsx`, `apps/web/src/features/imports/api.ts`
 - Modify: the environment secrets route (the list query adds `includeImports=true`)
-- Test: `apps/web/src/features/imports/*.test.tsx`
+- Test: `apps/web/test/features/imports/*.test.tsx`
 
 **Interfaces:**
 - Produces: `useImports`, `useCreateImport`, `useDeleteImport`.
@@ -705,7 +729,7 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
 **Files:**
 - Create: `apps/web/src/features/settings/EncryptionSection.tsx`, `apps/web/src/features/settings/keys-api.ts`
 - Modify: the M4 project settings route
-- Test: `apps/web/src/features/settings/EncryptionSection.test.tsx`
+- Test: `apps/web/test/features/settings/EncryptionSection.test.tsx`
 
 **Interfaces:**
 - Produces:
@@ -732,8 +756,8 @@ The `$$${DB}` case pins the scanning order. Scan left to right; the first `$${` 
 ### Task 18: End-to-end check and docs
 
 **Files:**
-- Modify: the M4 Playwright suite (add `m5.spec.ts`), the M3 CLI e2e suite, `README.md` (feature list), `docs/deploy.md` (link the runbooks)
-- Test: `apps/web/e2e/m5.spec.ts`, `apps/cli/test/e2e/m5.e2e.test.ts`
+- Modify: the M4 Playwright suite (add `apps/web/test/e2e/m5.spec.ts`), the M3 CLI e2e suite, `README.md` (feature list), `docs/deploy.md` (link the runbooks)
+- Test: `apps/web/test/e2e/m5.spec.ts`, `apps/cli/test/e2e/m5.e2e.test.ts`
 
 - [ ] **Step 1: Write the e2e tests:**
   - **Playwright against `wrangler dev`:**

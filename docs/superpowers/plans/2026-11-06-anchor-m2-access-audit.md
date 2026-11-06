@@ -34,6 +34,11 @@
 - `service_tokens.last_used_at` is written at most once per 60,000 ms per token.
 - Audit metadata must never contain a key matching `/^(value|values|rawValue|password|currentPassword|newPassword|token|cookie|authorization)$/i`. `recordAudit` throws `Error("audit metadata contains forbidden field: <name>")` when it does. Secret values never appear anywhere in audit rows.
 - Use only the names, routes and DTOs from spec §13 for public contracts. Internal helpers may be added.
+- Test layout follows `docs/testing.md`:
+  - Server tests live in `apps/server/test/<layer>/<mirror of src path>/<module>.test.ts`, where the layer is `unit` (pure logic), `integration` (service, repo or schema against D1) or `api` (HTTP through the Worker). Pick the lowest layer that can prove the behavior.
+  - Tests import source through `#src/<path>` and shared helpers through `#test/support`. Helpers live in `apps/server/test/support/`, split by concern, and are re-exported from `support/index.ts`.
+  - Every new table is added to `TABLES_CHILD_FIRST` in `apps/server/test/support/db.ts`. The guard test `test/integration/db/reset.test.ts` fails until it is.
+  - Shared-package tests live in `packages/shared/test/schemas/<domain>.test.ts`, mirroring `src/schemas/<domain>.ts`.
 
 ## Review Focus
 
@@ -48,10 +53,19 @@
 ## File Structure
 
 ```
-packages/shared/src/
-  api.ts                 + SessionDto, InviteDto, MemberDto, ServiceTokenDto, AuditEventDto, UserDto.disabledAt
-  schemas.ts             + M2 request body / query schemas
-  audit.ts               AUDIT_ACTIONS, AuditAction                      (new)
+packages/shared/
+  src/api.ts             + SessionDto, InviteDto, MemberDto, ServiceTokenDto, AuditEventDto, UserDto.disabledAt
+  src/audit.ts           AUDIT_ACTIONS, AuditAction                      (new)
+  src/index.ts           + export of ./audit
+  src/schemas/auth.ts    + changePasswordBodySchema, resetPasswordBodySchema
+  src/schemas/users.ts   instanceRoleSchema, updateUserBodySchema        (new)
+  src/schemas/invites.ts createInviteBodySchema, inviteTokenBodySchema, acceptInviteBodySchema  (new)
+  src/schemas/members.ts projectRoleSchema, addMemberBodySchema, updateMemberBodySchema         (new)
+  src/schemas/service-tokens.ts  createServiceTokenBodySchema            (new)
+  src/schemas/audit.ts   auditQuerySchema                                (new)
+  src/schemas/index.ts   + re-exports of the new domain files
+  test/audit.test.ts     (new)
+  test/schemas/{auth,users,invites,members,service-tokens,audit}.test.ts  (new)
 apps/server/
   migrations/0002_access.sql
   wrangler.jsonc         + triggers.crons
@@ -73,8 +87,20 @@ apps/server/
   src/members/repo.ts, src/members/routes.ts                                     (new)
   src/service-tokens/repo.ts, src/service-tokens/routes.ts                       (new)
   src/projects/routes.ts, src/secrets/routes.ts   awaited authorize + audit
-  test/helpers.ts        + createMember(), createServiceToken(), auditRows(), failingAuditDb()
-  test/*.test.ts
+  test/support/db.ts     + M2 tables in TABLES_CHILD_FIRST; resetDb drops and re-creates the audit retention trigger
+  test/support/audit.ts  AUDIT_RETENTION_TRIGGER_DDL, auditRows(), failingAuditDb()   (new)
+  test/support/factories/members.ts          createMember()              (new)
+  test/support/factories/service-tokens.ts   createServiceToken()        (new)
+  test/support/index.ts  + re-exports of audit, members and service-tokens
+  test/unit/lib/random.test.ts                              (new)
+  test/unit/authz/policy.test.ts                            scopeMatches; replaces the M1 table
+  test/integration/db/migration-0002.test.ts                 (new)
+  test/integration/audit/{record,scheduled}.test.ts         (new)
+  test/integration/authz/policy.test.ts                     (new)
+  test/api/{members,users,invites,service-tokens}/<feature>.test.ts   (new)
+  test/api/auth/{passwords,session-management}.test.ts      (new)
+  test/api/audit/{audit,wiring}.test.ts                     (new)
+  test/api/{projects,secrets}/*.test.ts                     M1 tests updated for memberships
 docs/deploy.md           + cron note, user management notes
 ```
 
@@ -84,7 +110,7 @@ docs/deploy.md           + cron note, user management notes
 
 **Files:** none modified unless the plan needs fixing. Edit this plan file only.
 
-- [ ] **Step 1: Check what M2 consumes.** For each name M2 takes from M1 (`createApp`, `AppEnv`, `Bindings`, `Principal`, `ApiError`, `parseJson`, `parseQuery`, `log`, `newId`, `newSessionToken`, `sha256Hex`, `toBase64Url`, `hashPassword`, `verifyPassword`, `verifyAgainstDummy`, `createSession`, `findPrincipalBySessionToken`, `revokeSession`, `setSessionCookie`, `authenticate`, `requireUser`, `checkOrigin`, `UserRow`, `findUserByEmail`, `findUserById`, `insertUser`, `toUserDto`, `authorize`, `Action`, `ProjectRow`, `EnvironmentRow`, `getProjectBySlug`, `getEnvironmentBySlug`, `listProjects`, `createProject`, the secrets service functions, and the test helpers `api`, `resetDb`, `createUserWithSession`, `jsonInit`, `TEST_ORIGIN`), run `grep -rn "<name>" apps/server/src apps/server/test packages/shared/src` and confirm its signature matches the M1 plan.
+- [ ] **Step 1: Check what M2 consumes.** For each name M2 takes from M1 (`createApp`, `AppEnv`, `Bindings`, `Principal`, `ApiError`, `parseJson`, `parseQuery`, `log`, `newId`, `newSessionToken`, `sha256Hex`, `toBase64Url`, `hashPassword`, `verifyPassword`, `verifyAgainstDummy`, `createSession`, `findPrincipalBySessionToken`, `revokeSession`, `setSessionCookie`, `authenticate`, `requireUser`, `checkOrigin`, `UserRow`, `findUserByEmail`, `findUserById`, `insertUser`, `toUserDto`, `authorize`, `Action`, `ProjectRow`, `EnvironmentRow`, `getProjectBySlug`, `getEnvironmentBySlug`, `listProjects`, `createProject`, the secrets service functions, and the test helpers `api`, `resetDb`, `createUserWithSession`, `jsonInit`, `TEST_ORIGIN`, which are exported from `apps/server/test/support/index.ts` as `#test/support`), run `grep -rn "<name>" apps/server/src apps/server/test packages/shared/src` and confirm its signature matches the M1 plan.
 - [ ] **Step 2: Fix any mismatches in this plan.** Where the merged code differs, update the matching **Consumes** lines and test snippets here. Do not change merged code in this task.
 - [ ] **Step 3: Run the baseline.** Run `pnpm lint && pnpm typecheck && pnpm test`. Expected: all green before starting M2.
 
@@ -94,34 +120,48 @@ docs/deploy.md           + cron note, user management notes
 
 **Files:**
 - Create: `packages/shared/src/audit.ts`
-- Modify: `packages/shared/src/api.ts`, `packages/shared/src/schemas.ts`, `packages/shared/src/index.ts`
-- Test: `packages/shared/test/m2-schemas.test.ts`
+- Create: `packages/shared/src/schemas/users.ts`, `packages/shared/src/schemas/invites.ts`, `packages/shared/src/schemas/members.ts`, `packages/shared/src/schemas/service-tokens.ts`, `packages/shared/src/schemas/audit.ts`
+- Modify: `packages/shared/src/api.ts`, `packages/shared/src/schemas/auth.ts`, `packages/shared/src/schemas/index.ts` (re-export the new domain files), `packages/shared/src/index.ts` (export `./audit`)
+- Test: `packages/shared/test/schemas/users.test.ts`, `packages/shared/test/schemas/auth.test.ts`, `packages/shared/test/schemas/invites.test.ts`, `packages/shared/test/schemas/members.test.ts`, `packages/shared/test/schemas/service-tokens.test.ts`, `packages/shared/test/schemas/audit.test.ts`, `packages/shared/test/audit.test.ts`
 
 **Interfaces:**
 - Produces (`audit.ts`): `AUDIT_ACTIONS` as a `const` tuple containing exactly the M2 list from spec §13.6, and `type AuditAction = (typeof AUDIT_ACTIONS)[number]`. M5 appends its actions later.
 - Produces (`api.ts`): the DTOs exactly as in spec §13.5 (`SessionDto`, `InviteDto`, `MemberDto`, `ServiceTokenDto`, `AuditEventDto`), plus `UserDto.disabledAt?: number | null` and `type ProjectRole = "admin" | "developer" | "viewer"`. `AuditEventDto.actor.type` is `"user" | "service_token" | "anonymous"`. `AuditEventDto.metadata` is `Record<string, unknown>`.
-- Produces (`schemas.ts`):
-  - `instanceRoleSchema`, `projectRoleSchema`
-  - `changePasswordBodySchema { currentPassword: string(1..1024), newPassword: passwordSchema }`
-  - `updateUserBodySchema { role?: instanceRole, disabled?: boolean }`, refined so at least one field is present
-  - `createInviteBodySchema { email, role: instanceRole }`
-  - `inviteTokenBodySchema { token: string(1..200) }`
-  - `acceptInviteBodySchema { token, name: string(1..100), password: passwordSchema }`
-  - `resetPasswordBodySchema { token, password: passwordSchema }`
-  - `addMemberBodySchema { email, role: projectRole, environments: slug[] (1..50, unique) | null = null }`, refined so `role === "admin"` requires `environments === null`
-  - `updateMemberBodySchema { role?, environments? }`, with the same refinement when both are present
-  - `createServiceTokenBodySchema { name: string(1..64), permission: "read" | "read-write", scopes: { environment: slug, path: secretPathSchema }[] (1..20), expiresInDays: int(1..365) }`
-  - `auditQuerySchema { projectId?: string, actorId?: string, action?: AuditAction, before?: string(1..200), limit: coerce int(1..200) = 50 }`
+- Produces (one file per domain under `packages/shared/src/schemas/`, each re-exported by `schemas/index.ts`):
+  - `users.ts`:
+    - `instanceRoleSchema`
+    - `updateUserBodySchema { role?: instanceRole, disabled?: boolean }`, refined so at least one field is present
+  - `auth.ts`:
+    - `changePasswordBodySchema { currentPassword: string(1..1024), newPassword: passwordSchema }`
+    - `resetPasswordBodySchema { token, password: passwordSchema }`
+  - `invites.ts`:
+    - `createInviteBodySchema { email, role: instanceRole }`
+    - `inviteTokenBodySchema { token: string(1..200) }`
+    - `acceptInviteBodySchema { token, name: string(1..100), password: passwordSchema }`
+  - `members.ts`:
+    - `projectRoleSchema`
+    - `addMemberBodySchema { email, role: projectRole, environments: slug[] (1..50, unique) | null = null }`, refined so `role === "admin"` requires `environments === null`
+    - `updateMemberBodySchema { role?, environments? }`, with the same refinement when both are present
+  - `service-tokens.ts`:
+    - `createServiceTokenBodySchema { name: string(1..64), permission: "read" | "read-write", scopes: { environment: slug, path: secretPathSchema }[] (1..20), expiresInDays: int(1..365) }`
+  - `audit.ts`:
+    - `auditQuerySchema { projectId?: string, actorId?: string, action?: AuditAction, before?: string(1..200), limit: coerce int(1..200) = 50 }`
 
-- [ ] **Step 1: Write the failing tests.**
-  - `addMember rejects admin with environments`: `{ email: "a@x.io", role: "admin", environments: ["prod"] }` fails, and `environments: null` passes.
-  - `addMember rejects duplicate env slugs`
-  - `serviceToken requires expiresInDays 1..365`: 0, 366 and missing all fail, 1 and 365 pass.
-  - `serviceToken normalizes scope paths`: `"api/"` becomes `"/api"`, and `"/../x"` fails.
-  - `serviceToken requires at least one scope`
-  - `updateUser requires a field`: `{}` fails.
-  - `auditQuery coerces limit and caps at 200`: `"10"` becomes 10, and `"201"` fails.
-  - `AUDIT_ACTIONS contains every M2 action in spec §13.6`: compare against a literal array copied from the spec.
+- [ ] **Step 1: Write the failing tests.** Each test file imports from `../../src/schemas/<domain>` (the shared package has no `#src` alias).
+  - `test/schemas/members.test.ts`:
+    - `addMember rejects admin with environments`: `{ email: "a@x.io", role: "admin", environments: ["prod"] }` fails, and `environments: null` passes.
+    - `addMember rejects duplicate env slugs`
+  - `test/schemas/service-tokens.test.ts`:
+    - `serviceToken requires expiresInDays 1..365`: 0, 366 and missing all fail, 1 and 365 pass.
+    - `serviceToken normalizes scope paths`: `"api/"` becomes `"/api"`, and `"/../x"` fails.
+    - `serviceToken requires at least one scope`
+  - `test/schemas/users.test.ts`:
+    - `updateUser requires a field`: `{}` fails.
+  - `test/schemas/audit.test.ts`:
+    - `auditQuery coerces limit and caps at 200`: `"10"` becomes 10, and `"201"` fails.
+  - `test/audit.test.ts` (mirrors `src/audit.ts`, imports from `../src/audit`):
+    - `AUDIT_ACTIONS contains every M2 action in spec §13.6`: compare against a literal array copied from the spec.
+  - `test/schemas/auth.test.ts` and `test/schemas/invites.test.ts` hold the plain accept and reject cases for `changePasswordBodySchema`, `resetPasswordBodySchema` and the invite schemas.
 - [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter @anchor/shared test`. Expected: FAIL.
 - [ ] **Step 3: Implement the shared contracts.**
 - [ ] **Step 4: Run the tests and confirm they pass.** Run `pnpm --filter @anchor/shared test && pnpm typecheck`. Expected: PASS.
@@ -133,8 +173,9 @@ docs/deploy.md           + cron note, user management notes
 
 **Files:**
 - Create: `apps/server/migrations/0002_access.sql`
-- Modify: `apps/server/src/lib/random.ts`, `apps/server/test/helpers.ts` (`resetDb` covers the new tables; it must delete `audit_events` with a statement the trigger allows, see Step 3)
-- Test: `apps/server/test/schema-m2.test.ts`, `apps/server/test/random.test.ts`
+- Create: `apps/server/test/support/audit.ts` (exports the trigger DDL constant now, and gains more helpers in Task 3)
+- Modify: `apps/server/src/lib/random.ts`, `apps/server/test/support/db.ts` (add the new tables to `TABLES_CHILD_FIRST`; `resetDb` must delete `audit_events` with a statement the trigger allows, see Step 3), `apps/server/test/support/index.ts` (re-export `./audit`)
+- Test: `apps/server/test/integration/db/migration-0002.test.ts`, `apps/server/test/unit/lib/random.test.ts`
 
 **Interfaces:**
 - Produces: the tables from spec §13.3 (M2), with these exact details:
@@ -194,9 +235,9 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
   - `deleting a project cascades members and service tokens`
   - `newToken has prefix and 43 base64url chars`: regex `/^anc_st_[A-Za-z0-9_-]{43}$/`.
   - `tokenPrefix is 12 chars`
-- [ ] **Step 2: Run the tests and confirm they fail.**
-- [ ] **Step 3: Write the migration and the helpers.** Because of the retention trigger, `resetDb()` cannot delete young audit rows. Make it run `DROP TRIGGER audit_events_retention`, then `DELETE FROM audit_events`, then re-create the trigger with the exact DDL above (read it from one exported constant in `test/helpers.ts` so it cannot drift). Run `wrangler d1 migrations apply anchor --local` to confirm that D1 accepts triggers. If D1 rejects `RAISE` inside triggers, stop and report: spec §6.5 depends on it.
-- [ ] **Step 4: Run the tests and confirm they pass.**
+- [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter ./apps/server exec vitest run test/integration/db test/unit/lib/random.test.ts`. Expected: FAIL.
+- [ ] **Step 3: Write the migration and the helpers.** Add `invites`, `password_resets`, `project_members`, `service_tokens` and `audit_events` to `TABLES_CHILD_FIRST` in `test/support/db.ts`, children before parents. The guard test `test/integration/db/reset.test.ts` fails until every new table is listed. Because of the retention trigger, `resetDb()` cannot delete young audit rows. Make it run `DROP TRIGGER audit_events_retention`, then `DELETE FROM audit_events`, then re-create the trigger with the exact DDL above (read it from one exported constant, `AUDIT_RETENTION_TRIGGER_DDL` in `test/support/audit.ts`, so it cannot drift). Run `wrangler d1 migrations apply anchor --local` to confirm that D1 accepts triggers. If D1 rejects `RAISE` inside triggers, stop and report: spec §6.5 depends on it.
+- [ ] **Step 4: Run the tests and confirm they pass.** Run `pnpm --filter ./apps/server exec vitest run test/integration/db test/unit/lib/random.test.ts`. Expected: PASS, including `reset.test.ts`.
 - [ ] **Step 5: Commit** with `git commit -m "feat(server): access-control tables and append-only audit log"`.
 
 ---
@@ -205,8 +246,8 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
 
 **Files:**
 - Create: `apps/server/src/lib/request.ts`, `apps/server/src/audit/record.ts`
-- Modify: `apps/server/src/env.ts` (`Variables.requestId: string`, `Variables.clientIp: string | null`, `Variables.userAgent: string | null`), `apps/server/src/app.ts` (register `requestContext` before `authenticate` on `/api/*`), `apps/server/test/helpers.ts`
-- Test: `apps/server/test/audit-record.test.ts`
+- Modify: `apps/server/src/env.ts` (`Variables.requestId: string`, `Variables.clientIp: string | null`, `Variables.userAgent: string | null`), `apps/server/src/app.ts` (register `requestContext` before `authenticate` on `/api/*`), `apps/server/test/support/audit.ts` (add `auditRows`, `failingAuditDb`)
+- Test: `apps/server/test/integration/audit/record.test.ts`
 
 **Interfaces:**
 - Produces (`request.ts`): `requestContext` middleware. It sets:
@@ -224,7 +265,7 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
   - `type AuditInput = { action: AuditAction; actor?: AuditActor; projectId?: string | null; environmentId?: string | null; target?: string | null; metadata?: Record<string, unknown> }`
   - `recordAudit(c: Context<AppEnv>, input: AuditInput): Promise<void>` inserts one row and awaits it. The actor defaults to `actorOf(c.var.principal)`. It validates metadata against the forbidden-key regex at every depth, throwing on a match. It serializes the metadata, and if the result is over 16,384 bytes it throws `Error("audit metadata too large")`.
   - `capKeys(keys: string[]): { keys: string[]; keysTruncated?: true }` keeps 500 keys at most.
-- Produces (helpers): `auditRows(action?: AuditAction): Promise<AuditRow[]>`, and `failingAuditDb(db: D1Database): D1Database`. The latter is a Proxy whose `prepare(sql)` throws `Error("audit unavailable")` when `sql` contains `INSERT INTO audit_events`, and passes every other statement through. Use it with `createApp().request(path, init, { ...env, DB: failingAuditDb(env.DB) })`.
+- Produces (`test/support/audit.ts`, imported through `#test/support`): `auditRows(action?: AuditAction): Promise<AuditRow[]>`, and `failingAuditDb(db: D1Database): D1Database`. The latter is a Proxy whose `prepare(sql)` throws `Error("audit unavailable")` when `sql` contains `INSERT INTO audit_events`, and passes every other statement through. Use it with `createApp().request(path, init, { ...env, DB: failingAuditDb(env.DB) })`.
 
 - [ ] **Step 1: Write the failing tests.** Mount a test-only route on `createApp()` that calls `recordAudit`.
   - `records actor, request id, ip and user agent`: send headers `cf-ray: ray-1`, `cf-connecting-ip: 203.0.113.9` and `user-agent: t/1`. The row has those values, and the response has `x-request-id: ray-1`.
@@ -233,9 +274,9 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
   - `allows key names in metadata`: `{ path: "/", keys: ["DB_URL"] }` is stored as JSON.
   - `capKeys truncates at 500`: 501 keys give length 500 and `keysTruncated: true`.
   - `oversized metadata throws`
-- [ ] **Step 2: Run the tests and confirm they fail.**
+- [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter ./apps/server exec vitest run test/integration/audit/record.test.ts`. Expected: FAIL.
 - [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run the tests and confirm they pass.**
+- [ ] **Step 4: Run the tests and confirm they pass.** Run the same command. Expected: PASS.
 - [ ] **Step 5: Commit** with `git commit -m "feat(audit): request context and awaited audit recorder"`.
 
 ---
@@ -245,7 +286,12 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
 **Files:**
 - Modify: `apps/server/src/env.ts`, `apps/server/src/authz/policy.ts`, `apps/server/src/auth/middleware.ts`, and every M1 route that calls `authorize` or `requireUser` (`projects/routes.ts`, `secrets/routes.ts`, `auth/routes.ts`)
 - Create: `apps/server/src/members/repo.ts` (read side only in this task)
-- Test: `apps/server/test/authz.test.ts` (replace the M1 table), `apps/server/test/helpers.ts`
+- Create: `apps/server/test/support/factories/members.ts` (`createMember`)
+- Modify: `apps/server/test/support/index.ts` (re-export `./factories/members`)
+- Test:
+  - `apps/server/test/unit/authz/policy.test.ts` (`scopeMatches`; replaces the M1 table)
+  - `apps/server/test/integration/authz/policy.test.ts` (`authorize` and `visibleEnvironmentIds` against D1 memberships)
+  - `apps/server/test/api/projects/projects.test.ts` and `apps/server/test/api/projects/environments.test.ts` (membership-filtered listings)
 
 **Interfaces:**
 - Produces (`env.ts`): `Principal` exactly as in spec §13.2, plus internal fields `name: string` and `expiresAt: number` on the service-token variant:
@@ -278,22 +324,24 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
     - token → the set of its scope environment ids
 - Produces (`middleware.ts`): `requirePrincipal(c): Principal` throws 401. `requireUser(c): Extract<Principal, { type: "user" }>` throws 401 when unauthenticated and 403 `forbidden` "This endpoint requires a user session" for tokens. M1 project, environment and secret routes switch to `requirePrincipal` and `await authorize(c.env.DB, ...)`, passing `environmentId` and `path` for secret routes. `GET /projects` lists only projects where `authorize(..., "project:read", { projectId })` passes. Implement this with one SQL query via `listProjectsForPrincipal(db, principal)` in `projects/repo.ts`, not by looping over `authorize`. `GET /projects/:p/environments` filters by `visibleEnvironmentIds`.
 
-- [ ] **Step 1: Write the failing tests.** Add `createMember(projectSlug, opts: { role: ProjectRole; environments?: string[] | null; instanceRole?: InstanceRole })` to the helpers. It inserts a user, a session and a membership row directly, and returns `{ userId, token }`. Tests:
-  - `owner and admin are allowed every action` (table over all `Action` values)
-  - `member without membership is denied project:read`
-  - `viewer can read but not write secrets`
-  - `developer can write in allowed env and is denied in a restricted env`: environments `["dev"]`, so a write to `prod` → 403.
-  - `member cannot manage environments, members or tokens unless project admin`
-  - `member is denied project:create, project:delete, user:manage, invite:manage and instance audit`
-  - `scopeMatches`: `("/", "/x")` → true, `("/api", "/api")` → true, `("/api", "/api/db")` → true, `("/api", "/apix")` → false, `("/api", "/")` → false, `("/api/db", "/api")` → false (Review Focus 1)
-  - `service token denied outside its project, env, path, and denied write when read-only`, built from a hand-made token `Principal`
-  - `service token denied every non-secret action except project:read`
-  - `authorize throws a programming error when secret action lacks environmentId`
-  - Integration: `member sees only their projects in GET /projects`, and `member with env restriction sees only allowed environments`.
-  - Update the M1 tests that expected "member → 403 everywhere": they must now give a member without membership a 403, and a member with membership the role-appropriate result.
-- [ ] **Step 2: Run the tests and confirm they fail.**
+- [ ] **Step 1: Write the failing tests.** Add `createMember(projectSlug, opts: { role: ProjectRole; environments?: string[] | null; instanceRole?: InstanceRole })` in `test/support/factories/members.ts`, re-exported from `#test/support`. It inserts a user, a session and a membership row directly, and returns `{ userId, token }`. Tests:
+  - `test/integration/authz/policy.test.ts` (the `authorize` rules against D1):
+    - `owner and admin are allowed every action` (table over all `Action` values)
+    - `member without membership is denied project:read`
+    - `viewer can read but not write secrets`
+    - `developer can write in allowed env and is denied in a restricted env`: environments `["dev"]`, so a write to `prod` → 403.
+    - `member cannot manage environments, members or tokens unless project admin`
+    - `member is denied project:create, project:delete, user:manage, invite:manage and instance audit`
+    - `service token denied outside its project, env, path, and denied write when read-only`, built from a hand-made token `Principal`
+    - `service token denied every non-secret action except project:read`
+    - `authorize throws a programming error when secret action lacks environmentId`
+  - `test/unit/authz/policy.test.ts` (pure):
+    - `scopeMatches`: `("/", "/x")` → true, `("/api", "/api")` → true, `("/api", "/api/db")` → true, `("/api", "/apix")` → false, `("/api", "/")` → false, `("/api/db", "/api")` → false (Review Focus 1)
+  - API tests: `member sees only their projects in GET /projects` (in `test/api/projects/projects.test.ts`), and `member with env restriction sees only allowed environments` (in `test/api/projects/environments.test.ts`).
+  - Update the M1 tests that expected "member → 403 everywhere" (`test/api/projects/*.test.ts`, `test/api/secrets/secrets.test.ts`, and the M1 table in `test/unit/authz/policy.test.ts`): they must now give a member without membership a 403, and a member with membership the role-appropriate result.
+- [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter ./apps/server exec vitest run test/unit/authz test/integration/authz test/api/projects`. Expected: FAIL.
 - [ ] **Step 3: Implement the policy, the repo and the middleware changes, and update the M1 routes.**
-- [ ] **Step 4: Run the full suite.** Run `pnpm --filter ./apps/server test`. Expected: PASS, including all M1 tests.
+- [ ] **Step 4: Run the full suite.** Run `pnpm --filter ./apps/server test` (all layers). Expected: PASS, including all M1 tests.
 - [ ] **Step 5: Commit** with `git commit -m "feat(authz): principal union, memberships and async authorization"`.
 
 ---
@@ -303,7 +351,9 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
 **Files:**
 - Create: `apps/server/src/service-tokens/repo.ts`, `apps/server/src/service-tokens/routes.ts`
 - Modify: `apps/server/src/auth/middleware.ts` (bearer dispatch), `apps/server/src/auth/routes.ts` (`/auth/me`), `apps/server/src/app.ts`
-- Test: `apps/server/test/service-tokens.test.ts`
+- Create: `apps/server/test/support/factories/service-tokens.ts` (`createServiceToken`)
+- Modify: `apps/server/test/support/index.ts` (re-export `./factories/service-tokens`)
+- Test: `apps/server/test/api/service-tokens/service-tokens.test.ts`
 
 **Interfaces:**
 - Consumes: `newToken`, `tokenPrefix`, `sha256Hex`, `authorize`, `recordAudit`, `getEnvironmentBySlug`, `listEnvironments`.
@@ -319,7 +369,7 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
   - `DELETE /:id` → 204, idempotent. Unknown id or an id from another project → 404. Audit `service_token.revoked`.
 - Produces: `GET /auth/me` for a token → `{ serviceToken: ServiceTokenDto }`.
 
-- [ ] **Step 1: Write the failing tests.** Add the helper `createServiceToken(projectSlug, { permission, scopes: [{ environment, path }], expiresInDays? })`, which goes through the API as owner and returns the token string. Tests:
+- [ ] **Step 1: Write the failing tests.** Add the helper `createServiceToken(projectSlug, { permission, scopes: [{ environment, path }], expiresInDays? })` in `test/support/factories/service-tokens.ts`, re-exported from `#test/support`, which goes through the API as owner and returns the token string. Tests:
   - `create returns the token once; list never includes it` (no `token` field in the list, and no string starting with `anc_st_` in the list body)
   - `stored row holds only the hash`
   - `token reads secrets in scope over HTTP`
@@ -335,9 +385,9 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
   - `last_used_at is throttled`: two requests within 60 s cause a single update; compare the column before and after with a manual `last_used_at` set to `now - 30_000`
   - `developer member cannot create tokens; project admin can`
   - `expiresInDays 366 -> 400`
-- [ ] **Step 2: Run the tests and confirm they fail.**
+- [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter ./apps/server exec vitest run test/api/service-tokens`. Expected: FAIL.
 - [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run the tests and confirm they pass.**
+- [ ] **Step 4: Run the tests and confirm they pass.** Run the same command. Expected: PASS.
 - [ ] **Step 5: Commit** with `git commit -m "feat(tokens): scoped, expiring, revocable service tokens"`.
 
 ---
@@ -348,7 +398,7 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
 - Modify: `apps/server/src/members/repo.ts`
 - Create: `apps/server/src/members/routes.ts`
 - Modify: `apps/server/src/app.ts`
-- Test: `apps/server/test/members.test.ts`
+- Test: `apps/server/test/api/members/members.test.ts`
 
 **Interfaces:**
 - Produces (repo): `listMembers(db, projectId): Promise<MemberDto[]>` (joins users, maps env ids to slugs, drops deleted envs), `addMember(db, { projectId, userId, role, environmentIds: string[] | null }, now)` (duplicate → 409 "User is already a member"), `updateMember(db, projectId, userId, patch: { role?: ProjectRole; environmentIds?: string[] | null }, now)`, `removeMember(db, projectId, userId): Promise<boolean>`.
@@ -371,9 +421,9 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
   - `developer cannot manage members -> 403`
   - `deleting an environment drops it from member DTOs and access`
   - `audit rows for add/update/remove exist with actor = project admin`
-- [ ] **Step 2: Run the tests and confirm they fail.**
+- [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter ./apps/server exec vitest run test/api/members`. Expected: FAIL.
 - [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run the tests and confirm they pass.**
+- [ ] **Step 4: Run the tests and confirm they pass.** Run the same command. Expected: PASS.
 - [ ] **Step 5: Commit** with `git commit -m "feat(members): project memberships with environment restrictions"`.
 
 ---
@@ -383,7 +433,7 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
 **Files:**
 - Modify: `apps/server/src/users/repo.ts`, `apps/server/src/auth/sessions.ts`, `apps/server/src/auth/routes.ts` (login checks `disabled_at`)
 - Create: `apps/server/src/users/routes.ts`
-- Test: `apps/server/test/users.test.ts`
+- Test: `apps/server/test/api/users/users.test.ts`
 
 **Interfaces:**
 - Produces (repo):
@@ -416,9 +466,9 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
   - `cannot disable or delete yourself -> 409`
   - `deleting a user removes memberships and sessions`
   - `audit row for user.updated has no password fields`
-- [ ] **Step 2: Run the tests and confirm they fail.**
+- [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter ./apps/server exec vitest run test/api/users`. Expected: FAIL.
 - [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run the tests and confirm they pass.**
+- [ ] **Step 4: Run the tests and confirm they pass.** Run the same command. Expected: PASS.
 - [ ] **Step 5: Commit** with `git commit -m "feat(users): instance user management with last-owner guard"`.
 
 ---
@@ -428,7 +478,7 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
 **Files:**
 - Create: `apps/server/src/invites/repo.ts`, `apps/server/src/invites/routes.ts`
 - Modify: `apps/server/src/app.ts`
-- Test: `apps/server/test/invites.test.ts`
+- Test: `apps/server/test/api/invites/invites.test.ts`
 
 **Interfaces:**
 - Produces (repo):
@@ -465,9 +515,9 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
   - `weak password on accept -> 400, invite still usable`
   - `member cannot create invites -> 403`
   - `404 bodies for invalid, expired and used tokens are byte-identical`
-- [ ] **Step 2: Run the tests and confirm they fail.**
+- [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter ./apps/server exec vitest run test/api/invites`. Expected: FAIL.
 - [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run the tests and confirm they pass.**
+- [ ] **Step 4: Run the tests and confirm they pass.** Run the same command. Expected: PASS.
 - [ ] **Step 5: Commit** with `git commit -m "feat(invites): single-use invite links"`.
 
 ---
@@ -477,7 +527,7 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
 **Files:**
 - Create: `apps/server/src/users/password-resets.ts`
 - Modify: `apps/server/src/auth/routes.ts`, `apps/server/src/users/routes.ts`, `apps/server/src/auth/sessions.ts`
-- Test: `apps/server/test/passwords.test.ts`, `apps/server/test/sessions-api.test.ts`
+- Test: `apps/server/test/api/auth/passwords.test.ts`, `apps/server/test/api/auth/session-management.test.ts` (session list and revoke; the M1 `test/api/auth/sessions.test.ts` stays as is)
 
 **Interfaces:**
 - Produces (`password-resets.ts`):
@@ -516,9 +566,9 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
   - `revoking another own session by short id -> that token 401`
   - `cannot revoke another user's session -> 404`, `malformed id -> 400`
   - `service token on /auth/password and /auth/sessions -> 403`
-- [ ] **Step 2: Run the tests and confirm they fail.**
+- [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter ./apps/server exec vitest run test/api/auth`. Expected: FAIL.
 - [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run the tests and confirm they pass.**
+- [ ] **Step 4: Run the tests and confirm they pass.** Run the same command. Expected: PASS.
 - [ ] **Step 5: Commit** with `git commit -m "feat(auth): password change, reset links and session management"`.
 
 ---
@@ -527,7 +577,7 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
 
 **Files:**
 - Modify: `apps/server/src/auth/routes.ts` (setup, login, logout), `apps/server/src/projects/routes.ts`, `apps/server/src/secrets/routes.ts`
-- Test: `apps/server/test/audit-wiring.test.ts`
+- Test: `apps/server/test/api/audit/wiring.test.ts` (uses `auditRows` and `failingAuditDb` from `#test/support`)
 
 **Interfaces:**
 - Consumes: `recordAudit`, `capKeys`, `actorOf`.
@@ -556,9 +606,9 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
   - `audit rows never contain the value canary`: put `"AUDIT-CANARY-51e2"` and update it to `"AUDIT-CANARY-2"`; read, list with reveal, then delete. `SELECT * FROM audit_events` serialized contains neither canary (Review Focus 5).
   - `secret read fails closed when audit insert fails`: `GET /secrets/:key` via `failingAuditDb` → 500 `internal`, and the body does not contain the value (Review Focus 5).
   - `500 from audit failure logs unhandled_error without the value` (console spy)
-- [ ] **Step 2: Run the tests and confirm they fail.**
+- [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter ./apps/server exec vitest run test/api/audit/wiring.test.ts`. Expected: FAIL.
 - [ ] **Step 3: Wire `recordAudit` into the routes.**
-- [ ] **Step 4: Run the full suite.** Run `pnpm --filter ./apps/server test`. Expected: PASS.
+- [ ] **Step 4: Run the full suite.** Run `pnpm --filter ./apps/server test` (all layers). Expected: PASS.
 - [ ] **Step 5: Commit** with `git commit -m "feat(audit): record auth, project, environment and secret events"`.
 
 ---
@@ -568,7 +618,7 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
 **Files:**
 - Create: `apps/server/src/audit/repo.ts`, `apps/server/src/audit/routes.ts`, `apps/server/src/audit/scheduled.ts`
 - Modify: `apps/server/src/index.ts`, `apps/server/src/app.ts`, `apps/server/wrangler.jsonc` (`"triggers": { "crons": ["0 3 * * *"] }`), `docs/deploy.md`
-- Test: `apps/server/test/audit-api.test.ts`, `apps/server/test/audit-purge.test.ts`
+- Test: `apps/server/test/api/audit/audit.test.ts` (query API), `apps/server/test/integration/audit/scheduled.test.ts` (retention purge, mirrors `src/audit/scheduled.ts`)
 
 **Interfaces:**
 - Produces (repo):
@@ -588,12 +638,12 @@ BEGIN SELECT RAISE(ABORT, 'audit_events within retention cannot be deleted'); EN
   - `project audit: project admin sees only that project; developer 403; projectId query param cannot widen scope`
   - `metadata is returned parsed as an object`
   - `scheduled purge deletes only rows older than 365 days`: rows at `now - 366d` and `now - 364d`, run `handleScheduled` with `createScheduledController()` from `cloudflare:test`, and only the old row is gone (Review Focus 5)
-- [ ] **Step 2: Run the tests and confirm they fail.**
+- [ ] **Step 2: Run the tests and confirm they fail.** Run `pnpm --filter ./apps/server exec vitest run test/api/audit/audit.test.ts test/integration/audit/scheduled.test.ts`. Expected: FAIL.
 - [ ] **Step 3: Implement, and update `docs/deploy.md`.** The docs must say:
   - The Cron Trigger is deployed automatically.
   - Audit rows are kept for 365 days.
   - The first owner manages users at `/api/v1/users` (UI in M4).
   - Lost-owner recovery: run `wrangler d1 execute anchor --remote --command "UPDATE users SET disabled_at = NULL, role = 'owner' WHERE email = '...'"`. This is a break-glass step, and the docs must note that the operator should audit it manually.
-- [ ] **Step 4: Run the full verification.** Run `pnpm lint && pnpm typecheck && pnpm test`. Expected: all pass. Then run `wrangler d1 migrations apply anchor --local`. Expected: 0002 applies on top of 0001.
+- [ ] **Step 4: Run the full verification.** Run `pnpm lint && pnpm typecheck && pnpm test` (all layers and packages). Expected: all pass. Then run `wrangler d1 migrations apply anchor --local`. Expected: 0002 applies on top of 0001.
 - [ ] **Step 5: Smoke-test locally.** Run `wrangler dev --test-scheduled`, then `curl "http://localhost:8787/__scheduled?cron=0+3+*+*+*"`. Expected: an `audit_purged` log line.
 - [ ] **Step 6: Commit** with `git commit -m "feat(audit): query API with cursor pagination and retention purge"`.

@@ -30,7 +30,9 @@ tests in several layers.
    `apps/server/package.json`), not through `../../../src`. Moving a test file never breaks its
    imports.
 5. **Every layer has its own script**: `pnpm test` runs all layers; `test:<layer>` runs one.
-6. **A new table needs a `resetDb` entry.** `test/support/db.ts` lists every table child-first;
+6. **One test file per migration**: `migrations/0002_access.sql` →
+   `test/integration/db/migration-0002.test.ts`.
+7. **A new table needs a `resetDb` entry.** `test/support/db.ts` lists every table child-first;
    `test/integration/db/reset.test.ts` fails when a migration adds a table that is not listed.
 
 ## Layers per package
@@ -47,6 +49,7 @@ tests in several layers.
 | `apps/web` | `unit/` | `src/lib` helpers, query keys, formatting | jsdom |
 | | `components/` | `src/components` rendered with Testing Library | jsdom |
 | | `routes/` | `src/routes` screens with MSW handlers | jsdom + MSW |
+| | `features/` | `src/features/<feature>` modules (screens, hooks) with MSW handlers | jsdom + MSW |
 | | `e2e/` | Playwright smoke against `wrangler dev` (`*.spec.ts`) | browser |
 
 `packages/shared` is small and has no I/O, so it skips the layer level: `src/schemas/secrets.ts` →

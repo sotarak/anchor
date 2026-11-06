@@ -45,7 +45,7 @@ apps/server/
   wrangler.jsonc                      + assets block (Task 3)
   src/projects/overview.ts            overview query + access resolution (Task 1)
   src/projects/routes.ts              + GET /:project/overview, ProjectDto.access (Task 1)
-  test/overview.test.ts, test/assets-routing.test.ts
+  test/api/projects/overview.test.ts, test/api/assets-routing.test.ts   (layered layout, see docs/testing.md)
 packages/shared/src/api.ts            + OverviewDto, ProjectAccessDto (Task 1)
 apps/web/
   package.json, index.html, vite.config.ts, tsconfig.json, tsconfig.app.json, components.json
@@ -82,9 +82,15 @@ apps/web/
   src/routes/_app/projects/$project/settings/members.tsx
   src/routes/_app/projects/$project/settings/service-tokens.tsx
   src/routes/_app/users.tsx, audit.tsx, account.tsx
-  src/test/setup.ts, msw.ts, fixtures.ts, render.tsx
-  src/**/*.test.tsx                   co-located tests
-  e2e/smoke.spec.ts, e2e/global-setup.ts
+  test/                               tests live beside src/, never inside it (docs/testing.md)
+    support/                          setup.ts, msw.ts, fixtures.ts, render.tsx, index.ts (no tests)
+    unit/                             harness.test.tsx
+      lib/                            mirror of src/lib: status, auth, fragment-token, api/client
+      public/                         headers.test.ts (mirrors public/_headers)
+      scripts/                        lint-tokens.test.ts
+    components/                       mirror of src/components: ui/, app-shell/, composites.test.tsx
+    routes/                           mirror of src/routes: public-pages.test.tsx, _app/**
+    e2e/                              smoke.spec.ts, global-setup.ts, .state/ (gitignored)
 ```
 
 ---
@@ -111,7 +117,7 @@ apps/web/
 **Files:**
 - Create: `apps/server/src/projects/overview.ts`
 - Modify: `apps/server/src/projects/routes.ts`, `packages/shared/src/api.ts`
-- Test: `apps/server/test/overview.test.ts`
+- Test: `apps/server/test/api/projects/overview.test.ts` (imports `#src/...` and `#test/support`)
 
 **Interfaces:**
 - Consumes: M2 `authorize(db, principal, action, resource)`, membership and env-restriction lookups (names from Task 0), `getProjectBySlug`, `listEnvironments`.
@@ -121,7 +127,7 @@ apps/web/
   - `OverviewDto { environments: EnvironmentDto[]; keys: { key: string; cells: Record<string, { version: number; updatedAt: number } | null> }[] }`
 - Produces (server): `resolveProjectAccess(db, principal, project): Promise<ProjectAccessDto | null>` (null = no access), `getOverview(db, project, environments: EnvironmentRow[], path: string): Promise<OverviewDto>` (one SQL query over `secrets` grouped by key, no decryption), and route `GET /api/v1/projects/:project/overview?path=` (path normalized with `secretPathSchema`, default `/`). The route needs `project:read`. Its `environments` contains only environments for which `authorize(..., "secret:read", { projectId, environmentId, path })` passes. No audit event, because no values are read. Keys are sorted ascending. A cell is `null` when the key is absent in that env.
 
-- [ ] **Step 1: Write the failing tests** (`resetDb` in `beforeEach`, seed through the existing service functions):
+- [ ] **Step 1: Write the failing tests** (`resetDb` and the HTTP/user factories come from `#test/support`; source from `#src/...`; `resetDb` in `beforeEach`, seed through the existing service functions):
   - `overview lists keys across envs with null for missing`: put `A` in dev+prod and `B` in staging. Expect keys `["A","B"]`, `A.cells.staging === null`, and `B.cells.dev === null`.
   - `overview never contains values`: put value `"OVERVIEW-CANARY"` and expect the response text not to contain it.
   - `overview respects path`: a secret at `/api` is absent from `path=/` and present in `path=/api`.
@@ -139,14 +145,14 @@ apps/web/
 ### Task 2: Web app scaffold, styling foundation and test harness
 
 **Files:**
-- Create: `apps/web/{package.json,index.html,vite.config.ts,tsconfig.json,tsconfig.app.json,components.json}`, `apps/web/src/{main.tsx,router.ts}`, `apps/web/src/routes/__root.tsx`, `apps/web/src/styles/globals.css`, `apps/web/src/lib/cn.ts`, `apps/web/scripts/lint-tokens.mjs`, `apps/web/src/test/{setup.ts,msw.ts,fixtures.ts,render.tsx}`
-- Test: `apps/web/src/test/harness.test.tsx`, `apps/web/scripts/lint-tokens.test.ts`
+- Create: `apps/web/{package.json,index.html,vite.config.ts,tsconfig.json,tsconfig.app.json,components.json}`, `apps/web/src/{main.tsx,router.ts}`, `apps/web/src/routes/__root.tsx`, `apps/web/src/styles/globals.css`, `apps/web/src/lib/cn.ts`, `apps/web/scripts/lint-tokens.mjs`, `apps/web/test/support/{setup.ts,msw.ts,fixtures.ts,render.tsx,index.ts}`
+- Test: `apps/web/test/unit/harness.test.tsx`, `apps/web/test/unit/scripts/lint-tokens.test.ts`
 
 **Interfaces:**
 - Produces:
   - `createAppRouter(opts: { queryClient: QueryClient; history?: RouterHistory }): Router`, with `context: { queryClient }` (root route created with `createRootRouteWithContext<{ queryClient: QueryClient }>()`).
   - `cn(...inputs: ClassValue[]): string` (clsx + tailwind-merge). Configure tailwind-merge with `extendTailwindMerge` so `text-label-*`, `text-paragraph-*` and `text-code-*` are font sizes, not colors.
-  - Test helpers:
+  - Test helpers (in `apps/web/test/support/`, re-exported from `index.ts`; tests import them via `#test/support`, never through relative paths. `setup.ts` is only referenced by Vitest `setupFiles` and is not re-exported):
     - `renderApp(url: string, opts?: { queryClient?: QueryClient }): Promise<{ router; queryClient; user: UserEvent }>`: real route tree, `createMemoryHistory({ initialEntries: [url] })`, waits for `router.load()`.
     - `server` (MSW `setupServer`).
     - `fixtures` (`owner`, `member`, `project`, `envs`, `secrets`, `serviceToken`, `invite`, `auditEvents`), typed with the `@anchor/shared` DTOs.
@@ -157,17 +163,20 @@ apps/web/
   - `dev`: `vite`, with a proxy `/api` → `http://localhost:8787`
   - `build`: `tsc -b && vite build`
   - `test`: `vitest run`
+  - `test:unit`: `vitest run test/unit`
+  - `test:components`: `vitest run test/components`
+  - `test:routes`: `vitest run test/routes`
   - `typecheck`: `tsc -b --noEmit`
   - `lint:tokens`
   - `e2e`: `playwright test`
 
-  Add the dependencies from Tech Stack, plus `@anchor/shared: workspace:*`.
-- [ ] **Step 2: Configure Vite.** Plugins, in order: `tanstackRouter({ target: "react", autoCodeSplitting: true })` from `@tanstack/router-plugin/vite`, then `react()`, then `tailwindcss()` from `@tailwindcss/vite`. Alias `@` → `./src`. Vitest config in the same file: `environment: "jsdom"`, `setupFiles: ["./src/test/setup.ts"]`, `css: false`. **Verify** the plugin import name and options against the TanStack Router "File-Based Routing → Vite" install docs and the Tailwind v4 Vite guide before writing them. Do not rely on memory.
+  Add the dependencies from Tech Stack, plus `@anchor/shared: workspace:*`. Add a subpath import, as in `apps/server/package.json`: `"imports": { "#test/support": "./test/support/index.ts" }`. Vite and TypeScript (`moduleResolution: Bundler`) both resolve it, so it needs no alias or `paths` entry. Source imports from tests use `@/...`.
+- [ ] **Step 2: Configure Vite.** Plugins, in order: `tanstackRouter({ target: "react", autoCodeSplitting: true })` from `@tanstack/router-plugin/vite`, then `react()`, then `tailwindcss()` from `@tailwindcss/vite`. Alias `@` → `./src`. Vitest config in the same file: `environment: "jsdom"`, `setupFiles: ["./test/support/setup.ts"]`, `include: ["test/**/*.test.{ts,tsx}"]`, `exclude: ["test/e2e/**", "node_modules/**"]` (Playwright owns `test/e2e`), `css: false`. `tsconfig.app.json` has `include: ["src", "test"]` and `paths: { "@/*": ["./src/*"] }`. **Verify** the plugin import name and options against the TanStack Router "File-Based Routing → Vite" install docs and the Tailwind v4 Vite guide before writing them. Do not rely on memory.
 - [ ] **Step 3: Run shadcn init.** Run `pnpm dlx shadcn@latest init` in `apps/web` (Tailwind v4 mode, CSS file `src/styles/globals.css`, alias `@/components`, base color neutral, CSS variables on). **Verify** the init flow for Tailwind v4 in the current shadcn docs (it must not create a `tailwind.config.*`). Then replace the generated `globals.css` body with the full contents of `.claude/skills/dashboard-ui/tokens.css`. Keep any `@import` that shadcn's components need (e.g. `tw-animate-css`) after `@import "tailwindcss"`. Add `@import "@fontsource/inter/400.css"`, `500.css`, `600.css` and `@import "@fontsource/jetbrains-mono/400.css"` in `main.tsx`.
 - [ ] **Step 4: Wire the root.** `main.tsx` creates one `QueryClient` with `defaultOptions.queries: { retry: false, refetchOnWindowFocus: false }`. Task 6 replaces `retry` with `(n, e) => !(e instanceof ApiClientError && e.status < 500) && n < 2`., mounts `<RouterProvider router={createAppRouter({ queryClient })} />` inside `QueryClientProvider`, and adds `<Toaster position="bottom-right" />` (Task 4 restyles it). `__root.tsx` renders `<Outlet />`. Commit the generated `routeTree.gen.ts`, and make Biome ignore it.
 - [ ] **Step 5: Write the failing tests.**
-  - `harness.test.tsx`: `renders the root route at /` (a placeholder `routes/index.tsx` renders `"Anchor"`; Task 7 removes it), and `MSW intercepts fetch` (a handler for `GET /api/v1/health` returns `{status:"ok"}` and `fetch` gets it).
-  - `lint-tokens.test.ts`: a temp dir containing a file with `bg-gray-100`, `text-[13px]` and `uppercase` → exit code 1 with 3 hits. A file with `bg-bg-weak text-label-sm bg-neutral-alpha-100` → exit code 0.
+  - `test/unit/harness.test.tsx`: `renders the root route at /` (a placeholder `routes/index.tsx` renders `"Anchor"`; Task 7 removes it), and `MSW intercepts fetch` (a handler for `GET /api/v1/health` returns `{status:"ok"}` and `fetch` gets it).
+  - `test/unit/scripts/lint-tokens.test.ts`: a temp dir containing a file with `bg-gray-100`, `text-[13px]` and `uppercase` → exit code 1 with 3 hits. A file with `bg-bg-weak text-label-sm bg-neutral-alpha-100` → exit code 0.
 - [ ] **Step 6: Run the tests and confirm they fail, then implement until they pass.** Run `pnpm --filter @anchor/web test`.
 - [ ] **Step 7: Check the build.** Run `pnpm --filter @anchor/web build && pnpm --filter @anchor/web lint:tokens`. Expected: `apps/web/dist/index.html` exists and lint exits 0.
 - [ ] **Step 8: Commit** with `git commit -m "chore(web): scaffold dashboard SPA with tokens, router, query and test harness"`.
@@ -179,20 +188,20 @@ apps/web/
 **Files:**
 - Create: `apps/web/public/_headers`
 - Modify: `apps/server/wrangler.jsonc`, `apps/server/package.json`, root `package.json`, `.github/workflows/ci.yml`, `docs/deploy.md`
-- Test: `apps/web/src/headers.test.ts`, `apps/server/test/assets-routing.test.ts`
+- Test: `apps/web/test/unit/public/headers.test.ts` (mirrors `public/`), `apps/server/test/api/assets-routing.test.ts` (app-wide behavior, top of the `api` layer)
 
 **Interfaces:**
 - Produces:
   - `wrangler.jsonc` `assets: { "directory": "../web/dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*"] }`, with `ASSETS: Fetcher` added to `Bindings`.
   - Root scripts: `build` (`pnpm --filter @anchor/web build`) and `deploy` (`pnpm build && pnpm --filter ./apps/server deploy`).
-  - `apps/server` `pretest` script: `node -e "require('node:fs').mkdirSync('../web/dist',{recursive:true})"`, so server tests run without a web build.
+  - `apps/server` `pretest` script: `node -e "require('node:fs').mkdirSync('../web/dist',{recursive:true})"`, so server tests run without a web build. Add the same hook for each layer script (`pretest:unit`, `pretest:integration`, `pretest:api`), because npm runs `pre<script>` per script name and `pretest` does not cover `test:<layer>`.
 - `_headers` content: `/*` gets the CSP and headers from Global Constraints. `/index.html` and `/` get `Cache-Control: no-cache`. `/assets/*` gets `Cache-Control: public, max-age=31536000, immutable`.
 
 - [ ] **Step 1: Write the failing tests.**
-  - `headers.test.ts` reads `public/_headers` and asserts:
+  - `test/unit/public/headers.test.ts` reads `public/_headers` and asserts:
     - the `/*` block contains the exact CSP string from Global Constraints, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `X-Frame-Options: DENY`
     - the CSP contains no `'unsafe-inline'` and no `'unsafe-eval'`
-  - `assets-routing.test.ts`:
+  - `test/api/assets-routing.test.ts` (imports `#src/...` and `#test/support`):
     - `unknown /api route still returns the JSON 404`
     - `/api/v1/health still served by the worker`
 - [ ] **Step 2: Run the tests and confirm they fail** (`_headers` missing).
@@ -209,7 +218,7 @@ apps/web/
 
 **Files:**
 - Create (via `pnpm dlx shadcn@latest add button input textarea select label checkbox dialog sheet dropdown-menu popover tooltip skeleton sonner`, then restyle): `apps/web/src/components/ui/{button,input,textarea,select,label,checkbox,dialog,sheet,dropdown-menu,popover,tooltip,skeleton,sonner}.tsx`. Hand-written: `status-badge.tsx`, `tag.tsx`, `table.tsx`.
-- Test: `apps/web/src/components/ui/primitives.test.tsx`
+- Test: `apps/web/test/components/ui/primitives.test.tsx`
 
 **Interfaces:**
 - Produces:
@@ -240,7 +249,7 @@ apps/web/
 
 **Files:**
 - Create: `apps/web/src/components/data/{table-states,table-footer,filter-chip,search-chip}.tsx`, `apps/web/src/components/overlays/{confirm-dialog,one-time-secret-dialog,form-sheet}.tsx`, `apps/web/src/components/secrets/{masked-value,secret-value-field}.tsx`, `apps/web/src/lib/{format,status}.ts`
-- Test: `apps/web/src/components/composites.test.tsx`, `apps/web/src/lib/status.test.ts`
+- Test: `apps/web/test/components/composites.test.tsx` (one file named after the feature group; it spans `components/data`, `overlays` and `secrets`), `apps/web/test/unit/lib/status.test.ts`
 
 **Interfaces:**
 - Produces (`table-states.tsx`):
@@ -284,7 +293,7 @@ apps/web/
 
 **Files:**
 - Create: `apps/web/src/lib/api/{client,endpoints,query-keys}.ts`, `apps/web/src/lib/{auth,fragment-token}.ts`
-- Test: `apps/web/src/lib/api/client.test.ts`, `apps/web/src/lib/auth.test.ts`, `apps/web/src/lib/fragment-token.test.ts`
+- Test: `apps/web/test/unit/lib/api/client.test.ts`, `apps/web/test/unit/lib/auth.test.ts`, `apps/web/test/unit/lib/fragment-token.test.ts`
 
 **Interfaces:**
 - Produces (`client.ts`):
@@ -337,7 +346,7 @@ apps/web/
 **Files:**
 - Create: `apps/web/src/components/app-shell/{app-shell,sidebar,header,environment-switcher,user-menu}.tsx`, `apps/web/src/lib/current-env.ts`, `apps/web/src/routes/_app.tsx`, `apps/web/src/routes/_app/index.tsx`
 - Delete: the placeholder `routes/index.tsx` from Task 2
-- Test: `apps/web/src/components/app-shell/app-shell.test.tsx`
+- Test: `apps/web/test/components/app-shell/app-shell.test.tsx`
 
 **Interfaces:**
 - Consumes: `requireUser`, `meQueryOptions`, `api.projects.get`, `api.environments.list`, `api.auth.logout`.
@@ -377,7 +386,7 @@ apps/web/
 
 **Files:**
 - Create: `apps/web/src/components/auth-layout.tsx`, `apps/web/src/routes/{setup,login,accept-invite,reset-password}.tsx`
-- Test: `apps/web/src/routes/public-pages.test.tsx`
+- Test: `apps/web/test/routes/public-pages.test.tsx`
 
 **Interfaces:**
 - Consumes: `api.setup.*`, `api.auth.login`, `api.invites.inspect/accept`, `api.auth.resetPassword`, `safeRedirect`, `takeFragmentToken`, the shared schemas (`setupBodySchema`, `loginBodySchema`, `passwordSchema`), and `FormSheet`-style fields (Input/Label/hint/error).
@@ -419,7 +428,7 @@ apps/web/
 
 **Files:**
 - Create: `apps/web/src/routes/_app/projects/index.tsx`
-- Test: `apps/web/src/routes/_app/projects/projects.test.tsx`
+- Test: `apps/web/test/routes/_app/projects/projects.test.tsx`
 
 **Interfaces:**
 - Consumes: `api.projects.list/create`, `qk.projects`, `createProjectBodySchema`, Table parts, `TableFooter`, `SearchChip`, `FormSheet`, the states from Task 5.
@@ -447,7 +456,7 @@ apps/web/
 
 **Files:**
 - Create: `apps/web/src/routes/_app/projects/$project/index.tsx`
-- Test: `apps/web/src/routes/_app/projects/$project/overview.test.tsx`
+- Test: `apps/web/test/routes/_app/projects/$project/overview.test.tsx`
 
 **Interfaces:**
 - Consumes: `api.projects.get`, `api.projects.overview`, `qk.overview`, Table parts, `SearchChip`, `FilterChip`, the states.
@@ -477,7 +486,7 @@ apps/web/
 
 **Files:**
 - Create: `apps/web/src/routes/_app/projects/$project/environments/$env.tsx`, `apps/web/src/routes/_app/projects/$project/environments/-components/{secret-sheet,secrets-table}.tsx`
-- Test: `apps/web/src/routes/_app/projects/$project/environments/secrets.test.tsx`
+- Test: `apps/web/test/routes/_app/projects/$project/environments/secrets.test.tsx`
 
 **Interfaces:**
 - Consumes: `api.secrets.list/get/put/remove`, `qk.secrets`, `putSecretBodySchema`, `secretKeySchema`, `MaskedValue`, `SecretValueField`, `FormSheet`, `ConfirmDialog`, `SearchChip`, the states, `project.access`.
@@ -517,7 +526,7 @@ apps/web/
 
 **Files:**
 - Create: `apps/web/src/routes/_app/projects/$project/settings/environments.tsx`
-- Test: `apps/web/src/routes/_app/projects/$project/settings/environments.test.tsx`
+- Test: `apps/web/test/routes/_app/projects/$project/settings/environments.test.tsx`
 
 **Interfaces:**
 - Consumes: `api.environments.*`, `createEnvironmentBodySchema`, `updateEnvironmentBodySchema`.
@@ -544,7 +553,7 @@ apps/web/
 
 **Files:**
 - Create: `apps/web/src/routes/_app/projects/$project/settings/members.tsx`
-- Test: `apps/web/src/routes/_app/projects/$project/settings/members.test.tsx`
+- Test: `apps/web/test/routes/_app/projects/$project/settings/members.test.tsx`
 
 **Interfaces:**
 - Consumes: `api.members.list/add/update/remove`, `api.environments.list`, `MemberDto`.
@@ -574,7 +583,7 @@ apps/web/
 
 **Files:**
 - Create: `apps/web/src/routes/_app/projects/$project/settings/service-tokens.tsx`
-- Test: `apps/web/src/routes/_app/projects/$project/settings/service-tokens.test.tsx`
+- Test: `apps/web/test/routes/_app/projects/$project/settings/service-tokens.test.tsx`
 
 **Interfaces:**
 - Consumes: `api.serviceTokens.list/create/revoke`, `tokenStatus`, `OneTimeSecretDialog`, `ConfirmDialog`.
@@ -607,7 +616,7 @@ apps/web/
 
 **Files:**
 - Create: `apps/web/src/routes/_app/users.tsx`, `apps/web/src/routes/_app/-components/{users-table,invites-table}.tsx`
-- Test: `apps/web/src/routes/_app/users.test.tsx`
+- Test: `apps/web/test/routes/_app/users.test.tsx`
 
 **Interfaces:**
 - Consumes: `api.users.*`, `api.invites.*`, `inviteStatus`, `OneTimeSecretDialog`, `ConfirmDialog`. The route guard redirects non-admins to `/projects` (`beforeLoad` checks `me.role`).
@@ -640,7 +649,7 @@ apps/web/
 **Files:**
 - Create: `apps/web/src/routes/_app/audit.tsx`, `apps/web/src/components/audit/audit-table.tsx`
 - Modify: `apps/web/src/components/app-shell/sidebar.tsx` (add a project "Audit log" link for project admins → `/audit?projectId=` handled by the same page using `api.audit.listForProject` when the user is not an instance admin)
-- Test: `apps/web/src/routes/_app/audit.test.tsx`
+- Test: `apps/web/test/routes/_app/audit.test.tsx`
 
 **Interfaces:**
 - Consumes: `api.audit.list/listForProject`, `AUDIT_ACTIONS` (shared), `api.users.list` (actor options, for admins), `api.projects.list`.
@@ -668,7 +677,7 @@ apps/web/
 
 **Files:**
 - Create: `apps/web/src/routes/_app/account.tsx`
-- Test: `apps/web/src/routes/_app/account.test.tsx`
+- Test: `apps/web/test/routes/_app/account.test.tsx`
 
 **Interfaces:**
 - Consumes: `api.auth.changePassword/sessions/revokeSession/logout`, `passwordSchema`, `SessionDto`.
@@ -694,18 +703,18 @@ apps/web/
 ### Task 18: Playwright smoke against `wrangler dev`, CI e2e job, final gate
 
 **Files:**
-- Create: `apps/web/playwright.config.ts`, `apps/web/e2e/global-setup.ts`, `apps/web/e2e/smoke.spec.ts`
-- Modify: `.github/workflows/ci.yml`, `.gitignore` (add `apps/web/e2e/.state/`, `apps/web/test-results/`, `apps/web/playwright-report/`), `README.md` (dashboard dev instructions)
+- Create: `apps/web/playwright.config.ts`, `apps/web/test/e2e/global-setup.ts`, `apps/web/test/e2e/smoke.spec.ts` (`playwright.config.ts` sets `testDir: "./test/e2e"` and `globalSetup: "./test/e2e/global-setup.ts"`)
+- Modify: `.github/workflows/ci.yml`, `.gitignore` (add `apps/web/test/e2e/.state/`, `apps/web/test-results/`, `apps/web/playwright-report/`), `README.md` (dashboard dev instructions)
 
 **Interfaces:**
 - `global-setup.ts`:
   - Generates a random root key and setup token in memory.
   - Writes them to `process.env.E2E_SETUP_TOKEN` for the spec.
-  - Runs `wrangler d1 migrations apply anchor --local --persist-to e2e/.state` from `apps/server`.
-- The Playwright `webServer` command is `pnpm --filter @anchor/web build && pnpm --filter ./apps/server exec wrangler dev --port 8788 --persist-to ../web/e2e/.state --var ANCHOR_ROOT_KEY:$KEY --var ANCHOR_SETUP_TOKEN:$TOKEN`. Pass the values through the `webServer.env` mapping and a small node launcher script if shell interpolation is awkward. `baseURL` is `http://localhost:8788`, and the browser is Chromium only.
+  - Runs `wrangler d1 migrations apply anchor --local --persist-to ../web/test/e2e/.state` from `apps/server`.
+- The Playwright `webServer` command is `pnpm --filter @anchor/web build && pnpm --filter ./apps/server exec wrangler dev --port 8788 --persist-to ../web/test/e2e/.state --var ANCHOR_ROOT_KEY:$KEY --var ANCHOR_SETUP_TOKEN:$TOKEN`. Pass the values through the `webServer.env` mapping and a small node launcher script if shell interpolation is awkward. `baseURL` is `http://localhost:8788`, and the browser is Chromium only.
   - **Verify** that `wrangler dev` supports `--persist-to` and `--var` in the installed version (`wrangler dev --help`). If secrets cannot be passed that way, write a temporary `.dev.vars.e2e` and use `--env-file`, deleting it in global teardown. Never write over `apps/server/.dev.vars`.
 
-- [ ] **Step 1: Write the smoke test** (`smoke.spec.ts`):
+- [ ] **Step 1: Write the smoke test** (`test/e2e/smoke.spec.ts`):
   - Collect `page.on("console")` errors and fail at the end if any message contains `Content Security Policy` or `Refused to` (Review Focus 5).
   - `/` redirects to `/setup`. Fill in the token, name, email and password, then submit → `/projects`.
   - Create project "Smoke App" → overview.

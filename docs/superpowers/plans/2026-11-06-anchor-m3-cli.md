@@ -42,6 +42,7 @@
 - HTTP: 15 s timeout per request. Retries happen only for `GET` and `PUT` (the secret PUT is idempotent by API contract): at most 2 retries, with delays of 250 ms and then 1000 ms, on network errors, 429, 502, 503 and 504. `POST` and `DELETE` are never retried.
 - `User-Agent: anchor-cli/<version> (<platform>-<arch>)`.
 - Tests: Vitest in Node. POSIX-specific tests (`chmod` modes, signals) use `it.skipIf(process.platform === "win32")`.
+- Test layout follows `docs/testing.md`. The first level under `apps/cli/test/` is the layer: `unit/` (pure logic, plus modules whose only collaborators are injected fakes), `integration/` (commands run through `runCli` with fakes, and anything touching temp dirs or real child processes), `e2e/` (the built CLI against a local Worker). Below the layer, paths mirror `src/`. Shared helpers live in `test/support/`, split by concern and re-exported from `test/support/index.ts`. Tests import helpers through `#test/support` and source through `#src/...` (Node subpath `imports` in `apps/cli/package.json`), never through relative `../../src` paths.
 
 ## Review Focus
 
@@ -75,8 +76,9 @@
 
 ```
 apps/cli/
-  package.json                private, name @anchor-secrets/cli (placeholder), bin anchor -> dist/anchor.mjs
-  tsconfig.json, vitest.config.ts, vitest.e2e.config.ts, build.mjs (esbuild bundle)
+  package.json                private, name @anchor-secrets/cli (placeholder), bin anchor -> dist/anchor.mjs,
+                              imports { "#src/*": "./src/*.ts", "#test/support": "./test/support/index.ts" }
+  tsconfig.json, vitest.config.ts (excludes test/e2e/**), vitest.e2e.config.ts, build.mjs (esbuild bundle)
   src/main.ts                 entry: main(argv, deps?) -> exit code; bin wrapper sets process.exitCode
   src/program.ts              buildProgram(deps): Command — all commands, global flags, help text
   src/context.ts              CliDeps, CommandContext, createContext(), requireProject()
@@ -105,8 +107,23 @@ apps/cli/
   src/format/env-file.ts      formatDotenv(), formatJson(), formatYaml()
   src/files.ts                writeSecretFile(), isGitIgnored()
   src/commands/{login,logout,whoami,init,projects,envs,secrets,run,export,tokens}.ts
-  test/helpers.ts             createTestIo(), fakeApi(), fakePrompts(), fakeSpawner(), tmpDir()
-  test/*.test.ts, test/__snapshots__/help.test.ts.snap
+  test/support/index.ts       entry point for `#test/support`; re-exports io, fakes, fs
+  test/support/io.ts          createTestIo(), runCli()
+  test/support/fakes.ts       fakeApi(), fakePrompts(), fakeSpawner()
+  test/support/fs.ts          tmpDir()
+  test/support/fixtures/child.mjs   fixture child process for run-child tests
+  test/unit/                  mirrors src/ (pure logic and injected-fake tests):
+    output.test.ts, auth.test.ts, secret-input.test.ts, help.test.ts, __snapshots__/help.test.ts.snap
+    api/client.test.ts
+    config/api-url.test.ts
+    credentials/{types,macos,linux,select}.test.ts
+    format/env-file.test.ts
+  test/integration/           mirrors src/ (runCli with fakes, temp dirs, real child processes):
+    main.test.ts, build.test.ts
+    commands/{login,init,discovery,secrets,run,export,tokens}.test.ts
+    config/config.test.ts
+    credentials/{file,macos-real}.test.ts
+    process/run-child.test.ts
   test/e2e/harness.ts, test/e2e/cli.e2e.test.ts
 docs/cli.md
 .github/workflows/ci.yml (modify), .github/workflows/release-cli.yml (create)
@@ -133,8 +150,8 @@ docs/cli.md
 ### Task 1: Package scaffold, IO/output layer, exit codes
 
 **Files:**
-- Create: `apps/cli/package.json`, `apps/cli/tsconfig.json`, `apps/cli/vitest.config.ts`, `apps/cli/src/{main,program,context,io,output,errors,version,prompts}.ts`, `apps/cli/test/helpers.ts`
-- Test: `apps/cli/test/output.test.ts`, `apps/cli/test/main.test.ts`
+- Create: `apps/cli/package.json`, `apps/cli/tsconfig.json`, `apps/cli/vitest.config.ts`, `apps/cli/src/{main,program,context,io,output,errors,version,prompts}.ts`, `apps/cli/test/support/{index,io,fakes,fs}.ts`
+- Test: `apps/cli/test/unit/output.test.ts`, `apps/cli/test/integration/main.test.ts`
 
 **Interfaces:**
 - Produces (`errors.ts`): `EXIT = { OK: 0, ERROR: 1, USAGE: 2, AUTH: 3, FORBIDDEN: 4, NOT_FOUND: 5, CONFLICT: 6 } as const`, `type ExitCode`, `class CliError extends Error { constructor(readonly exitCode: number, message: string, readonly hint?: string) }`.
@@ -157,20 +174,22 @@ docs/cli.md
 
   Verify these Commander APIs (`exitOverride`, `configureOutput`, `configureHelp`, `enablePositionalOptions`, `passThroughOptions`) against the README of the installed major version.
 - Produces (`main.ts`): `main(argv: string[], deps?: Partial<CliDeps>): Promise<number>`. It maps a Commander usage error to `2` (and `--help`/`--version` to `0`), a `CliError` to its `exitCode`, and anything else to `1` with "error: Unexpected error (run with --debug for details)". Under `--debug` only, it prints the error name and stack. The bin entry is `process.exitCode = await main(process.argv)`.
-- Produces (`test/helpers.ts`): `createTestIo(opts?: { stdin?: string; stdinIsTTY?: boolean; stdoutIsTTY?: boolean; env?: Record<string, string>; cwd?: string; platform?: NodeJS.Platform; homeDir?: string }): Io & { out(): string; err(): string }`, and `runCli(args: string[], deps: Partial<CliDeps> & { io: Io }): Promise<number>`, which calls `main(["node", "anchor", ...args], deps)`.
+- Produces (`test/support/io.ts`, re-exported by `test/support/index.ts` and imported as `#test/support`; `fakes.ts` and `fs.ts` hold `fakeApi`, `fakePrompts`, `fakeSpawner` and `tmpDir`): `createTestIo(opts?: { stdin?: string; stdinIsTTY?: boolean; stdoutIsTTY?: boolean; env?: Record<string, string>; cwd?: string; platform?: NodeJS.Platform; homeDir?: string }): Io & { out(): string; err(): string }`, and `runCli(args: string[], deps: Partial<CliDeps> & { io: Io }): Promise<number>`, which calls `main(["node", "anchor", ...args], deps)`.
 
 - [ ] **Step 1: Scaffold the package.**
   - Dependencies: `commander`, `@inquirer/prompts`, `@anchor/shared` (`workspace:*`).
   - devDependencies: `vitest`, `tsx`, `esbuild`, `@types/node`, `dotenv`, `yaml` (the last two are for round-trip tests only).
-  - Scripts: `dev` (`tsx src/main.ts`), `test` (`vitest run`), `test:e2e` (`vitest run -c vitest.e2e.config.ts`), `typecheck` (`tsc --noEmit`), `build` (`node build.mjs`).
+  - Scripts: `dev` (`tsx src/main.ts`), `test` (`vitest run`, all layers except e2e), `test:unit` (`vitest run test/unit`), `test:integration` (`vitest run test/integration`), `test:e2e` (`vitest run -c vitest.e2e.config.ts`), `typecheck` (`tsc --noEmit`), `build` (`node build.mjs`).
+  - `imports` map in `package.json`: `"#src/*": "./src/*.ts"` and `"#test/support": "./test/support/index.ts"`. Tests import source as `#src/...` and helpers from `#test/support`.
+  - `vitest.config.ts`: `test.include` is `["test/**/*.test.ts"]` and `test.exclude` contains `"test/e2e/**"` (plus `node_modules`), so the e2e suite only runs through `test:e2e`.
   - `CLI_VERSION` in `src/version.ts` is replaced at build time by esbuild/Bun `define` and falls back to reading `package.json` in dev.
 - [ ] **Step 2: Write the failing tests.**
-  - `output.test.ts`:
+  - `test/unit/output.test.ts`:
     - `json mode writes exactly one JSON document to stdout and nothing else`
     - `info is suppressed by --quiet and by --json, warn is not`
     - `shouldUseColor is false when NO_COLOR is set, TERM=dumb, stream not a TTY, or --no-color`
     - `error prints message and hint on stderr only`
-  - `main.test.ts`:
+  - `test/integration/main.test.ts` (runs `main` through `runCli`):
     - `--version prints the version on stdout and exits 0`
     - `unknown command exits 2 with the usage error on stderr and empty stdout`
     - `unexpected exception exits 1 without a stack trace unless --debug`
@@ -185,7 +204,7 @@ docs/cli.md
 
 **Files:**
 - Create: `apps/cli/src/api/{client,http,proxy}.ts`
-- Test: `apps/cli/test/api-client.test.ts`
+- Test: `apps/cli/test/unit/api/client.test.ts` (covers `http.ts`, `client.ts` and the `errors.ts` additions; all I/O is the injected fake `fetch`)
 
 **Interfaces:**
 - Produces (`http.ts`):
@@ -248,7 +267,7 @@ docs/cli.md
 **Files:**
 - Create: `apps/cli/src/config/{api-url,project-file,user-config,resolve}.ts`
 - Modify: `apps/cli/src/context.ts`
-- Test: `apps/cli/test/config.test.ts`
+- Test: `apps/cli/test/unit/config/api-url.test.ts` (the `normalizeApiUrl` case, pure), `apps/cli/test/integration/config/config.test.ts` (all other cases; they use temp dirs)
 
 **Interfaces:**
 - Produces (`api-url.ts`): `normalizeApiUrl(input: string): string`. It returns the origin and throws `CliError(EXIT.USAGE, "Invalid API URL: <input>")` for an unparsable URL. For `http:` on a host other than `localhost`/`127.0.0.1`/`[::1]` it throws `CliError(EXIT.USAGE, "Refusing to use insecure http:// API URL <origin>", "Use https://")`.
@@ -266,7 +285,7 @@ docs/cli.md
   - `resolveConfig(io: Io, flags: GlobalFlags): Promise<ResolvedConfig>`: applies the precedence and normalizes `apiUrl` with `normalizeApiUrl` and `path` with `normalizeSecretPath`.
 - Produces (`context.ts`): `CommandContext.config: ResolvedConfig` and `requireProject(ctx): string`, which throws `CliError(EXIT.USAGE, "No project selected", "Run 'anchor init' or pass --project <slug>")`.
 
-- [ ] **Step 1: Write the failing tests** (tmp dirs, `createTestIo`):
+- [ ] **Step 1: Write the failing tests** (tmp dirs, `createTestIo`; the `normalizeApiUrl` case goes in the unit file, the rest in the integration file):
   - `flag beats env beats project file beats user config beats default` (table over apiUrl, project, env, path, asserting value and source)
   - `finds .anchor.json in a parent directory`
   - `env defaults to dev and path to /`
@@ -285,7 +304,7 @@ docs/cli.md
 
 **Files:**
 - Create: `apps/cli/src/credentials/{types,macos,linux,file,select}.ts`, `apps/cli/src/process/spawner.ts`
-- Test: `apps/cli/test/credentials.test.ts`
+- Test: `apps/cli/test/unit/credentials/{types,macos,linux,select}.test.ts` (fake spawner only), `apps/cli/test/integration/credentials/file.test.ts` (real temp dirs)
 
 **Interfaces:**
 - Produces (`types.ts`):
@@ -316,7 +335,7 @@ docs/cli.md
   - Otherwise, including `win32` → file.
   - If a keychain `set` fails, fall back to the file store with a warning.
 
-- [ ] **Step 1: Write the failing tests** with `fakeSpawner()`, which records `{ cmd, args, input }` and returns scripted results:
+- [ ] **Step 1: Write the failing tests** with `fakeSpawner()`, which records `{ cmd, args, input }` and returns scripted results. File placement: macOS cases in `unit/credentials/macos.test.ts`, Linux cases in `unit/credentials/linux.test.ts`, the `decodeCredential` case in `unit/credentials/types.test.ts`, the `selectCredentialStore` case in `unit/credentials/select.test.ts`, and the three file-store cases in `integration/credentials/file.test.ts`:
   - `macOS set passes the token only via stdin`: assert `JSON.stringify(call.args)` does not contain the token or the encoded credential, and `call.input` contains the encoded credential (Review Focus 1)
   - `macOS get decodes stdout; not-found returns null; other failure throws CliError without the token`
   - `linux set passes the token only via stdin` (same assertion), and `lookup exit 1 returns null`
@@ -327,7 +346,7 @@ docs/cli.md
   - `selectCredentialStore honors ANCHOR_CREDENTIAL_STORE=file; picks file on win32; falls back to file when security is missing`
 - [ ] **Step 2: Run the tests and confirm they fail.**
 - [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run the tests and confirm they pass.** On a macOS dev machine, also run the opt-in real-keychain test `ANCHOR_TEST_KEYCHAIN=1 pnpm --filter ./apps/cli test credentials-real` (create `test/credentials-real.test.ts`: set/get/delete against the real `security` binary with a throwaway origin `https://anchor-test.invalid`; skipped unless the env var is set). Expected: PASS.
+- [ ] **Step 4: Run the tests and confirm they pass.** On a macOS dev machine, also run the opt-in real-keychain test `ANCHOR_TEST_KEYCHAIN=1 pnpm --filter ./apps/cli test:integration macos-real` (create `test/integration/credentials/macos-real.test.ts`: set/get/delete against the real `security` binary with a throwaway origin `https://anchor-test.invalid`; skipped unless the env var is set). Expected: PASS.
 - [ ] **Step 5: Commit** with `git commit -m "feat(cli): OS keychain and 0600 file credential stores"`.
 
 ---
@@ -337,7 +356,7 @@ docs/cli.md
 **Files:**
 - Create: `apps/cli/src/auth.ts`, `apps/cli/src/commands/{login,logout,whoami}.ts`
 - Modify: `apps/cli/src/program.ts`
-- Test: `apps/cli/test/auth.test.ts`, `apps/cli/test/login.test.ts`
+- Test: `apps/cli/test/unit/auth.test.ts` (`resolveAuth` cases), `apps/cli/test/integration/commands/login.test.ts` (`login`, `logout` and `whoami` cases, run through `runCli`)
 
 **Interfaces:**
 - Produces (`auth.ts`):
@@ -390,7 +409,7 @@ docs/cli.md
 **Files:**
 - Create: `apps/cli/src/commands/{init,projects,envs}.ts`
 - Modify: `apps/cli/src/program.ts`
-- Test: `apps/cli/test/init.test.ts`, `apps/cli/test/discovery.test.ts`
+- Test: `apps/cli/test/integration/commands/init.test.ts`, `apps/cli/test/integration/commands/discovery.test.ts` (`projects list` and `envs list`)
 
 **Interfaces:**
 - Produces:
@@ -424,7 +443,7 @@ docs/cli.md
 **Files:**
 - Create: `apps/cli/src/commands/secrets.ts`, `apps/cli/src/secret-input.ts`, `apps/cli/src/confirm.ts`
 - Modify: `apps/cli/src/program.ts`, `apps/cli/src/main.ts` (call `assertNoSecretInArgv` before parsing)
-- Test: `apps/cli/test/secrets.test.ts`, `apps/cli/test/secret-input.test.ts`
+- Test: `apps/cli/test/integration/commands/secrets.test.ts`, `apps/cli/test/unit/secret-input.test.ts`
 
 **Interfaces:**
 - Produces (`secret-input.ts`):
@@ -479,7 +498,7 @@ docs/cli.md
 **Files:**
 - Create: `apps/cli/src/process/run-child.ts`, `apps/cli/src/commands/run.ts`
 - Modify: `apps/cli/src/program.ts`
-- Test: `apps/cli/test/run.test.ts`, `apps/cli/test/run-child.test.ts`, `apps/cli/test/fixtures/child.mjs`
+- Test: `apps/cli/test/integration/commands/run.test.ts`, `apps/cli/test/integration/process/run-child.test.ts`, `apps/cli/test/support/fixtures/child.mjs`
 
 **Interfaces:**
 - Produces (`run-child.ts`):
@@ -504,7 +523,7 @@ docs/cli.md
   - `missing command after -- exits 2`
   - `flags after -- are passed to the child verbatim` (`anchor run -- node --version`)
   - `secret values are not printed on stdout/stderr even with --debug` (canary)
-  - `run-child.test.ts` (real processes, POSIX only). The fixture `child.mjs` prints `ready` and on SIGTERM writes `got SIGTERM` and exits 42; with arg `exit:N` it exits N; with arg `env:KEY` it prints `process.env[KEY]`.
+  - `integration/process/run-child.test.ts` (real processes, POSIX only). The fixture `support/fixtures/child.mjs` prints `ready` and on SIGTERM writes `got SIGTERM` and exits 42; with arg `exit:N` it exits N; with arg `env:KEY` it prints `process.env[KEY]`.
     - `propagates child exit code 3`
     - `emitting SIGTERM on the fake proc forwards to the child and resolves with 42`
     - `child killed by SIGKILL -> exitCodeFromChild 137`
@@ -522,7 +541,7 @@ docs/cli.md
 **Files:**
 - Create: `apps/cli/src/format/env-file.ts`, `apps/cli/src/files.ts`, `apps/cli/src/commands/export.ts`
 - Modify: `apps/cli/src/program.ts`
-- Test: `apps/cli/test/env-file.test.ts`, `apps/cli/test/export.test.ts`
+- Test: `apps/cli/test/unit/format/env-file.test.ts`, `apps/cli/test/integration/commands/export.test.ts`
 
 **Interfaces:**
 - Produces (`env-file.ts`, input `entries: [key: string, value: string][]` sorted by key):
@@ -542,10 +561,10 @@ docs/cli.md
   - With `--output`: if the file exists, `confirmDestructive("Overwrite <file>?")`. Then `writeSecretFile`. When `isGitIgnored` returns `false`, warn `<file> is not gitignored; add it to .gitignore`. Human output: `Wrote <n> secrets to <file>`. `--json` → `{ path, count, format }`.
 
 - [ ] **Step 1: Write the failing tests:**
-  - `env-file.test.ts`: round-trip through `dotenv.parse` for each of: `plain`, `with space`, `has#hash`, `a=b`, a 3-line PEM, `say "hi"`, `it's`, `both ' and "`, the empty string, `🔑 ünïcødé`, and `C:\path\name` (a backslash followed by `n`). For each value, `parse(formatDotenv([["K", v]])).K === v`.
+  - `unit/format/env-file.test.ts`: round-trip through `dotenv.parse` for each of: `plain`, `with space`, `has#hash`, `a=b`, a 3-line PEM, `say "hi"`, `it's`, `both ' and "`, the empty string, `🔑 ünïcødé`, and `C:\path\name` (a backslash followed by `n`). For each value, `parse(formatDotenv([["K", v]])).K === v`.
     - A value with both `"` and a newline throws the documented `CliError` (Review Focus 4).
     - JSON and YAML round-trip through `JSON.parse` and `yaml.parse` for the same set.
-  - `export.test.ts` (tmp git repo created with `git init`):
+  - `integration/commands/export.test.ts` (tmp git repo created with `git init`):
     - `refuses TTY stdout without --output`
     - `pipes dotenv to non-TTY stdout`
     - `--output creates the file with mode 0600`
@@ -565,7 +584,7 @@ docs/cli.md
 **Files:**
 - Create: `apps/cli/src/commands/tokens.ts`
 - Modify: `apps/cli/src/program.ts`
-- Test: `apps/cli/test/tokens.test.ts`
+- Test: `apps/cli/test/integration/commands/tokens.test.ts`
 
 **Interfaces:**
 - Produces:
@@ -594,7 +613,7 @@ docs/cli.md
 ### Task 11: Help snapshots and CLI reference
 
 **Files:**
-- Create: `apps/cli/test/help.test.ts`, `docs/cli.md`
+- Create: `apps/cli/test/unit/help.test.ts` (snapshots in `apps/cli/test/unit/__snapshots__/help.test.ts.snap`), `docs/cli.md`
 - Modify: `apps/cli/src/program.ts` (only to fill gaps the test reveals)
 
 **Interfaces:**
@@ -622,7 +641,7 @@ docs/cli.md
 ### Task 12: End-to-end tests against a local Worker
 
 **Files:**
-- Create: `apps/cli/vitest.e2e.config.ts`, `apps/cli/test/e2e/harness.ts`, `apps/cli/test/e2e/cli.e2e.test.ts`
+- Create: `apps/cli/vitest.e2e.config.ts` (`test.include: ["test/e2e/**/*.e2e.test.ts"]`), `apps/cli/test/e2e/harness.ts`, `apps/cli/test/e2e/cli.e2e.test.ts`
 - Modify: `.github/workflows/ci.yml` (add `pnpm --filter ./apps/cli test:e2e`)
 
 **Interfaces:**
@@ -675,7 +694,7 @@ docs/cli.md
   - On native runners it smoke-tests `./anchor-* --version` and `--help`.
   - A final job writes `SHA256SUMS` and uploads all binaries to a **draft** GitHub Release. There is no npm publish.
 
-- [ ] **Step 1: Write the failing test** `apps/cli/test/build.test.ts`: it runs `node build.mjs` and then `node dist/anchor.mjs --version`, and expects the `package.json` version on stdout and exit 0. It also runs `node dist/anchor.mjs secrets set X=1` and expects exit 2 (the argv guard survives bundling).
+- [ ] **Step 1: Write the failing test** `apps/cli/test/integration/build.test.ts`: it runs `node build.mjs` and then `node dist/anchor.mjs --version`, and expects the `package.json` version on stdout and exit 0. It also runs `node dist/anchor.mjs secrets set X=1` and expects exit 2 (the argv guard survives bundling).
 - [ ] **Step 2: Run it and confirm it fails.**
 - [ ] **Step 3: Implement `build.mjs` and the `package.json` changes.**
 - [ ] **Step 4: Run it and confirm it passes.**

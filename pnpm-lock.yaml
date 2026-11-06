@@ -175,6 +175,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@anchor/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       hono:
         specifier: ^4.13.16
         version: 4.13.16

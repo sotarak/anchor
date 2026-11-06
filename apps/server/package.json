@@ -9,6 +9,7 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
+    "@anchor/shared": "workspace:*",
     "hono": "^4.13.16"
   },
   "devDependencies": {

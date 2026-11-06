@@ -134,7 +134,7 @@ function ProjectsPage() {
                   </TableCell>
                   <TableCell>
                     {p.access ? (
-                      <Tag tone="neutral">{roleLabel(p.access.role)}</Tag>
+                      <Tag>{roleLabel(p.access.role)}</Tag>
                     ) : (
                       <span className="text-text-soft">–</span>
                     )}

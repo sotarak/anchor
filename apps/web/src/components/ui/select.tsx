@@ -62,8 +62,12 @@ export function SelectContent({
 export function SelectItem({
   className,
   children,
+  description,
   ...props
-}: ComponentProps<typeof SelectPrimitive.Item>) {
+}: ComponentProps<typeof SelectPrimitive.Item> & {
+  /** A one-line hint under the label, shown in the list only (not in the trigger). */
+  description?: string;
+}) {
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
@@ -74,7 +78,14 @@ export function SelectItem({
       )}
       {...props}
     >
-      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      {description ? (
+        <div className="flex flex-col">
+          <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+          <span className="text-paragraph-xs text-text-soft">{description}</span>
+        </div>
+      ) : (
+        <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      )}
       <SelectPrimitive.ItemIndicator className="absolute right-2">
         <RiCheckLine aria-hidden className="size-4" />
       </SelectPrimitive.ItemIndicator>

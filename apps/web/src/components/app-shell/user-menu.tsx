@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { RiLogoutBoxRLine, RiUserLine } from "react-icons/ri";
 import { toast } from "sonner";
+import { initials } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,12 +14,6 @@ import {
 import { ApiClientError } from "@/lib/api/client";
 import { api } from "@/lib/api/endpoints";
 import { meQueryOptions } from "@/lib/auth";
-
-export function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const letters = parts.length > 1 ? [parts[0], parts[parts.length - 1]] : parts;
-  return letters.map((p) => p?.[0]?.toUpperCase() ?? "").join("") || "?";
-}
 
 export function UserMenu() {
   const { data: me } = useQuery(meQueryOptions);

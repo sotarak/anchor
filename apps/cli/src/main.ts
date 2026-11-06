@@ -1,6 +1,7 @@
 import { CommanderError } from "commander";
 import { configureProxyFromEnv } from "./api/proxy";
 import { assertRunSeparator } from "./commands/run";
+import { assertNoVersionFlagOnGet } from "./commands/secrets";
 import type { CliDeps } from "./context";
 import { CliError, EXIT } from "./errors";
 import { createNodeIo } from "./io";
@@ -51,6 +52,7 @@ export async function main(argv: string[], partial: Partial<CliDeps> = {}): Prom
   try {
     assertNoSecretInArgv(argv.slice(2));
     assertRunSeparator(argv.slice(2));
+    assertNoVersionFlagOnGet(argv.slice(2));
     await buildProgram(deps, state).parseAsync(argv);
     return state.exitCode;
   } catch (e) {

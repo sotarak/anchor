@@ -200,7 +200,12 @@ describe("anchor secrets get", () => {
     });
     expect(p.code).toBe(0);
     expect(p.out).toBe(CANARY);
-    expect(p.fake.called("getSecret")[0]?.args).toEqual(["app", "dev", "DB_URL", { path: "/" }]);
+    expect(p.fake.called("getSecret")[0]?.args).toEqual([
+      "app",
+      "dev",
+      "DB_URL",
+      { path: "/", expand: true, includeImports: true },
+    ]);
 
     const ttyJson = await loggedIn({ tty: true });
     const tj = await ttyJson.run(["secrets", "get", "DB_URL", "--json", ...P], {

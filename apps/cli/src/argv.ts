@@ -13,6 +13,8 @@ const VALUE_OPTIONS = new Set([
   "--scope",
   "--permission",
   "--expires-in",
+  "--at-version",
+  "--to",
 ]);
 
 export interface Positional {

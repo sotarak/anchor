@@ -46,7 +46,7 @@ describe("anchor export", () => {
     expect(r.fake.called("listSecrets")[0]?.args).toEqual([
       "app",
       "dev",
-      { path: "/", reveal: true },
+      { path: "/", reveal: true, expand: true, includeImports: true },
     ]);
   });
 

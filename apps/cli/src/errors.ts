@@ -18,9 +18,28 @@ export class CliError extends Error {
     readonly exitCode: number,
     message: string,
     readonly hint?: string,
+    /** The API error code when this came from a server response. */
+    readonly apiCode?: string,
   ) {
     super(message);
     this.name = "CliError";
+  }
+}
+
+const NO_EXPAND_HINT = "Use --no-expand to skip reference expansion.";
+
+/**
+ * A 400 from a read with expansion on is a reference problem (unresolved, cycle, too deep,
+ * too large): keep the server's message and point at --no-expand.
+ */
+export async function withExpandHint<T>(expand: boolean, call: Promise<T>): Promise<T> {
+  try {
+    return await call;
+  } catch (e) {
+    if (expand && e instanceof CliError && e.apiCode === "bad_request") {
+      throw new CliError(e.exitCode, e.message, NO_EXPAND_HINT, e.apiCode);
+    }
+    throw e;
   }
 }
 
@@ -53,5 +72,5 @@ export function toCliError(
   if (e.code === "unauthenticated" && ctx.authSource === "ANCHOR_TOKEN") {
     return new CliError(EXIT.AUTH, "ANCHOR_TOKEN was rejected (expired, revoked or invalid)");
   }
-  return new CliError(exitCodeForApiError(e), e.message);
+  return new CliError(exitCodeForApiError(e), e.message, undefined, e.code);
 }

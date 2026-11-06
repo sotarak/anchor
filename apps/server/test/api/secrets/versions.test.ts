@@ -73,7 +73,8 @@ describe("secret versions", () => {
     await put("K", "two", "second");
     const res = await rollback("K", 1);
     expect(res.status).toBe(200);
-    const { secret } = await json<{ secret: SecretDto }>(res);
+    const { secret, changed } = await json<{ secret: SecretDto; changed: boolean }>(res);
+    expect(changed).toBe(true);
     expect(secret).toMatchObject({ key: "K", version: 3, comment: "first" });
     expect(secret).not.toHaveProperty("value");
     expect(await current("K")).toMatchObject({ version: 3, value: "one", comment: "first" });
@@ -85,7 +86,8 @@ describe("secret versions", () => {
     await put("K", "one", "first");
     const res = await rollback("K", 1);
     expect(res.status).toBe(200);
-    expect((await json<{ secret: SecretDto }>(res)).secret.version).toBe(3);
+    const body = await json<{ secret: SecretDto; changed: boolean }>(res);
+    expect(body).toMatchObject({ secret: { version: 3 }, changed: false });
     const rows = await env.DB.prepare("SELECT COUNT(*) AS n FROM secret_versions").first<{
       n: number;
     }>();

@@ -50,7 +50,7 @@ describe("anchor run", () => {
     expect(r.fake.called("listSecrets")[0]?.args).toEqual([
       "app",
       "dev",
-      { path: "/", reveal: true },
+      { path: "/", reveal: true, expand: true, includeImports: true },
     ]);
     expect(child.calls[0]?.cmd).toBe("node");
     expect(child.calls[0]?.args).toEqual(["app.js"]);

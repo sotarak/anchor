@@ -6,7 +6,14 @@ import { login } from "./commands/login";
 import { logout } from "./commands/logout";
 import { projectsList } from "./commands/projects";
 import { runCommand } from "./commands/run";
-import { secretsDelete, secretsGet, secretsList, secretsSet } from "./commands/secrets";
+import {
+  secretsDelete,
+  secretsGet,
+  secretsHistory,
+  secretsList,
+  secretsRollback,
+  secretsSet,
+} from "./commands/secrets";
 import { tokensCreate, tokensList, tokensRevoke } from "./commands/tokens";
 import { whoami } from "./commands/whoami";
 import { type CliDeps, type CommandContext, createContext, type GlobalFlags } from "./context";
@@ -109,15 +116,50 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     .description("Print one secret (the value is masked in a terminal unless --reveal)")
     .argument("<key>", "secret key")
     .option("--reveal", "show the value in a terminal")
+    .option("--expand", "expand ${KEY} references in the value (default)")
+    .option("--no-expand", "print the stored value without expanding references")
+    .option("--at-version <n>", "read a past version (stored value, not expanded)")
     .addHelpText(
       "after",
-      examples("anchor secrets get DB_URL --reveal", "anchor secrets get DB_URL > db-url.txt"),
+      examples(
+        "anchor secrets get DB_URL --reveal",
+        "anchor secrets get DB_URL > db-url.txt",
+        "anchor secrets get DB_URL --at-version 2 --reveal",
+      ),
     )
     .action(
-      act((ctx, key: string, opts: { reveal?: boolean }) =>
-        secretsGet(ctx, key, { reveal: opts.reveal === true }),
+      act((ctx, key: string, opts: { reveal?: boolean; expand?: boolean; atVersion?: string }) =>
+        secretsGet(ctx, key, {
+          reveal: opts.reveal === true,
+          expand: opts.expand !== false,
+          atVersion: opts.atVersion,
+        }),
       ),
     );
+  secrets
+    .command("history")
+    .description("List the versions of a secret (no values)")
+    .argument("<key>", "secret key")
+    .addHelpText(
+      "after",
+      examples("anchor secrets history DB_URL", "anchor secrets history DB_URL --json"),
+    )
+    .action(act((ctx, key: string) => secretsHistory(ctx, key)));
+  secrets
+    .command("rollback")
+    .description(
+      "Restore a past version as a new version (asks for confirmation; --yes in scripts)",
+    )
+    .argument("<key>", "secret key")
+    .requiredOption("--to <n>", "the version to restore")
+    .addHelpText(
+      "after",
+      examples(
+        "anchor secrets rollback DB_URL --to 2",
+        "anchor secrets rollback DB_URL --to 2 --yes",
+      ),
+    )
+    .action(act((ctx, key: string, opts: { to: string }) => secretsRollback(ctx, key, opts)));
   secrets
     .command("set")
     .description("Create or update a secret; the value comes from stdin, --from-file or a prompt")
@@ -152,13 +194,17 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     .description("Run a command with the environment's secrets injected as environment variables")
     .argument("[command...]", "the command to run, after --")
     .option("--no-override", "keep existing environment variables instead of Anchor values")
+    .option("--expand", "expand ${KEY} references in values (default)")
+    .option("--no-expand", "inject stored values without expanding references")
     .usage("[options] -- <command> [args...]")
     .addHelpText(
       "after",
       examples("anchor run -- npm start", "anchor run --env prod --path /api -- node server.js"),
     )
     .action(
-      act((ctx, command: string[], opts: { override: boolean }) => runCommand(ctx, command, opts)),
+      act((ctx, command: string[], opts: { override: boolean; expand?: boolean }) =>
+        runCommand(ctx, command, { override: opts.override, expand: opts.expand !== false }),
+      ),
     );
 
   program
@@ -168,6 +214,8 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
       new Option("--format <format>", "output format").choices(EXPORT_FORMATS).default("dotenv"),
     )
     .option("--output <file>", "write to a file instead of stdout")
+    .option("--expand", "expand ${KEY} references in values (default)")
+    .option("--no-expand", "write stored values without expanding references")
     .addHelpText(
       "after",
       examples(
@@ -176,7 +224,13 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
       ),
     )
     .action(
-      act((ctx, opts: { format: ExportFormat; output?: string }) => exportCommand(ctx, opts)),
+      act((ctx, opts: { format: ExportFormat; output?: string; expand?: boolean }) =>
+        exportCommand(ctx, {
+          format: opts.format,
+          output: opts.output,
+          expand: opts.expand !== false,
+        }),
+      ),
     );
 
   const tokens = program.command("tokens").description("Manage service tokens for CI and servers");

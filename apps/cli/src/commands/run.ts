@@ -2,7 +2,7 @@ import type { SecretDto } from "@anchor/shared";
 import { positionals } from "../argv";
 import { authedApi } from "../auth";
 import { type CommandContext, requireProject } from "../context";
-import { CliError, EXIT } from "../errors";
+import { CliError, EXIT, withExpandHint } from "../errors";
 import { exitCodeFromChild } from "../process/run-child";
 
 /** Parent env plus secrets. By default Anchor values win; with override=false existing vars win. */
@@ -41,7 +41,7 @@ export function assertRunSeparator(argv: string[]): void {
 export async function runCommand(
   ctx: CommandContext,
   argv: string[],
-  opts: { override: boolean },
+  opts: { override: boolean; expand: boolean },
 ): Promise<number> {
   const [cmd, ...args] = argv;
   if (!cmd) {
@@ -49,10 +49,15 @@ export async function runCommand(
   }
   const project = requireProject(ctx);
   const { api } = await authedApi(ctx);
-  const secrets = await api.listSecrets(project, ctx.config.env.value, {
-    path: ctx.config.path.value,
-    reveal: true,
-  });
+  const secrets = await withExpandHint(
+    opts.expand,
+    api.listSecrets(project, ctx.config.env.value, {
+      path: ctx.config.path.value,
+      reveal: true,
+      expand: opts.expand,
+      includeImports: true,
+    }),
+  );
   const env = buildChildEnv(ctx.deps.io.env, secrets, opts.override);
   ctx.out.debug(`injecting ${secrets.length} secrets into ${cmd}`);
   return exitCodeFromChild(await ctx.deps.runChild(cmd, args, env));

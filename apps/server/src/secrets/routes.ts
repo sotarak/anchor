@@ -148,7 +148,7 @@ secretRoutes.post("/:key/rollback", async (c) => {
     });
   }
   const { value: _omit, ...withoutValue } = secret;
-  return c.json<{ secret: SecretDto }>({ secret: withoutValue });
+  return c.json<{ secret: SecretDto; changed: boolean }>({ secret: withoutValue, changed });
 });
 
 secretRoutes.get("/:key", async (c) => {

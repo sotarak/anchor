@@ -221,6 +221,44 @@ describe("api client", () => {
     );
   });
 
+  it("sends expansion flags only when given, and calls the version endpoints", async () => {
+    const version = { version: 2, comment: "", createdAt: 1, createdBy: null };
+    const secret = { key: "K", path: "/a", version: 3, comment: "", updatedAt: 1 };
+    const f = scriptedFetch(
+      json(200, { secrets: [] }),
+      json(200, { secret }),
+      json(200, { versions: [version] }),
+      json(200, { version: { ...version, value: "v" } }),
+      json(200, { secret, changed: true }),
+    );
+    const api = createApiClient(opts(f.fn));
+    await api.listSecrets("app", "dev", {
+      path: "/a",
+      reveal: true,
+      expand: false,
+      includeImports: true,
+    });
+    await api.getSecret("app", "dev", "K", { path: "/a", expand: true });
+    expect(await api.listVersions("app", "dev", "K", { path: "/a" })).toEqual([version]);
+    expect(await api.getSecretVersion("app", "dev", "K", 2, { path: "/a" })).toEqual({
+      ...version,
+      value: "v",
+    });
+    expect(await api.rollbackSecret("app", "dev", "K", { path: "/a", version: 2 })).toEqual({
+      secret,
+      changed: true,
+    });
+    const base = "https://anchor.example/api/v1/projects/app/environments/dev/secrets";
+    expect(f.calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `GET ${base}?path=%2Fa&reveal=true&expand=false&includeImports=true`,
+      `GET ${base}/K?path=%2Fa&expand=true`,
+      `GET ${base}/K/versions?path=%2Fa`,
+      `GET ${base}/K/versions/2?path=%2Fa`,
+      `POST ${base}/K/rollback`,
+    ]);
+    expect(JSON.parse(f.calls[4]?.body ?? "")).toEqual({ path: "/a", version: 2 });
+  });
+
   it("unwraps response envelopes", async () => {
     const project = { id: "p", slug: "app", name: "App", createdAt: 1 };
     const token = { id: "t" };

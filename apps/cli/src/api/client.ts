@@ -3,6 +3,7 @@ import type {
   LoginResponse,
   ProjectDto,
   SecretDto,
+  SecretVersionDto,
   ServiceTokenDto,
   UserDto,
 } from "@anchor/shared";
@@ -15,6 +16,9 @@ export type CreateServiceTokenBody = {
   expiresInDays: number;
 };
 
+/** Read flags for secrets; omitted flags are not sent, so the server defaults apply. */
+export type SecretReadFlags = { expand?: boolean; includeImports?: boolean };
+
 export interface ApiClient {
   login(email: string, password: string): Promise<LoginResponse>;
   logout(): Promise<void>;
@@ -25,9 +29,33 @@ export interface ApiClient {
   listSecrets(
     project: string,
     env: string,
-    q: { path: string; reveal: boolean },
+    q: { path: string; reveal: boolean } & SecretReadFlags,
   ): Promise<SecretDto[]>;
-  getSecret(project: string, env: string, key: string, q: { path: string }): Promise<SecretDto>;
+  getSecret(
+    project: string,
+    env: string,
+    key: string,
+    q: { path: string } & SecretReadFlags,
+  ): Promise<SecretDto>;
+  listVersions(
+    project: string,
+    env: string,
+    key: string,
+    q: { path: string },
+  ): Promise<SecretVersionDto[]>;
+  getSecretVersion(
+    project: string,
+    env: string,
+    key: string,
+    version: number,
+    q: { path: string },
+  ): Promise<SecretVersionDto & { value: string }>;
+  rollbackSecret(
+    project: string,
+    env: string,
+    key: string,
+    body: { path: string; version: number },
+  ): Promise<{ secret: SecretDto; changed: boolean }>;
   putSecret(
     project: string,
     env: string,
@@ -52,7 +80,11 @@ export function createApiClient(opts: HttpOptions): ApiClient {
     (await call<T>(method, path, body)).data;
   const secretsPath = (project: string, env: string) =>
     `/projects/${seg(project)}/environments/${seg(env)}/secrets`;
-  const query = (q: Record<string, string>) => `?${new URLSearchParams(q)}`;
+  const query = (q: Record<string, string | boolean | undefined>) => {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(q)) if (v !== undefined) params.set(k, String(v));
+    return `?${params}`;
+  };
 
   return {
     login: (email, password) =>
@@ -75,16 +107,42 @@ export function createApiClient(opts: HttpOptions): ApiClient {
       (
         await data<{ secrets: SecretDto[] }>(
           "GET",
-          secretsPath(project, env) + query({ path: q.path, reveal: String(q.reveal) }),
+          secretsPath(project, env) +
+            query({
+              path: q.path,
+              reveal: q.reveal,
+              expand: q.expand,
+              includeImports: q.includeImports,
+            }),
         )
       ).secrets,
     getSecret: async (project, env, key, q) =>
       (
         await data<{ secret: SecretDto }>(
           "GET",
-          `${secretsPath(project, env)}/${seg(key)}${query({ path: q.path })}`,
+          `${secretsPath(project, env)}/${seg(key)}${query({
+            path: q.path,
+            expand: q.expand,
+            includeImports: q.includeImports,
+          })}`,
         )
       ).secret,
+    listVersions: async (project, env, key, q) =>
+      (
+        await data<{ versions: SecretVersionDto[] }>(
+          "GET",
+          `${secretsPath(project, env)}/${seg(key)}/versions${query({ path: q.path })}`,
+        )
+      ).versions,
+    getSecretVersion: async (project, env, key, version, q) =>
+      (
+        await data<{ version: SecretVersionDto & { value: string } }>(
+          "GET",
+          `${secretsPath(project, env)}/${seg(key)}/versions/${version}${query({ path: q.path })}`,
+        )
+      ).version,
+    rollbackSecret: (project, env, key, body) =>
+      data("POST", `${secretsPath(project, env)}/${seg(key)}/rollback`, body),
     putSecret: async (project, env, key, body) => {
       const res = await call<{ secret: SecretDto }>(
         "PUT",

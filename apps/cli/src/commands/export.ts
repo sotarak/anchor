@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { authedApi } from "../auth";
 import { confirmDestructive } from "../confirm";
 import { type CommandContext, requireProject } from "../context";
-import { CliError, EXIT } from "../errors";
+import { CliError, EXIT, withExpandHint } from "../errors";
 import { isGitIgnored, writeSecretFile } from "../files";
 import { type Entry, formatDotenv, formatJson, formatYaml } from "../format/env-file";
 
@@ -18,7 +18,7 @@ const FORMATTERS: Record<ExportFormat, (entries: Entry[]) => string> = {
 
 export async function exportCommand(
   ctx: CommandContext,
-  opts: { format: ExportFormat; output?: string },
+  opts: { format: ExportFormat; output?: string; expand: boolean },
 ): Promise<void> {
   const { io } = ctx.deps;
   if (!opts.output) {
@@ -33,10 +33,15 @@ export async function exportCommand(
   }
   const project = requireProject(ctx);
   const { api } = await authedApi(ctx);
-  const secrets = await api.listSecrets(project, ctx.config.env.value, {
-    path: ctx.config.path.value,
-    reveal: true,
-  });
+  const secrets = await withExpandHint(
+    opts.expand,
+    api.listSecrets(project, ctx.config.env.value, {
+      path: ctx.config.path.value,
+      reveal: true,
+      expand: opts.expand,
+      includeImports: true,
+    }),
+  );
   const entries: Entry[] = secrets
     .filter((s) => s.value !== undefined)
     .map((s): Entry => [s.key, s.value as string])

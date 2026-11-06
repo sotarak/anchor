@@ -97,6 +97,8 @@ Write the environment's secrets as dotenv, JSON or YAML (file mode 0600)
 Options:
   --format <format>  output format (choices: "dotenv", "json", "yaml", default: "dotenv")
   --output <file>    write to a file instead of stdout
+  --expand           expand \${KEY} references in values (default)
+  --no-expand        write stored values without expanding references
   -h, --help         display help for command
 
 Global Options:
@@ -263,6 +265,8 @@ Arguments:
 
 Options:
   --no-override     keep existing environment variables instead of Anchor values
+  --expand          expand \${KEY} references in values (default)
+  --no-expand       inject stored values without expanding references
   -h, --help        display help for command
 
 Global Options:
@@ -290,27 +294,30 @@ exports[`help text > help for secrets 1`] = `
 Manage secrets in the current project, environment and path
 
 Options:
-  -h, --help           display help for command
+  -h, --help                display help for command
 
 Global Options:
-  --version            print the CLI version
-  --json               print machine-readable JSON on stdout
-  -q, --quiet          suppress progress messages
-  --no-color           disable colored output
-  --debug              print request diagnostics to stderr (never secret values)
-  --api-url <url>      Anchor server URL
-  --project <slug>     project slug
-  --env <slug>         environment slug
-  --path <path>        secret folder path
-  -y, --yes            skip confirmations
+  --version                 print the CLI version
+  --json                    print machine-readable JSON on stdout
+  -q, --quiet               suppress progress messages
+  --no-color                disable colored output
+  --debug                   print request diagnostics to stderr (never secret values)
+  --api-url <url>           Anchor server URL
+  --project <slug>          project slug
+  --env <slug>              environment slug
+  --path <path>             secret folder path
+  -y, --yes                 skip confirmations
 
 Commands:
-  list [options]       List secret names and metadata (values only with --reveal)
-  get [options] <key>  Print one secret (the value is masked in a terminal unless --reveal)
-  set [options] <key>  Create or update a secret; the value comes from stdin, --from-file or a
-                       prompt
-  delete <key>         Delete a secret (asks for confirmation; --yes in scripts)
-  help [command]       display help for command
+  list [options]            List secret names and metadata (values only with --reveal)
+  get [options] <key>       Print one secret (the value is masked in a terminal unless --reveal)
+  history <key>             List the versions of a secret (no values)
+  rollback [options] <key>  Restore a past version as a new version (asks for confirmation; --yes in
+                            scripts)
+  set [options] <key>       Create or update a secret; the value comes from stdin, --from-file or a
+                            prompt
+  delete <key>              Delete a secret (asks for confirmation; --yes in scripts)
+  help [command]            display help for command
 "
 `;
 
@@ -354,6 +361,9 @@ Arguments:
 
 Options:
   --reveal          show the value in a terminal
+  --expand          expand \${KEY} references in the value (default)
+  --no-expand       print the stored value without expanding references
+  --at-version <n>  read a past version (stored value, not expanded)
   -h, --help        display help for command
 
 Global Options:
@@ -371,6 +381,37 @@ Global Options:
 Examples:
   $ anchor secrets get DB_URL --reveal
   $ anchor secrets get DB_URL > db-url.txt
+  $ anchor secrets get DB_URL --at-version 2 --reveal
+
+"
+`;
+
+exports[`help text > help for secrets history 1`] = `
+"Usage: anchor secrets history [options] <key>
+
+List the versions of a secret (no values)
+
+Arguments:
+  key               secret key
+
+Options:
+  -h, --help        display help for command
+
+Global Options:
+  --version         print the CLI version
+  --json            print machine-readable JSON on stdout
+  -q, --quiet       suppress progress messages
+  --no-color        disable colored output
+  --debug           print request diagnostics to stderr (never secret values)
+  --api-url <url>   Anchor server URL
+  --project <slug>  project slug
+  --env <slug>      environment slug
+  --path <path>     secret folder path
+  -y, --yes         skip confirmations
+
+Examples:
+  $ anchor secrets history DB_URL
+  $ anchor secrets history DB_URL --json
 
 "
 `;
@@ -399,6 +440,37 @@ Global Options:
 Examples:
   $ anchor secrets list
   $ anchor secrets list --env prod --path /api --json
+
+"
+`;
+
+exports[`help text > help for secrets rollback 1`] = `
+"Usage: anchor secrets rollback [options] <key>
+
+Restore a past version as a new version (asks for confirmation; --yes in scripts)
+
+Arguments:
+  key               secret key
+
+Options:
+  --to <n>          the version to restore
+  -h, --help        display help for command
+
+Global Options:
+  --version         print the CLI version
+  --json            print machine-readable JSON on stdout
+  -q, --quiet       suppress progress messages
+  --no-color        disable colored output
+  --debug           print request diagnostics to stderr (never secret values)
+  --api-url <url>   Anchor server URL
+  --project <slug>  project slug
+  --env <slug>      environment slug
+  --path <path>     secret folder path
+  -y, --yes         skip confirmations
+
+Examples:
+  $ anchor secrets rollback DB_URL --to 2
+  $ anchor secrets rollback DB_URL --to 2 --yes
 
 "
 `;

@@ -1,0 +1,22 @@
+import type { AuditFilters } from "./endpoints";
+
+/** Query keys. No key and no cached query ever holds a secret value. */
+export const qk = {
+  me: ["me"] as const,
+  setupStatus: ["setup-status"] as const,
+  projects: ["projects"] as const,
+  project: (p: string) => ["projects", p] as const,
+  overview: (p: string, path: string) => ["projects", p, "overview", path] as const,
+  overviewAll: (p: string) => ["projects", p, "overview"] as const,
+  environments: (p: string) => ["projects", p, "environments"] as const,
+  secrets: (p: string, env: string, path: string) =>
+    ["projects", p, "environments", env, "secrets", path] as const,
+  secretsAll: (p: string, env: string) => ["projects", p, "environments", env, "secrets"] as const,
+  members: (p: string) => ["projects", p, "members"] as const,
+  serviceTokens: (p: string) => ["projects", p, "service-tokens"] as const,
+  users: ["users"] as const,
+  invites: ["invites"] as const,
+  audit: (filters: AuditFilters) => ["audit", filters] as const,
+  projectAudit: (p: string, filters: AuditFilters) => ["projects", p, "audit", filters] as const,
+  sessions: ["sessions"] as const,
+};

@@ -7,6 +7,7 @@ import type { AppEnv } from "./env";
 import { folderRoutes } from "./folders/routes";
 import { importRoutes } from "./imports/routes";
 import { inviteRoutes } from "./invites/routes";
+import { keyRoutes } from "./keys/routes";
 import { errorHandler, notFoundHandler } from "./lib/errors";
 import { requestContext } from "./lib/request";
 import { memberRoutes } from "./members/routes";
@@ -33,6 +34,7 @@ export function createApp(): Hono<AppEnv> {
   app.route("/api/v1/projects/:project/environments/:env/folders", folderRoutes);
   app.route("/api/v1/projects/:project/environments/:env/imports", importRoutes);
   app.route("/api/v1/projects/:project/service-tokens", serviceTokenRoutes);
+  app.route("/api/v1/projects/:project/keys", keyRoutes);
   app.route("/api/v1/projects/:project/members", memberRoutes);
   app.route("/api/v1/projects/:project/audit", projectAuditRoutes);
   app.route("/api/v1/projects", projectRoutes);

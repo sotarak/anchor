@@ -1,4 +1,5 @@
 import type { InstanceRole } from "@anchor/shared";
+import type { ReencryptMessage } from "./keys/rotation";
 
 export type Bindings = {
   DB: D1Database;
@@ -11,6 +12,8 @@ export type Bindings = {
   ANCHOR_ROOT_KEY_PREVIOUS?: string;
   ANCHOR_ROOT_KEY_PREVIOUS_ID?: string;
   ANCHOR_SETUP_TOKEN?: string;
+  /** Queue anchor-reencrypt: KEK rotation batches (src/keys/queue.ts consumes it). */
+  REENCRYPT_QUEUE: Queue<ReencryptMessage>;
 };
 
 export type UserPrincipal = {

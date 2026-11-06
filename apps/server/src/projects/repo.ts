@@ -3,6 +3,7 @@ import { createWrappedKek, type RootKeyring, rootKeyFor, unwrapKek } from "../cr
 import type { Principal } from "../env";
 import { isUniqueViolation, toBytes } from "../lib/d1";
 import { ApiError, ConfigError, IntegrityError } from "../lib/errors";
+import { log } from "../lib/log";
 import { newId } from "../lib/random";
 
 export type ProjectRow = {
@@ -173,11 +174,16 @@ export async function getProjectKek(
 ): Promise<CryptoKey> {
   const row = await db
     .prepare(
-      "SELECT root_key_id, iv, wrapped_key FROM project_keys WHERE project_id = ? AND version = ?",
+      "SELECT root_key_id, iv, wrapped_key, status FROM project_keys WHERE project_id = ? AND version = ?",
     )
     .bind(project.id, version)
-    .first<{ root_key_id: string; iv: unknown; wrapped_key: unknown }>();
+    .first<{ root_key_id: string; iv: unknown; wrapped_key: unknown; status: string }>();
   if (!row) throw new Error("project key not found");
+  // Retiring and retired keys still decrypt; a retired one in use means a write raced the end of
+  // a rotation (the next rotation re-encrypts it). Worth knowing, not worth failing a read.
+  if (row.status === "retired") {
+    log("warn", "retired_kek_used", { projectId: project.id, kekVersion: version });
+  }
   return unwrapKek(keyring, {
     projectId: project.id,
     version,

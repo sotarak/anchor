@@ -105,12 +105,51 @@ export async function recordAudit(c: Context<AppEnv>, input: AuditInput): Promis
   if (new TextEncoder().encode(serialized).byteLength > MAX_METADATA_BYTES) {
     throw new Error("audit metadata too large");
   }
-  const actor = input.actor ?? actorOf(c.get("principal"));
-  await c.env.DB.prepare(
-    `INSERT INTO audit_events (id, at, actor_type, actor_id, actor_label, action, project_id,
+  await insertAudit(c.env.DB, input, serialized, {
+    actor: input.actor ?? actorOf(c.get("principal")),
+    ip: c.get("clientIp") ?? null,
+    userAgent: c.get("userAgent") ?? null,
+    requestId: c.get("requestId") ?? null,
+  });
+}
+
+/** Actor for work no request drives (queue consumers, cron). */
+export const SYSTEM_ACTOR: AuditActor = { type: "anonymous", id: null, label: "system" };
+
+/** recordAudit for background work: no request, so no IP, user agent or request id. */
+export async function recordSystemAudit(db: D1Database, input: AuditInput): Promise<void> {
+  const metadata = input.metadata ?? {};
+  assertNoForbiddenKeys(metadata);
+  const serialized = JSON.stringify(metadata);
+  if (new TextEncoder().encode(serialized).byteLength > MAX_METADATA_BYTES) {
+    throw new Error("audit metadata too large");
+  }
+  await insertAudit(db, input, serialized, {
+    actor: input.actor ?? SYSTEM_ACTOR,
+    ip: null,
+    userAgent: null,
+    requestId: null,
+  });
+}
+
+async function insertAudit(
+  db: D1Database,
+  input: AuditInput,
+  serialized: string,
+  origin: {
+    actor: AuditActor;
+    ip: string | null;
+    userAgent: string | null;
+    requestId: string | null;
+  },
+): Promise<void> {
+  const { actor } = origin;
+  await db
+    .prepare(
+      `INSERT INTO audit_events (id, at, actor_type, actor_id, actor_label, action, project_id,
        environment_id, target, ip, user_agent, request_id, metadata)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  )
+    )
     .bind(
       newId(),
       Date.now(),
@@ -121,9 +160,9 @@ export async function recordAudit(c: Context<AppEnv>, input: AuditInput): Promis
       input.projectId ?? null,
       input.environmentId ?? null,
       input.target ?? null,
-      c.get("clientIp") ?? null,
-      c.get("userAgent") ?? null,
-      c.get("requestId") ?? null,
+      origin.ip,
+      origin.userAgent,
+      origin.requestId,
       serialized,
     )
     .run();

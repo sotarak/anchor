@@ -7,6 +7,7 @@ declare namespace Cloudflare {
     ANCHOR_ROOT_KEY_PREVIOUS?: string;
     ANCHOR_ROOT_KEY_PREVIOUS_ID?: string;
     ANCHOR_SETUP_TOKEN?: string;
+    REENCRYPT_QUEUE: Queue<import("../../src/keys/rotation").ReencryptMessage>;
     TEST_MIGRATIONS: import("cloudflare:test").D1Migration[];
   }
   interface GlobalProps {

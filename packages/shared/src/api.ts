@@ -69,6 +69,27 @@ export type FolderImportDto = {
   position: number;
 };
 
+/** A project key (KEK) version. "retiring" keys still decrypt until re-encryption finishes. */
+export type ProjectKeyDto = {
+  version: number;
+  status: "active" | "retiring" | "retired";
+  rootKeyId: string;
+  createdAt: number;
+};
+
+/** A KEK rotation (spec §13.5). `error` is a short code when status is "failed". */
+export type KeyRotationDto = {
+  id: string;
+  fromVersion: number;
+  toVersion: number;
+  status: "running" | "completed" | "failed";
+  total: number;
+  done: number;
+  error: string | null;
+  startedAt: number;
+  finishedAt: number | null;
+};
+
 /** A direct child folder (spec §13.5). */
 export type FolderDto = { path: string; name: string };
 

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { authenticate, checkOrigin } from "./auth/middleware";
 import { authRoutes } from "./auth/routes";
 import type { AppEnv } from "./env";
+import { inviteRoutes } from "./invites/routes";
 import { errorHandler, notFoundHandler } from "./lib/errors";
 import { requestContext } from "./lib/request";
 import { memberRoutes } from "./members/routes";
@@ -29,6 +30,7 @@ export function createApp(): Hono<AppEnv> {
   app.route("/api/v1/projects/:project/members", memberRoutes);
   app.route("/api/v1/projects", projectRoutes);
   app.route("/api/v1/users", userRoutes);
+  app.route("/api/v1/invites", inviteRoutes);
 
   app.onError(errorHandler);
   app.notFound(notFoundHandler);

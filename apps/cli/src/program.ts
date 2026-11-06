@@ -1,6 +1,9 @@
 import { Command } from "commander";
+import { envsList } from "./commands/envs";
+import { init } from "./commands/init";
 import { login } from "./commands/login";
 import { logout } from "./commands/logout";
+import { projectsList } from "./commands/projects";
 import { whoami } from "./commands/whoami";
 import { type CliDeps, type CommandContext, createContext, type GlobalFlags } from "./context";
 import { CLI_VERSION } from "./version";
@@ -59,6 +62,26 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     .description("Show the current user or service token")
     .addHelpText("after", examples("anchor whoami", "anchor whoami --json"))
     .action(act((ctx) => whoami(ctx)));
+
+  program
+    .command("init")
+    .description("Link this directory to a project and default environment (.anchor.json)")
+    .addHelpText("after", examples("anchor init", "anchor init --project my-app --env dev"))
+    .action(act((ctx) => init(ctx)));
+
+  const projects = program.command("projects").description("Discover projects");
+  projects
+    .command("list")
+    .description("List the projects you can access")
+    .addHelpText("after", examples("anchor projects list", "anchor projects list --json"))
+    .action(act((ctx) => projectsList(ctx)));
+
+  const envs = program.command("envs").description("Discover environments of a project");
+  envs
+    .command("list")
+    .description("List the environments of the current project")
+    .addHelpText("after", examples("anchor envs list", "anchor envs list --project my-app --json"))
+    .action(act((ctx) => envsList(ctx)));
 
   return program;
 }

@@ -1,3 +1,4 @@
+export * from "./cli";
 export * from "./context";
 export * from "./fakes";
 export * from "./fs";

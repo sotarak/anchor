@@ -21,6 +21,7 @@ import { Route as AppUsersRouteImport } from './routes/_app/users'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects/index'
 import { Route as AppProjectsProjectIndexRouteImport } from './routes/_app/projects/$project/index'
 import { Route as AppProjectsProjectEnvironmentsEnvRouteImport } from './routes/_app/projects/$project/environments/$env'
+import { Route as AppProjectsProjectSettingsEncryptionRouteImport } from './routes/_app/projects/$project/settings/encryption'
 import { Route as AppProjectsProjectSettingsEnvironmentsRouteImport } from './routes/_app/projects/$project/settings/environments'
 import { Route as AppProjectsProjectSettingsMembersRouteImport } from './routes/_app/projects/$project/settings/members'
 import { Route as AppProjectsProjectSettingsServiceTokensRouteImport } from './routes/_app/projects/$project/settings/service-tokens'
@@ -85,6 +86,12 @@ const AppProjectsProjectEnvironmentsEnvRoute =
     path: '/projects/$project/environments/$env',
     getParentRoute: () => AppRoute,
   } as any)
+const AppProjectsProjectSettingsEncryptionRoute =
+  AppProjectsProjectSettingsEncryptionRouteImport.update({
+    id: '/projects/$project/settings/encryption',
+    path: '/projects/$project/settings/encryption',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppProjectsProjectSettingsEnvironmentsRoute =
   AppProjectsProjectSettingsEnvironmentsRouteImport.update({
     id: '/projects/$project/settings/environments',
@@ -116,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/projects/': typeof AppProjectsIndexRoute
   '/projects/$project/': typeof AppProjectsProjectIndexRoute
   '/projects/$project/environments/$env': typeof AppProjectsProjectEnvironmentsEnvRoute
+  '/projects/$project/settings/encryption': typeof AppProjectsProjectSettingsEncryptionRoute
   '/projects/$project/settings/environments': typeof AppProjectsProjectSettingsEnvironmentsRoute
   '/projects/$project/settings/members': typeof AppProjectsProjectSettingsMembersRoute
   '/projects/$project/settings/service-tokens': typeof AppProjectsProjectSettingsServiceTokensRoute
@@ -132,6 +140,7 @@ export interface FileRoutesByTo {
   '/projects': typeof AppProjectsIndexRoute
   '/projects/$project': typeof AppProjectsProjectIndexRoute
   '/projects/$project/environments/$env': typeof AppProjectsProjectEnvironmentsEnvRoute
+  '/projects/$project/settings/encryption': typeof AppProjectsProjectSettingsEncryptionRoute
   '/projects/$project/settings/environments': typeof AppProjectsProjectSettingsEnvironmentsRoute
   '/projects/$project/settings/members': typeof AppProjectsProjectSettingsMembersRoute
   '/projects/$project/settings/service-tokens': typeof AppProjectsProjectSettingsServiceTokensRoute
@@ -150,6 +159,7 @@ export interface FileRoutesById {
   '/_app/projects/': typeof AppProjectsIndexRoute
   '/_app/projects/$project/': typeof AppProjectsProjectIndexRoute
   '/_app/projects/$project/environments/$env': typeof AppProjectsProjectEnvironmentsEnvRoute
+  '/_app/projects/$project/settings/encryption': typeof AppProjectsProjectSettingsEncryptionRoute
   '/_app/projects/$project/settings/environments': typeof AppProjectsProjectSettingsEnvironmentsRoute
   '/_app/projects/$project/settings/members': typeof AppProjectsProjectSettingsMembersRoute
   '/_app/projects/$project/settings/service-tokens': typeof AppProjectsProjectSettingsServiceTokensRoute
@@ -168,6 +178,7 @@ export interface FileRouteTypes {
     | '/projects/'
     | '/projects/$project/'
     | '/projects/$project/environments/$env'
+    | '/projects/$project/settings/encryption'
     | '/projects/$project/settings/environments'
     | '/projects/$project/settings/members'
     | '/projects/$project/settings/service-tokens'
@@ -184,6 +195,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/projects/$project'
     | '/projects/$project/environments/$env'
+    | '/projects/$project/settings/encryption'
     | '/projects/$project/settings/environments'
     | '/projects/$project/settings/members'
     | '/projects/$project/settings/service-tokens'
@@ -201,6 +213,7 @@ export interface FileRouteTypes {
     | '/_app/projects/'
     | '/_app/projects/$project/'
     | '/_app/projects/$project/environments/$env'
+    | '/_app/projects/$project/settings/encryption'
     | '/_app/projects/$project/settings/environments'
     | '/_app/projects/$project/settings/members'
     | '/_app/projects/$project/settings/service-tokens'
@@ -300,6 +313,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectsProjectEnvironmentsEnvRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/projects/$project/settings/encryption': {
+      id: '/_app/projects/$project/settings/encryption'
+      path: '/projects/$project/settings/encryption'
+      fullPath: '/projects/$project/settings/encryption'
+      preLoaderRoute: typeof AppProjectsProjectSettingsEncryptionRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/projects/$project/settings/environments': {
       id: '/_app/projects/$project/settings/environments'
       path: '/projects/$project/settings/environments'
@@ -332,6 +352,7 @@ interface AppRouteChildren {
   AppProjectsIndexRoute: typeof AppProjectsIndexRoute
   AppProjectsProjectIndexRoute: typeof AppProjectsProjectIndexRoute
   AppProjectsProjectEnvironmentsEnvRoute: typeof AppProjectsProjectEnvironmentsEnvRoute
+  AppProjectsProjectSettingsEncryptionRoute: typeof AppProjectsProjectSettingsEncryptionRoute
   AppProjectsProjectSettingsEnvironmentsRoute: typeof AppProjectsProjectSettingsEnvironmentsRoute
   AppProjectsProjectSettingsMembersRoute: typeof AppProjectsProjectSettingsMembersRoute
   AppProjectsProjectSettingsServiceTokensRoute: typeof AppProjectsProjectSettingsServiceTokensRoute
@@ -346,6 +367,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppProjectsProjectIndexRoute: AppProjectsProjectIndexRoute,
   AppProjectsProjectEnvironmentsEnvRoute:
     AppProjectsProjectEnvironmentsEnvRoute,
+  AppProjectsProjectSettingsEncryptionRoute:
+    AppProjectsProjectSettingsEncryptionRoute,
   AppProjectsProjectSettingsEnvironmentsRoute:
     AppProjectsProjectSettingsEnvironmentsRoute,
   AppProjectsProjectSettingsMembersRoute:

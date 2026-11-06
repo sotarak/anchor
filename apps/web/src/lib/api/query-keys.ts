@@ -21,6 +21,7 @@ export const qk = {
   imports: (p: string, env: string, path: string) =>
     ["projects", p, "environments", env, "imports", path] as const,
   importsAll: (p: string, env: string) => ["projects", p, "environments", env, "imports"] as const,
+  keys: (p: string) => ["projects", p, "keys"] as const,
   members: (p: string) => ["projects", p, "members"] as const,
   serviceTokens: (p: string) => ["projects", p, "service-tokens"] as const,
   users: ["users"] as const,

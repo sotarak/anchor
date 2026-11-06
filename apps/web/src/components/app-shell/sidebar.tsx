@@ -10,6 +10,7 @@ import {
   RiGroupLine,
   RiKey2Line,
   RiLockLine,
+  RiShieldKeyholeLine,
   RiShieldUserLine,
   RiStackLine,
   RiUserLine,
@@ -117,6 +118,15 @@ function ProjectNav({ project }: { project: string }) {
         >
           Service tokens
         </NavLink>
+        {projectQuery.data?.access?.role === "admin" ? (
+          <NavLink
+            to="/projects/$project/settings/encryption"
+            params={{ project }}
+            icon={<RiShieldKeyholeLine />}
+          >
+            Encryption
+          </NavLink>
+        ) : null}
         {projectQuery.data?.access?.role === "admin" ? (
           <NavLink
             to="/audit"

@@ -6,10 +6,12 @@ import type {
   FolderImportDto,
   InstanceRole,
   InviteDto,
+  KeyRotationDto,
   LoginResponse,
   MemberDto,
   OverviewDto,
   ProjectDto,
+  ProjectKeyDto,
   ProjectRole,
   SecretDto,
   SecretVersionDto,
@@ -196,6 +198,16 @@ export const api = {
       ).import,
     remove: (p: string, env: string, id: string) =>
       apiFetch<void>(`${envUrl(p, env)}/imports/${e(id)}`, { method: "DELETE" }),
+  },
+  keys: {
+    status: (p: string) =>
+      apiFetch<{ keys: ProjectKeyDto[]; rotations: KeyRotationDto[] }>(`${projectUrl(p)}/keys`),
+    rotate: async (p: string) =>
+      (
+        await apiFetch<{ rotation: KeyRotationDto }>(`${projectUrl(p)}/keys/rotate`, {
+          method: "POST",
+        })
+      ).rotation,
   },
   members: {
     list: async (p: string) =>

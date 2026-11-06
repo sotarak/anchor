@@ -20,7 +20,17 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // One server for the whole run: the smoke needs a fresh instance (it performs first-run setup),
+  // so every later spec depends on it and signs in as its owner.
+  projects: [
+    { name: "smoke", testMatch: /smoke\.spec\.ts$/, use: { ...devices["Desktop Chrome"] } },
+    {
+      name: "m5",
+      testMatch: /m5\.spec\.ts$/,
+      dependencies: ["smoke"],
+      use: { ...devices["Desktop Chrome"] },
+    },
+  ],
   webServer: {
     // CI builds the dashboard in an earlier step; locally the smoke always tests a fresh build.
     command: process.env.CI ? "node test/e2e/serve.mjs" : "pnpm build && node test/e2e/serve.mjs",

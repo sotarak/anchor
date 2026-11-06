@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { OWNER } from "./owner";
 
 // Must equal the CSP in docs/superpowers/plans/2026-11-06-anchor-m4-dashboard.md (Global Constraints)
 // and public/_headers.
@@ -6,7 +7,6 @@ const CSP =
   "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; " +
   "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
-const OWNER = { name: "Smoke Owner", email: "smoke@example.com", password: "smoke-password-123" };
 const VALUE = "world-smoke-123";
 
 test("setup → project → secret reveal/re-mask → logout → login, with no CSP violations", async ({

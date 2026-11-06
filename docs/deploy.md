@@ -2,6 +2,13 @@
 
 Anchor runs as one Cloudflare Worker with one D1 database. One deployment serves one organization.
 
+Runbooks after the first deploy:
+
+- [Rotating a project key](#rotating-a-project-key) (background re-encryption through Queues)
+- [Rotating the root key](#rotating-the-root-key) (re-wrap every project key)
+- [Audit retention](#audit-retention) and [rate-limiting the auth endpoints](#rate-limit-the-public-auth-endpoints)
+- [Break-glass: lost owner recovery](#break-glass-lost-owner-recovery)
+
 ## Prerequisites
 
 - A Cloudflare account on the **Workers Paid** plan. Password hashing (PBKDF2, 100,000 iterations)
@@ -139,7 +146,8 @@ Each project has a key (KEK) that encrypts its secret values. A project admin ro
 `POST /api/v1/projects/<slug>/keys/rotate` (202). That creates a new key version for new writes,
 marks the old one `retiring`, and re-encrypts existing values in the background, 100 versions per
 queue message. Every value stays readable throughout. `GET /api/v1/projects/<slug>/keys` shows the
-key versions and the rotation progress (`done` / `total`).
+key versions and the rotation progress (`done` / `total`). In the dashboard, the same controls are
+on the project's **Encryption** page (project admins), which polls while a rotation runs.
 
 - The old key becomes `retired` only when no stored version uses it any more.
 - Calling rotate again while a rotation runs resumes it (re-sends its message) instead of starting

@@ -2,7 +2,15 @@ import { env } from "cloudflare:workers";
 import type { ApiErrorBody, SecretDto } from "@anchor/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "#src/app";
-import { api, createUserWithSession, json, jsonInit, resetDb, TEST_ORIGIN } from "#test/support";
+import {
+  api,
+  createMember,
+  createUserWithSession,
+  json,
+  jsonInit,
+  resetDb,
+  TEST_ORIGIN,
+} from "#test/support";
 
 const BASE = "/api/v1/projects/app/environments/dev/secrets";
 let token: string;
@@ -122,7 +130,7 @@ describe("secrets HTTP API", () => {
     expect((await del("K")).status).toBe(404);
   });
 
-  it("member -> 403 on read and write", async () => {
+  it("member without membership -> 403 on read and write", async () => {
     await put("K", { value: "v" });
     const member = await createUserWithSession({ role: "member" });
     const t = member.token;
@@ -134,6 +142,23 @@ describe("secrets HTTP API", () => {
       (await json<{ secret: SecretDto }>(await get("K"))).secret.value,
       "member write must not land",
     ).toBe("v");
+  });
+
+  it("members get role- and environment-appropriate access", async () => {
+    await put("K", { value: "v" });
+    const viewer = await createMember("app", { role: "viewer" });
+    expect((await get("K", "", viewer.token)).status).toBe(200);
+    expect((await list("?reveal=true", viewer.token)).status).toBe(200);
+    expect((await put("K", { value: "x" }, { token: viewer.token })).status).toBe(403);
+    expect((await del("K", "", viewer.token)).status).toBe(403);
+
+    const prodOnly = await createMember("app", { role: "developer", environments: ["prod"] });
+    expect((await get("K", "", prodOnly.token)).status).toBe(403);
+    expect((await put("K", { value: "x" }, { token: prodOnly.token })).status).toBe(403);
+
+    const dev = await createMember("app", { role: "developer", environments: ["dev"] });
+    expect((await put("K", { value: "from-dev" }, { token: dev.token })).status).toBe(200);
+    expect((await get("K", "", dev.token)).status).toBe(200);
   });
 
   it("no auth -> 401", async () => {

@@ -25,6 +25,9 @@ const MAX_KEYS = 500;
 
 export function actorOf(principal: Principal | undefined): AuditActor {
   if (!principal) return { type: "anonymous", id: null, label: null };
+  if (principal.type === "service_token") {
+    return { type: "service_token", id: principal.tokenId, label: principal.name };
+  }
   return { type: "user", id: principal.userId, label: principal.email };
 }
 

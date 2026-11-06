@@ -6,7 +6,15 @@ import { open, seal } from "#src/crypto/aead";
 import { getRootKey } from "#src/crypto/keyring";
 import { utf8Encode } from "#src/lib/encoding";
 import { getProjectBySlug, getProjectKek } from "#src/projects/repo";
-import { api, createUserWithSession, json, jsonInit, resetDb, TEST_ORIGIN } from "#test/support";
+import {
+  api,
+  createMember,
+  createUserWithSession,
+  json,
+  jsonInit,
+  resetDb,
+  TEST_ORIGIN,
+} from "#test/support";
 
 let token: string;
 const bearer = () => ({ authorization: `Bearer ${token}` });
@@ -70,13 +78,46 @@ describe("projects", () => {
     expect((await create({ name: "App", slug: "My App" })).status).toBe(400);
   });
 
-  it("member gets 403 on list and create", async () => {
+  it("member without membership sees no projects and cannot create", async () => {
+    await create({ name: "App", slug: "app" });
     const member = await createUserWithSession({ kind: "cli", role: "member" });
-    expect((await create({ name: "App", slug: "app" }, member.token)).status).toBe(403);
+    expect((await create({ name: "Mine", slug: "mine" }, member.token)).status).toBe(403);
     const list = await api("/api/v1/projects", {
       headers: { authorization: `Bearer ${member.token}` },
     });
-    expect(list.status).toBe(403);
+    expect(list.status).toBe(200);
+    expect((await json<{ projects: ProjectDto[] }>(list)).projects).toEqual([]);
+    const one = await api("/api/v1/projects/app", {
+      headers: { authorization: `Bearer ${member.token}` },
+    });
+    expect(one.status).toBe(403);
+  });
+
+  it("member sees only their projects in GET /projects", async () => {
+    for (const slug of ["alpha", "beta", "gamma"]) await create({ name: slug, slug });
+    const member = await createMember("beta", { role: "viewer" });
+    const res = await api("/api/v1/projects", {
+      headers: { authorization: `Bearer ${member.token}` },
+    });
+    expect(res.status).toBe(200);
+    const { projects } = await json<{ projects: ProjectDto[] }>(res);
+    expect(projects.map((p) => p.slug)).toEqual(["beta"]);
+  });
+
+  it("viewer can read the project but not rename or delete it; project admin can rename only", async () => {
+    await create({ name: "App", slug: "app" });
+    const viewer = await createMember("app", { role: "viewer" });
+    const admin = await createMember("app", { role: "admin" });
+    const get = (t: string) =>
+      api("/api/v1/projects/app", { headers: { authorization: `Bearer ${t}` } });
+    const rename = (t: string) =>
+      api("/api/v1/projects/app", jsonInit("PATCH", { name: "Renamed" }, { token: t }));
+    const remove = (t: string) =>
+      api("/api/v1/projects/app", jsonInit("DELETE", undefined, { token: t }));
+    expect((await get(viewer.token)).status).toBe(200);
+    expect((await rename(viewer.token)).status).toBe(403);
+    expect((await rename(admin.token)).status).toBe(200);
+    expect((await remove(admin.token)).status).toBe(403);
   });
 
   it("unauthenticated gets 401", async () => {

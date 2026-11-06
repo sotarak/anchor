@@ -1,5 +1,6 @@
 import type { EnvironmentDto, ProjectDto } from "@anchor/shared";
 import { createWrappedKek, ROOT_KEY_ID, unwrapKek } from "../crypto/keyring";
+import type { Principal } from "../env";
 import { isUniqueViolation, toBytes } from "../lib/d1";
 import { ApiError, ConfigError, IntegrityError } from "../lib/errors";
 import { newId } from "../lib/random";
@@ -99,6 +100,33 @@ export async function listProjects(db: D1Database): Promise<ProjectRow[]> {
     .prepare(`SELECT ${PROJECT_COLUMNS} FROM projects ORDER BY name, slug`)
     .all<ProjectRow>();
   return results;
+}
+
+/**
+ * Projects the principal may read, in one query: everything for instance owners/admins, member
+ * projects for members, and the token's own project for service tokens. Mirrors authorize's
+ * project:read rule.
+ */
+export async function listProjectsForPrincipal(
+  db: D1Database,
+  principal: Principal,
+): Promise<ProjectRow[]> {
+  if (principal.type === "user" && (principal.role === "owner" || principal.role === "admin")) {
+    return listProjects(db);
+  }
+  const stmt =
+    principal.type === "service_token"
+      ? db
+          .prepare(`SELECT ${PROJECT_COLUMNS} FROM projects WHERE id = ? ORDER BY name, slug`)
+          .bind(principal.projectId)
+      : db
+          .prepare(
+            `SELECT ${PROJECT_COLUMNS} FROM projects
+             WHERE id IN (SELECT project_id FROM project_members WHERE user_id = ?)
+             ORDER BY name, slug`,
+          )
+          .bind(principal.userId);
+  return (await stmt.all<ProjectRow>()).results;
 }
 
 export async function getProjectBySlug(db: D1Database, slug: string): Promise<ProjectRow> {

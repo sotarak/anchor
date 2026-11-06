@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import type { ApiErrorBody, EnvironmentDto } from "@anchor/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, createUserWithSession, json, jsonInit, resetDb } from "#test/support";
+import { api, createMember, createUserWithSession, json, jsonInit, resetDb } from "#test/support";
 
 let token: string;
 const base = (project = "app") => `/api/v1/projects/${project}/environments`;
@@ -94,7 +94,7 @@ describe("environments", () => {
     );
   });
 
-  it("member -> 403", async () => {
+  it("member without membership -> 403", async () => {
     const member = await createUserWithSession({ kind: "cli", role: "member" });
     const auth = { token: member.token };
     expect(
@@ -104,5 +104,22 @@ describe("environments", () => {
       403,
     );
     expect((await api(`${base()}/dev`, jsonInit("DELETE", undefined, auth))).status).toBe(403);
+  });
+
+  it("member with env restriction sees only allowed environments", async () => {
+    const member = await createMember("app", { role: "developer", environments: ["dev", "prod"] });
+    const res = await api(base(), { headers: { authorization: `Bearer ${member.token}` } });
+    expect(res.status).toBe(200);
+    const { environments } = await json<{ environments: EnvironmentDto[] }>(res);
+    expect(environments.map((e) => e.slug)).toEqual(["dev", "prod"]);
+  });
+
+  it("only a project admin member can manage environments", async () => {
+    const dev = await createMember("app", { role: "developer" });
+    const admin = await createMember("app", { role: "admin" });
+    const add = (t: string, slug: string) =>
+      api(base(), jsonInit("POST", { name: slug, slug }, { token: t }));
+    expect((await add(dev.token, "qa")).status).toBe(403);
+    expect((await add(admin.token, "qa")).status).toBe(201);
   });
 });

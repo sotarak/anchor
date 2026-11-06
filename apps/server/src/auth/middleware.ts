@@ -1,6 +1,6 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { getCookie } from "hono/cookie";
-import type { AppEnv, Principal } from "../env";
+import type { AppEnv, Principal, UserPrincipal } from "../env";
 import { ApiError } from "../lib/errors";
 import { findPrincipalBySessionToken, SESSION_COOKIE } from "./sessions";
 
@@ -40,8 +40,18 @@ export const checkOrigin: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();
 };
 
-export function requireUser(c: Context<AppEnv>): Principal {
+/** Any authenticated caller (user session or service token); 401 otherwise. */
+export function requirePrincipal(c: Context<AppEnv>): Principal {
   const principal = c.get("principal");
   if (!principal) throw new ApiError(401, "unauthenticated", "Authentication required");
+  return principal;
+}
+
+/** A user session only: 401 when unauthenticated, 403 for service tokens. */
+export function requireUser(c: Context<AppEnv>): UserPrincipal {
+  const principal = requirePrincipal(c);
+  if (principal.type !== "user") {
+    throw new ApiError(403, "forbidden", "This endpoint requires a user session");
+  }
   return principal;
 }

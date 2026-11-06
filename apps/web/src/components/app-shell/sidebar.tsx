@@ -117,6 +117,16 @@ function ProjectNav({ project }: { project: string }) {
         >
           Service tokens
         </NavLink>
+        {projectQuery.data?.access?.role === "admin" ? (
+          <NavLink
+            to="/audit"
+            search={{ projectId: projectQuery.data.id }}
+            activeOptions={{ includeSearch: true }}
+            icon={<RiFileListLine />}
+          >
+            Project audit log
+          </NavLink>
+        ) : null}
       </Group>
     </>
   );

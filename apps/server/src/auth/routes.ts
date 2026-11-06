@@ -53,7 +53,11 @@ authRoutes.get("/auth/me", async (c) => {
 
 authRoutes.post("/auth/logout", async (c) => {
   const presented = readPresentedToken(c);
-  if (presented) await revokeSession(c.env.DB, presented.token);
+  if (presented) {
+    await revokeSession(c.env.DB, presented.token);
+    // Audit only a real logout: the presented token resolved to a user session.
+    if (c.get("principal")?.type === "user") await recordAudit(c, { action: "auth.logout" });
+  }
   clearSessionCookie(c);
   return c.body(null, 204);
 });
@@ -95,6 +99,11 @@ authRoutes.post("/setup", async (c) => {
     now,
   );
   setSessionCookie(c, token, expiresAt);
+  await recordAudit(c, {
+    action: "auth.setup",
+    actor: { type: "user", id: userId, label: body.email },
+    target: userId,
+  });
   const user = toUserDto({ id: userId, email: body.email, name: body.name, role: "owner" });
   return c.json<LoginResponse>({ user, expiresAt }, 201);
 });
@@ -105,21 +114,34 @@ const INVALID_CREDENTIALS = "Invalid email or password";
 authRoutes.post("/auth/login", async (c) => {
   const body = await parseJson(c, loginBodySchema);
   const now = Date.now();
+  // The submitted (already lowercased) email is the only identity a failed attempt has.
+  const failed = (reason: "invalid_credentials" | "locked" | "disabled") =>
+    recordAudit(c, {
+      action: "auth.login_failed",
+      actor: { type: "anonymous", id: null, label: body.email },
+      metadata: { reason },
+    });
   const user = await findUserByEmail(c.env.DB, body.email);
   if (!user) {
     await verifyAgainstDummy(body.password);
+    await failed("invalid_credentials");
     throw new ApiError(401, "invalid_credentials", INVALID_CREDENTIALS);
   }
   // Count the attempt as a failure up front (atomically); a correct password resets it below.
   const limits = { maxFailures: MAX_FAILED_LOGINS, lockoutMs: LOCKOUT_MS };
   if (!(await reserveLoginAttempt(c.env.DB, user.id, now, limits))) {
+    await failed("locked");
     throw new ApiError(429, "rate_limited", "Too many failed attempts, try again later");
   }
   if (!(await verifyPassword(body.password, user.password_hash))) {
+    await failed("invalid_credentials");
     throw new ApiError(401, "invalid_credentials", INVALID_CREDENTIALS);
   }
   // Only after the password checks out, so a disabled account is not revealed to guessers.
-  if (user.disabled_at !== null) throw new ApiError(403, "forbidden", "Account disabled");
+  if (user.disabled_at !== null) {
+    await failed("disabled");
+    throw new ApiError(403, "forbidden", "Account disabled");
+  }
   await updateLoginState(c.env.DB, user.id, { failedLogins: 0, lockedUntil: null });
   const { token, expiresAt } = await createSession(
     c.env.DB,
@@ -128,6 +150,11 @@ authRoutes.post("/auth/login", async (c) => {
     c.req.header("user-agent") ?? null,
     now,
   );
+  await recordAudit(c, {
+    action: "auth.login",
+    actor: { type: "user", id: user.id, label: user.email },
+    metadata: { client: body.client },
+  });
   const dto = toUserDto(user);
   if (body.client === "web") {
     setSessionCookie(c, token, expiresAt);

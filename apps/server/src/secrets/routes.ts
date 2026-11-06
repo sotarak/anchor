@@ -5,6 +5,7 @@ import {
   secretQuerySchema,
 } from "@anchor/shared";
 import { type Context, Hono } from "hono";
+import { capKeys, recordAudit } from "../audit/record";
 import { requirePrincipal } from "../auth/middleware";
 import { type Action, authorize } from "../authz/policy";
 import { getRootKey } from "../crypto/keyring";
@@ -68,6 +69,15 @@ secretRoutes.get("/", async (c) => {
   const query = parseQuery(c, secretQuerySchema);
   const ctx = await secretContext(c, target, "secret:read", query.path);
   const secrets = await listSecrets(ctx, query);
+  // Values are about to leave: the read must be on record first (fails closed with a 500).
+  if (query.reveal) {
+    await recordAudit(c, {
+      action: "secret.read",
+      projectId: target.project.id,
+      environmentId: target.environment.id,
+      metadata: { path: query.path, ...capKeys(secrets.map((s) => s.key)) },
+    });
+  }
   return c.json<{ secrets: SecretDto[] }>({ secrets });
 });
 
@@ -77,6 +87,13 @@ secretRoutes.get("/:key", async (c) => {
   const { path } = parseQuery(c, secretQuerySchema);
   const ctx = await secretContext(c, target, "secret:read", path);
   const secret = await getSecret(ctx, { path, key });
+  await recordAudit(c, {
+    action: "secret.read",
+    projectId: target.project.id,
+    environmentId: target.environment.id,
+    target: key,
+    metadata: { path, ...capKeys([key]) },
+  });
   return c.json<{ secret: SecretDto }>({ secret });
 });
 
@@ -85,7 +102,16 @@ secretRoutes.put("/:key", async (c) => {
   const key = keyParam(c);
   const body = await parseJson(c, putSecretBodySchema);
   const ctx = await secretContext(c, target, "secret:write", body.path);
-  const { secret, created } = await putSecret(ctx, { key, ...body });
+  const { secret, created, changed } = await putSecret(ctx, { key, ...body });
+  if (changed) {
+    await recordAudit(c, {
+      action: created ? "secret.created" : "secret.updated",
+      projectId: target.project.id,
+      environmentId: target.environment.id,
+      target: key,
+      metadata: { path: body.path, key, version: secret.version },
+    });
+  }
   // The service never sets value on a put result; strip defensively so a write never echoes it.
   const { value: _omit, ...withoutValue } = secret;
   return c.json<{ secret: SecretDto }>({ secret: withoutValue }, created ? 201 : 200);
@@ -97,5 +123,12 @@ secretRoutes.delete("/:key", async (c) => {
   const { path } = parseQuery(c, secretQuerySchema);
   const ctx = await secretContext(c, target, "secret:write", path);
   await deleteSecret(ctx, { path, key });
+  await recordAudit(c, {
+    action: "secret.deleted",
+    projectId: target.project.id,
+    environmentId: target.environment.id,
+    target: key,
+    metadata: { path, key },
+  });
   return c.body(null, 204);
 });

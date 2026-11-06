@@ -1,3 +1,6 @@
+// sonner's base layout as a real stylesheet: its runtime <style> injection is blocked by the CSP
+// and disabled in scripts/vite-plugin-csp-styles.ts.
+import "sonner/dist/styles.css";
 import { Toaster as Sonner } from "sonner";
 
 /** One-line toasts, bottom-right, styled with tokens (no sonner default palette). */

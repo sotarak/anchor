@@ -12,3 +12,8 @@ dist/
 coverage/
 .claude/settings.local.json
 .superpowers/
+
+# Dashboard Playwright smoke
+apps/web/test/e2e/.state/
+apps/web/test-results/
+apps/web/playwright-report/

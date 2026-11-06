@@ -3,7 +3,7 @@ import type { ApiErrorBody, EnvironmentDto, ProjectDto } from "@anchor/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "#src/app";
 import { open, seal } from "#src/crypto/aead";
-import { getRootKey } from "#src/crypto/keyring";
+import { getRootKeyring } from "#src/crypto/keyring";
 import { utf8Encode } from "#src/lib/encoding";
 import { getProjectBySlug, getProjectKek } from "#src/projects/repo";
 import {
@@ -59,7 +59,7 @@ describe("projects", () => {
     }>();
     expect(row?.wrapped_key.length).toBe(48);
     const project = await getProjectBySlug(env.DB, "app");
-    const kek = await getProjectKek(env.DB, await getRootKey(env), project);
+    const kek = await getProjectKek(env.DB, await getRootKeyring(env), project);
     const sealed = await seal(kek, utf8Encode("x"), "aad");
     expect(await open(kek, sealed, "aad")).toEqual(utf8Encode("x"));
   });

@@ -122,6 +122,36 @@ closed when they cannot be audited, secret reads then fail too. Add a Cloudflare
 (dashboard → Security → WAF → Rate limiting rules) for `POST /api/v1/auth/*` and
 `POST /api/v1/invites/*`, for example 20 requests per minute per IP, and watch the D1 size.
 
+## Rotating the root key
+
+The root key wraps every project key (KEK). Rotating it re-wraps those keys; secret values are
+not touched. Every root key has an id, stored with each KEK it wraps: `ANCHOR_ROOT_KEY_ID`
+(default `rk1`, format `^[a-z0-9-]{1,32}$`). While rotating, the old key stays configured as
+`ANCHOR_ROOT_KEY_PREVIOUS` so existing data keeps working.
+
+1. Generate the new key and back it up offline (see step 3 above):
+   `umask 077 && openssl rand -base64 32 > anchor-root-new.key`
+2. Set the old key and its current id as the previous key:
+   `pnpm exec wrangler secret put ANCHOR_ROOT_KEY_PREVIOUS` (paste the old key) and
+   `pnpm exec wrangler secret put ANCHOR_ROOT_KEY_PREVIOUS_ID` (the old id, `rk1` if you never
+   set one).
+3. Set the new key and a new id: `pnpm exec wrangler secret put ANCHOR_ROOT_KEY < anchor-root-new.key`
+   and `pnpm exec wrangler secret put ANCHOR_ROOT_KEY_ID` (for example `rk2`).
+4. Deploy (`pnpm deploy:worker`) if the secrets did not already trigger a new version.
+5. As an instance owner, re-wrap every project key:
+   `curl -X POST https://<host>/api/v1/admin/root-key/rewrap -H 'authorization: Bearer <token>'`
+6. Check that `rewrapped` equals the number of project key rows, then call it again and expect
+   `{ "rewrapped": 0 }`.
+7. Remove the previous key: `pnpm exec wrangler secret delete ANCHOR_ROOT_KEY_PREVIOUS` (and
+   `ANCHOR_ROOT_KEY_PREVIOUS_ID`).
+8. Confirm the offline backup of the new key, then destroy the old key's backups only after you
+   no longer need to restore a database backup taken before step 5.
+
+A misconfiguration fails closed with `500 internal` and a `config_error` log: a previous key
+without its id, a previous id equal to the current id, or project keys under an id that is not
+configured. A previous key that does not match fails the rewrap with `secret_decrypt_failed` and
+writes nothing.
+
 ## Break-glass: lost owner recovery
 
 If no active owner can sign in (for example, the only owner was disabled or forgot their password

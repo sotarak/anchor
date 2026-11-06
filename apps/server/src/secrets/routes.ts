@@ -11,7 +11,7 @@ import { type Context, Hono } from "hono";
 import { capKeys, readSources, recordAudit } from "../audit/record";
 import { requirePrincipal } from "../auth/middleware";
 import { type Action, authorize } from "../authz/policy";
-import { getRootKey } from "../crypto/keyring";
+import { getRootKeyring } from "../crypto/keyring";
 import type { AppEnv, Principal } from "../env";
 import { ApiError } from "../lib/errors";
 import { parseJson, parseQuery } from "../lib/validate";
@@ -57,10 +57,10 @@ async function secretContext(
     environmentId: environment.id,
     path,
   });
-  const rootKey = await getRootKey(c.env);
+  const keyring = await getRootKeyring(c.env);
   return {
     db: c.env.DB,
-    rootKey,
+    keyring,
     project,
     environment,
     // secret_versions.created_by references users; token writes are attributed in the audit log.

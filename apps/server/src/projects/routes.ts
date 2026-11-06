@@ -13,7 +13,7 @@ import { z } from "zod";
 import { recordAudit } from "../audit/record";
 import { requirePrincipal } from "../auth/middleware";
 import { authorize, visibleEnvironmentIds } from "../authz/policy";
-import { getRootKey } from "../crypto/keyring";
+import { getRootKeyring } from "../crypto/keyring";
 import type { AppEnv } from "../env";
 import { ApiError } from "../lib/errors";
 import { parseJson, parseQuery } from "../lib/validate";
@@ -58,8 +58,8 @@ projectRoutes.get("/", async (c) => {
 projectRoutes.post("/", async (c) => {
   await authorize(c.env.DB, requirePrincipal(c), "project:create");
   const body = await parseJson(c, createProjectBodySchema);
-  const rootKey = await getRootKey(c.env);
-  const project = await createProject(c.env.DB, rootKey, body, Date.now());
+  const keyring = await getRootKeyring(c.env);
+  const project = await createProject(c.env.DB, keyring, body, Date.now());
   await recordAudit(c, {
     action: "project.created",
     projectId: project.id,

@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { getRootKey } from "#src/crypto/keyring";
+import { getRootKeyring } from "#src/crypto/keyring";
 import { toBase64, utf8Encode } from "#src/lib/encoding";
 import { ApiError, IntegrityError } from "#src/lib/errors";
 import { randomBytes } from "#src/lib/random";
@@ -33,10 +33,10 @@ const rejection = (p: Promise<unknown>) =>
 
 beforeEach(async () => {
   await resetDb();
-  const rootKey = await getRootKey(env);
-  const project = await createProject(db, rootKey, { name: "App", slug: "app" }, Date.now());
+  const keyring = await getRootKeyring(env);
+  const project = await createProject(db, keyring, { name: "App", slug: "app" }, Date.now());
   const envs = await listEnvironments(db, project.id);
-  const base = { db, rootKey, project, actorId: null, now: Date.now() };
+  const base = { db, keyring, project, actorId: null, now: Date.now() };
   const [devEnv, stagingEnv] = envs;
   if (!devEnv || !stagingEnv) throw new Error("default environments missing");
   dev = { ...base, environment: devEnv };
@@ -190,8 +190,11 @@ describe("secrets service", () => {
 
   it("wrong root key fails closed", async () => {
     await put(dev, "K", "v");
-    const wrongRoot = await getRootKey({ ANCHOR_ROOT_KEY: toBase64(randomBytes(32)) });
-    const ctx = { ...dev, rootKey: wrongRoot };
+    const wrongRoot = await getRootKeyring({
+      ANCHOR_ROOT_KEY: toBase64(randomBytes(32)),
+      ANCHOR_ROOT_KEY_ID: env.ANCHOR_ROOT_KEY_ID,
+    });
+    const ctx = { ...dev, keyring: wrongRoot };
     expect(await rejection(getSecret(ctx, { path: "/", key: "K" }))).toBeInstanceOf(IntegrityError);
     expect(await rejection(listSecrets(ctx, { path: "/", reveal: true }))).toBeInstanceOf(
       IntegrityError,

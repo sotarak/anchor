@@ -5,6 +5,12 @@
 # Wraps every project key. Losing it loses every secret.
 ANCHOR_ROOT_KEY=
 
+# Optional. The id stored with every project key wrapped by ANCHOR_ROOT_KEY (default rk1).
+# ANCHOR_ROOT_KEY_ID=rk1
+# Only while rotating the root key (docs/deploy.md): the old key and its id.
+# ANCHOR_ROOT_KEY_PREVIOUS=
+# ANCHOR_ROOT_KEY_PREVIOUS_ID=
+
 # One-time token that guards POST /api/v1/setup. Generate with: openssl rand -base64 32
 # Leave empty (or remove) to disable setup.
 ANCHOR_SETUP_TOKEN=

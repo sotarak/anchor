@@ -1,5 +1,5 @@
 import type { EnvironmentDto, ProjectDto } from "@anchor/shared";
-import { createWrappedKek, ROOT_KEY_ID, unwrapKek } from "../crypto/keyring";
+import { createWrappedKek, type RootKeyring, rootKeyFor, unwrapKek } from "../crypto/keyring";
 import type { Principal } from "../env";
 import { isUniqueViolation, toBytes } from "../lib/d1";
 import { ApiError, ConfigError, IntegrityError } from "../lib/errors";
@@ -30,43 +30,54 @@ export const DEFAULT_ENVIRONMENTS = [
 const PROJECT_COLUMNS = "id, slug, name, current_key_version, created_at";
 
 /**
- * Refuses to wrap new key material under a root key that cannot open the keys already stored.
- * Without this, a mistyped ANCHOR_ROOT_KEY would split data across two root keys: old projects
- * fail closed while new ones silently work, and restoring either key breaks the other half.
+ * Refuses to wrap new key material under a keyring that cannot open the keys already stored:
+ * every root key id in use must be configured, and one row per id must open. Without this, a
+ * mistyped ANCHOR_ROOT_KEY would split data across two root keys: old projects fail closed
+ * while new ones silently work, and restoring either key breaks the other half.
  */
-async function assertRootKeyMatchesStoredKeys(db: D1Database, rootKey: CryptoKey): Promise<void> {
-  const row = await db
+async function assertKeyringMatchesStoredKeys(db: D1Database, keyring: RootKeyring): Promise<void> {
+  const { results } = await db
     .prepare(
-      "SELECT project_id, version, iv, wrapped_key FROM project_keys WHERE root_key_id = ? LIMIT 1",
+      `SELECT k.project_id, k.version, k.root_key_id, k.iv, k.wrapped_key FROM project_keys k
+       WHERE k.rowid IN (SELECT MIN(rowid) FROM project_keys GROUP BY root_key_id)`,
     )
-    .bind(ROOT_KEY_ID)
-    .first<{ project_id: string; version: number; iv: unknown; wrapped_key: unknown }>();
-  if (!row) return;
-  try {
-    await unwrapKek(rootKey, {
-      projectId: row.project_id,
-      version: row.version,
-      rootKeyId: ROOT_KEY_ID,
-      iv: toBytes(row.iv),
-      wrappedKey: toBytes(row.wrapped_key),
-    });
-  } catch (err) {
-    if (err instanceof IntegrityError) {
-      throw new ConfigError("ANCHOR_ROOT_KEY does not match the stored project keys");
+    .all<{
+      project_id: string;
+      version: number;
+      root_key_id: string;
+      iv: unknown;
+      wrapped_key: unknown;
+    }>();
+  for (const row of results) {
+    if (!rootKeyFor(keyring, row.root_key_id)) {
+      throw new ConfigError("Stored project keys use a root key id that is not configured");
     }
-    throw err;
+    try {
+      await unwrapKek(keyring, {
+        projectId: row.project_id,
+        version: row.version,
+        rootKeyId: row.root_key_id,
+        iv: toBytes(row.iv),
+        wrappedKey: toBytes(row.wrapped_key),
+      });
+    } catch (err) {
+      if (err instanceof IntegrityError) {
+        throw new ConfigError("A configured root key does not match the stored project keys");
+      }
+      throw err;
+    }
   }
 }
 
 export async function createProject(
   db: D1Database,
-  rootKey: CryptoKey,
+  keyring: RootKeyring,
   input: { name: string; slug: string },
   now: number,
 ): Promise<ProjectRow> {
-  await assertRootKeyMatchesStoredKeys(db, rootKey);
+  await assertKeyringMatchesStoredKeys(db, keyring);
   const id = newId();
-  const kek = await createWrappedKek(rootKey, id, 1);
+  const kek = await createWrappedKek(keyring, id, 1);
   const statements = [
     db
       .prepare(
@@ -156,7 +167,7 @@ export async function deleteProject(db: D1Database, id: string): Promise<void> {
 
 export async function getProjectKek(
   db: D1Database,
-  rootKey: CryptoKey,
+  keyring: RootKeyring,
   project: ProjectRow,
   version: number = project.current_key_version,
 ): Promise<CryptoKey> {
@@ -167,7 +178,7 @@ export async function getProjectKek(
     .bind(project.id, version)
     .first<{ root_key_id: string; iv: unknown; wrapped_key: unknown }>();
   if (!row) throw new Error("project key not found");
-  return unwrapKek(rootKey, {
+  return unwrapKek(keyring, {
     projectId: project.id,
     version,
     rootKeyId: row.root_key_id,

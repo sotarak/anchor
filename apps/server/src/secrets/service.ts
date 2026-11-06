@@ -1,6 +1,6 @@
 import type { SecretDto } from "@anchor/shared";
 import { AEAD_ALG, open, seal } from "../crypto/aead";
-import { secretAad } from "../crypto/keyring";
+import { type RootKeyring, secretAad } from "../crypto/keyring";
 import { ensureFolders } from "../folders/repo";
 import { isUniqueViolation } from "../lib/d1";
 import { utf8Decode, utf8Encode } from "../lib/encoding";
@@ -21,7 +21,7 @@ import {
 
 export type SecretContext = {
   db: D1Database;
-  rootKey: CryptoKey;
+  keyring: RootKeyring;
   project: ProjectRow;
   environment: EnvironmentRow;
   actorId: string | null;
@@ -36,7 +36,7 @@ export type KekCache = Map<number, CryptoKey>;
 async function kekFor(ctx: SecretContext, cache: KekCache, version: number): Promise<CryptoKey> {
   let kek = cache.get(version);
   if (!kek) {
-    kek = await getProjectKek(ctx.db, ctx.rootKey, ctx.project, version);
+    kek = await getProjectKek(ctx.db, ctx.keyring, ctx.project, version);
     cache.set(version, kek);
   }
   return kek;

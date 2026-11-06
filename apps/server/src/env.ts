@@ -5,6 +5,11 @@ export type Bindings = {
   /** Static assets (the dashboard build); the Worker itself only serves /api/*. */
   ASSETS: Fetcher;
   ANCHOR_ROOT_KEY: string;
+  /** Id stored with every KEK wrapped by ANCHOR_ROOT_KEY. Default "rk1". */
+  ANCHOR_ROOT_KEY_ID?: string;
+  /** During root key rotation only: the old key, accepted for unwrapping until rewrap. */
+  ANCHOR_ROOT_KEY_PREVIOUS?: string;
+  ANCHOR_ROOT_KEY_PREVIOUS_ID?: string;
   ANCHOR_SETUP_TOKEN?: string;
 };
 

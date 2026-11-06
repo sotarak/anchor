@@ -12,6 +12,8 @@ export default defineConfig({
           TEST_MIGRATIONS: await readD1Migrations(path.join(import.meta.dirname, "migrations")),
           // Fresh random key per test run; never a real key.
           ANCHOR_ROOT_KEY: randomBytes(32).toString("base64"),
+          // Not the default "rk1", so code that ignores the configured id fails tests.
+          ANCHOR_ROOT_KEY_ID: "rk-test",
           ANCHOR_SETUP_TOKEN: "test-setup-token-0123456789abcdef",
         },
       },

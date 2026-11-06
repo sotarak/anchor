@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import type { SecretDto, SecretVersionDto } from "@anchor/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createWrappedKek, getRootKey } from "#src/crypto/keyring";
+import { createWrappedKek, getRootKeyring } from "#src/crypto/keyring";
 import {
   api,
   auditRows,
@@ -106,7 +106,7 @@ describe("secret versions", () => {
     const project = await env.DB.prepare("SELECT id FROM projects WHERE slug = 'app'").first<{
       id: string;
     }>();
-    const w = await createWrappedKek(await getRootKey(env), project?.id ?? "", 2);
+    const w = await createWrappedKek(await getRootKeyring(env), project?.id ?? "", 2);
     await env.DB.batch([
       env.DB.prepare(
         "INSERT INTO project_keys (project_id, version, root_key_id, iv, wrapped_key, created_at) VALUES (?, 2, ?, ?, ?, 0)",

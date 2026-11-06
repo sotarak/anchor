@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import type { InstanceRole } from "@anchor/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { type Action, authorize, visibleEnvironmentIds } from "#src/authz/policy";
-import { getRootKey } from "#src/crypto/keyring";
+import { getRootKeyring } from "#src/crypto/keyring";
 import type { Principal } from "#src/env";
 import { ApiError } from "#src/lib/errors";
 import { createProject, listEnvironments, type ProjectRow } from "#src/projects/repo";
@@ -69,9 +69,9 @@ async function denied(p: Promise<void>): Promise<boolean> {
 
 beforeEach(async () => {
   await resetDb();
-  const rootKey = await getRootKey(env);
-  project = await createProject(db, rootKey, { name: "App", slug: "app" }, Date.now());
-  other = await createProject(db, rootKey, { name: "Other", slug: "other" }, Date.now());
+  const keyring = await getRootKeyring(env);
+  project = await createProject(db, keyring, { name: "App", slug: "app" }, Date.now());
+  other = await createProject(db, keyring, { name: "Other", slug: "other" }, Date.now());
   envs = Object.fromEntries((await listEnvironments(db, project.id)).map((e) => [e.slug, e.id]));
 });
 

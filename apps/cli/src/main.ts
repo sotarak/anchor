@@ -1,6 +1,3 @@
-#!/usr/bin/env node
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { CommanderError } from "commander";
 import { configureProxyFromEnv } from "./api/proxy";
 import type { CliDeps } from "./context";
@@ -69,15 +66,3 @@ export async function main(argv: string[], partial: Partial<CliDeps> = {}): Prom
     return EXIT.ERROR;
   }
 }
-
-function isEntryPoint(): boolean {
-  const entry = process.argv[1];
-  if (!entry) return false;
-  try {
-    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url));
-  } catch {
-    return false;
-  }
-}
-
-if (isEntryPoint()) process.exitCode = await main(process.argv);

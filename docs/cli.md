@@ -11,7 +11,7 @@ project, manage secrets and run commands with secrets injected. CI uses it with 
   `PATH` as `anchor`.
 - **Node bundle.** `pnpm --filter ./apps/cli build` writes `apps/cli/dist/anchor.mjs`, a single file
   that runs on Node 22.19 or later (`node apps/cli/dist/anchor.mjs --help`).
-- **From the workspace (development).** `pnpm --filter ./apps/cli dev -- <args>` runs the TypeScript
+- **From the workspace (development).** `pnpm --filter ./apps/cli dev <args>` runs the TypeScript
   source with `tsx`.
 
 The npm package name `@anchor-secrets/cli` is a placeholder; the package is not published yet.

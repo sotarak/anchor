@@ -1,0 +1,102 @@
+name: Release CLI
+
+# Builds single-file `anchor` binaries with `bun build --compile` and attaches them, with
+# SHA256SUMS, to a draft GitHub Release. Nothing is published to npm.
+on:
+  push:
+    tags: ["cli-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # `native: true` means the runner can execute the binary, so it is smoke-tested there.
+          # darwin-x64 and linux-arm64 are cross-compiled (Bun supports every target from any host).
+          - {
+              target: bun-darwin-arm64,
+              asset: anchor-darwin-arm64,
+              runner: macos-latest,
+              native: true,
+            }
+          - {
+              target: bun-darwin-x64,
+              asset: anchor-darwin-x64,
+              runner: macos-latest,
+              native: false,
+            }
+          - { target: bun-linux-x64, asset: anchor-linux-x64, runner: ubuntu-latest, native: true }
+          - {
+              target: bun-linux-arm64,
+              asset: anchor-linux-arm64,
+              runner: ubuntu-latest,
+              native: false,
+            }
+          - {
+              target: bun-windows-x64,
+              asset: anchor-windows-x64.exe,
+              runner: windows-latest,
+              native: true,
+            }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+      - run: pnpm install --frozen-lockfile
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(node -p "require('./apps/cli/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Build binary
+        shell: bash
+        run: >
+          bun build apps/cli/src/bin.ts --compile
+          --target=${{ matrix.target }}
+          --define ANCHOR_CLI_VERSION='"${{ steps.version.outputs.version }}"'
+          --outfile dist/${{ matrix.asset }}
+      - name: Smoke test
+        if: matrix.native
+        shell: bash
+        run: |
+          test "$(./dist/${{ matrix.asset }} --version)" = "${{ steps.version.outputs.version }}"
+          ./dist/${{ matrix.asset }} --help > /dev/null
+          set +e
+          ./dist/${{ matrix.asset }} secrets set X=1
+          test $? -eq 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum anchor-* > SHA256SUMS
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('cli-dev-{0}', github.run_number) }}
+        run: >
+          gh release create "$TAG" dist/anchor-* dist/SHA256SUMS
+          --repo "${{ github.repository }}" --draft --title "Anchor CLI $TAG"
+          --target "${{ github.sha }}" --notes "Draft build of the anchor CLI."

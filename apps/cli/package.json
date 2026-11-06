@@ -3,8 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "anchor": "dist/anchor.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.19"
+  },
   "scripts": {
-    "dev": "tsx src/main.ts",
+    "dev": "tsx src/bin.ts",
     "test": "vitest run",
     "test:unit": "vitest run test/unit",
     "test:integration": "vitest run test/integration",

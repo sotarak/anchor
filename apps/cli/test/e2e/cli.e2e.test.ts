@@ -9,7 +9,7 @@ import { tmpDirOutsideTest } from "./tmp";
 
 const CLI_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const TSX = join(CLI_ROOT, "node_modules", ".bin", "tsx");
-const MAIN = join(CLI_ROOT, "src", "main.ts");
+const MAIN = join(CLI_ROOT, "src", "bin.ts");
 const PASSWORD = "e2e owner passphrase";
 const DB_URL = "postgres://u:p@h/db";
 

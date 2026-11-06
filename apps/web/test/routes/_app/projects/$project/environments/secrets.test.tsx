@@ -238,6 +238,43 @@ describe("/projects/$project/environments/$env", () => {
     expect(put).toHaveBeenCalledTimes(1);
   });
 
+  it("a revealed value re-masks after the secret is edited (no stale plaintext)", async () => {
+    signedInAs(fixtures.owner);
+    projectExists(fixtures.project);
+    let row0 = { ...(fixtures.secrets[0] as SecretDto) };
+    let value = CANARY;
+    const get = vi.fn(() => HttpResponse.json({ secret: { ...row0, value } }));
+    server.use(
+      http.get(`${base}/dev/secrets`, () =>
+        HttpResponse.json({ secrets: [row0, ...fixtures.secrets.slice(1)] }),
+      ),
+      http.get(`${base}/dev/secrets/:key`, get),
+      http.put(`${base}/dev/secrets/API_KEY`, async ({ request }) => {
+        value = ((await request.json()) as { value: string }).value;
+        row0 = { ...row0, version: row0.version + 1 };
+        return HttpResponse.json({ secret: row0, created: false });
+      }),
+    );
+    const { user } = await renderApp("/projects/app/environments/dev");
+    await user.click(within(await rowOf("API_KEY")).getByRole("button", { name: "Reveal value" }));
+    expect(await within(await rowOf("API_KEY")).findByText(CANARY)).toBeInTheDocument();
+
+    await openMenu(user, "API_KEY");
+    await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    const sheet = await screen.findByRole("dialog");
+    await user.type(within(sheet).getByLabelText("Value"), "ROTATED-VALUE");
+    await user.click(within(sheet).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    const row = await rowOf("API_KEY");
+    await waitFor(() => expect(within(row).getByText(`v${row0.version}`)).toBeInTheDocument());
+    expect(within(row).getByText(MASK)).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(CANARY);
+    // Revealing again fetches the new value instead of reusing the old plaintext.
+    await user.click(within(row).getByRole("button", { name: "Reveal value" }));
+    expect(await within(row).findByText("ROTATED-VALUE")).toBeInTheDocument();
+  });
+
   it("409 on save shows conflict toast and keeps the sheet open", async () => {
     setup();
     server.use(

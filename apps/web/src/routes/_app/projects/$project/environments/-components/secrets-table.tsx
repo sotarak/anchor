@@ -93,6 +93,9 @@ export function SecretsTable({
               </TableCell>
               <TableCell className="max-w-64">
                 <MaskedValue
+                  // Any write (edit, or delete then re-add) remounts it: a revealed or copied
+                  // value is never the stale plaintext of an earlier version.
+                  key={`${s.version}:${s.updatedAt}`}
                   reveal={async () =>
                     (await api.secrets.get(project, env, s.key, path)).value ?? ""
                   }

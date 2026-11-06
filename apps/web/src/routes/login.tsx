@@ -50,7 +50,9 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<FieldErrors<Key>>({});
   const login = useMutation({
-    mutationFn: api.auth.login,
+    // No variables: the body is read from the form state so the password never sits in the
+    // MutationCache (state.variables outlives the page by gcTime).
+    mutationFn: () => api.auth.login({ email, password }),
     onSuccess: async ({ user }) => {
       queryClient.setQueryData(qk.me, user);
       await navigate({ href: safeRedirect(search.redirect) });
@@ -61,7 +63,7 @@ function LoginPage() {
     e.preventDefault();
     const next = validate(loginBodySchema, { email, password }, MESSAGES);
     setErrors(next);
-    if (Object.keys(next).length === 0) login.mutate({ email, password });
+    if (Object.keys(next).length === 0) login.mutate();
   }
 
   return (

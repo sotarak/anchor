@@ -63,7 +63,12 @@ function SetupPage() {
   });
   const [errors, setErrors] = useState<FieldErrors<Key>>({});
   const setup = useMutation({
-    mutationFn: api.setup.submit,
+    // No variables: the body is read from the form state so the password never sits in the
+    // MutationCache (state.variables outlives the page by gcTime).
+    mutationFn: () => {
+      const { confirm: _confirm, ...body } = values;
+      return api.setup.submit(body);
+    },
     onSuccess: async ({ user }) => {
       queryClient.setQueryData(qk.me, user);
       queryClient.setQueryData(qk.setupStatus, { needsSetup: false });
@@ -85,7 +90,7 @@ function SetupPage() {
     const next = validate(setupBodySchema, body, MESSAGES);
     if (confirm !== body.password) next.confirm = PASSWORD_MISMATCH;
     setErrors(next);
-    if (Object.keys(next).length === 0) setup.mutate(body);
+    if (Object.keys(next).length === 0) setup.mutate();
   }
 
   return (

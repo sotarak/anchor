@@ -40,7 +40,9 @@ function ResetPasswordPage() {
   const [values, setValues] = useState<Record<Key, string>>({ password: "", confirm: "" });
   const [errors, setErrors] = useState<FieldErrors<Key>>({});
   const reset = useMutation({
-    mutationFn: api.auth.resetPassword,
+    // No variables: the body is read from the form state so the token and password never sit in the
+    // MutationCache (state.variables outlives the page by gcTime).
+    mutationFn: () => api.auth.resetPassword({ token: token as string, password: values.password }),
     onSuccess: async () => {
       toast.success("Password updated, sign in again");
       await navigate({ to: "/login" });
@@ -74,7 +76,7 @@ function ResetPasswordPage() {
     const next = validate(resetPasswordBodySchema, body, MESSAGES);
     if (values.confirm !== values.password) next.confirm = PASSWORD_MISMATCH;
     setErrors(next);
-    if (Object.keys(next).length === 0) reset.mutate(body);
+    if (Object.keys(next).length === 0) reset.mutate();
   }
 
   const failure =

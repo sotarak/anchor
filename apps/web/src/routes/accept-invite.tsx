@@ -69,7 +69,10 @@ function AcceptInvitePage() {
   });
   const [errors, setErrors] = useState<FieldErrors<Key>>({});
   const accept = useMutation({
-    mutationFn: api.invites.accept,
+    // No variables: the body is read from the form state so the token and password never sit in the
+    // MutationCache (state.variables outlives the page by gcTime).
+    mutationFn: () =>
+      api.invites.accept({ token: token as string, name: values.name, password: values.password }),
     onSuccess: async ({ user }) => {
       queryClient.setQueryData(qk.me, user);
       await navigate({ to: "/projects" });
@@ -92,7 +95,7 @@ function AcceptInvitePage() {
     const next = validate(acceptInviteBodySchema, body, MESSAGES);
     if (values.confirm !== values.password) next.confirm = PASSWORD_MISMATCH;
     setErrors(next);
-    if (Object.keys(next).length === 0) accept.mutate(body);
+    if (Object.keys(next).length === 0) accept.mutate();
   }
 
   return (

@@ -79,6 +79,21 @@ export async function reserveLoginAttempt(
   return row !== null;
 }
 
+/** Sets a new password hash and clears lockout state. */
+export async function setPassword(
+  db: D1Database,
+  userId: string,
+  passwordHash: string,
+  now: number,
+): Promise<void> {
+  await db
+    .prepare(
+      "UPDATE users SET password_hash = ?, failed_logins = 0, locked_until = NULL, updated_at = ? WHERE id = ?",
+    )
+    .bind(passwordHash, now, userId)
+    .run();
+}
+
 export async function updateLoginState(
   db: D1Database,
   userId: string,

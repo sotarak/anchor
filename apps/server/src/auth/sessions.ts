@@ -1,4 +1,4 @@
-import type { InstanceRole } from "@anchor/shared";
+import type { InstanceRole, SessionDto } from "@anchor/shared";
 import type { Context } from "hono";
 import { deleteCookie, setCookie } from "hono/cookie";
 import type { Principal } from "../env";
@@ -58,6 +58,58 @@ export async function findPrincipalBySessionToken(
     role: row.role,
     sessionId: row.session_id,
   };
+}
+
+const SHORT_ID = /^[0-9a-f]{16}$/;
+
+/** The user's unexpired sessions, newest first. ids are the first 16 hex chars of the stored hash. */
+export async function listSessions(
+  db: D1Database,
+  userId: string,
+  currentSessionId: string,
+  now: number = Date.now(),
+): Promise<SessionDto[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, kind, user_agent, created_at, last_used_at, expires_at FROM sessions
+       WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC, id DESC`,
+    )
+    .bind(userId, now)
+    .all<{
+      id: string;
+      kind: "web" | "cli";
+      user_agent: string | null;
+      created_at: number;
+      last_used_at: number | null;
+      expires_at: number;
+    }>();
+  return results.map((r) => ({
+    id: r.id.slice(0, 16),
+    kind: r.kind,
+    userAgent: r.user_agent,
+    createdAt: r.created_at,
+    lastUsedAt: r.last_used_at,
+    expiresAt: r.expires_at,
+    current: r.id === currentSessionId,
+  }));
+}
+
+export function isSessionShortId(shortId: string): boolean {
+  return SHORT_ID.test(shortId);
+}
+
+/** Deletes one of the user's own sessions by its short id. Never matches another user's sessions. */
+export async function revokeSessionByShortId(
+  db: D1Database,
+  userId: string,
+  shortId: string,
+): Promise<boolean> {
+  if (!isSessionShortId(shortId)) throw new Error("invalid session short id");
+  const row = await db
+    .prepare("DELETE FROM sessions WHERE user_id = ? AND substr(id, 1, 16) = ? RETURNING id")
+    .bind(userId, shortId)
+    .first<{ id: string }>();
+  return row !== null;
 }
 
 /** Deletes every session of the user, optionally keeping one (the caller's own). */

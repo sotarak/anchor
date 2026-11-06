@@ -7,6 +7,7 @@ import { authorize } from "../authz/policy";
 import type { AppEnv, UserPrincipal } from "../env";
 import { ApiError } from "../lib/errors";
 import { parseJson } from "../lib/validate";
+import { createPasswordReset } from "./password-resets";
 import {
   deleteUserGuarded,
   findUserById,
@@ -93,4 +94,30 @@ userRoutes.delete("/:id", async (c) => {
     metadata: { userId: target.id, email: target.email },
   });
   return c.body(null, 204);
+});
+
+userRoutes.post("/:id/password-reset", async (c) => {
+  const actor = await userManager(c);
+  const target = await targetUser(c);
+  if (target.id === actor.userId) {
+    throw new ApiError(409, "conflict", "Use change password instead");
+  }
+  // An admin may reset members only; owners may reset anyone but themselves.
+  if (actor.role !== "owner" && target.role !== "member") {
+    throw new ApiError(403, "forbidden", "Only an owner can reset an owner or admin");
+  }
+  if (target.disabled_at !== null) throw new ApiError(409, "conflict", "User is disabled");
+  const { token, expiresAt } = await createPasswordReset(
+    c.env.DB,
+    target.id,
+    actor.userId,
+    Date.now(),
+  );
+  await recordAudit(c, {
+    action: "password_reset.created",
+    target: target.id,
+    metadata: { userId: target.id },
+  });
+  const url = `${new URL(c.req.url).origin}/reset-password#token=${token}`;
+  return c.json<{ url: string; expiresAt: number }>({ url, expiresAt }, 201);
 });

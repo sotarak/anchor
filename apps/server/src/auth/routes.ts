@@ -1,27 +1,43 @@
 import {
+  changePasswordBodySchema,
   type LoginResponse,
   loginBodySchema,
+  resetPasswordBodySchema,
   type ServiceTokenDto,
+  type SessionDto,
   type SetupStatusDto,
   setupBodySchema,
 } from "@anchor/shared";
 import { Hono } from "hono";
+import { recordAudit } from "../audit/record";
 import { hashPassword, verifyAgainstDummy, verifyPassword } from "../crypto/password";
 import type { AppEnv } from "../env";
 import { utf8Encode } from "../lib/encoding";
 import { ApiError } from "../lib/errors";
 import { parseJson } from "../lib/validate";
 import { loadServiceTokenDto } from "../service-tokens/repo";
+import { consumePasswordReset } from "../users/password-resets";
 import {
   findUserByEmail,
+  findUserById,
   insertFirstOwner,
   reserveLoginAttempt,
+  setPassword,
   toUserDto,
   updateLoginState,
 } from "../users/repo";
 import { LOCKOUT_MS, MAX_FAILED_LOGINS } from "./lockout";
-import { readPresentedToken, requirePrincipal } from "./middleware";
-import { clearSessionCookie, createSession, revokeSession, setSessionCookie } from "./sessions";
+import { readPresentedToken, requirePrincipal, requireUser } from "./middleware";
+import {
+  clearSessionCookie,
+  createSession,
+  isSessionShortId,
+  listSessions,
+  revokeSession,
+  revokeSessionByShortId,
+  revokeUserSessions,
+  setSessionCookie,
+} from "./sessions";
 
 export const authRoutes = new Hono<AppEnv>();
 
@@ -118,4 +134,56 @@ authRoutes.post("/auth/login", async (c) => {
     return c.json<LoginResponse>({ user: dto, expiresAt });
   }
   return c.json<LoginResponse>({ user: dto, token, expiresAt });
+});
+
+authRoutes.post("/auth/password", async (c) => {
+  const principal = requireUser(c);
+  const body = await parseJson(c, changePasswordBodySchema);
+  const now = Date.now();
+  const user = await findUserById(c.env.DB, principal.userId);
+  if (!user) throw new ApiError(401, "unauthenticated", "Authentication required");
+  // Same lockout as login: the attempt is reserved atomically, a correct password resets it.
+  const limits = { maxFailures: MAX_FAILED_LOGINS, lockoutMs: LOCKOUT_MS };
+  if (!(await reserveLoginAttempt(c.env.DB, user.id, now, limits))) {
+    throw new ApiError(429, "rate_limited", "Too many failed attempts, try again later");
+  }
+  if (!(await verifyPassword(body.currentPassword, user.password_hash))) {
+    throw new ApiError(401, "invalid_credentials", "Current password is incorrect");
+  }
+  await setPassword(c.env.DB, user.id, await hashPassword(body.newPassword), now);
+  await revokeUserSessions(c.env.DB, user.id, principal.sessionId);
+  await recordAudit(c, { action: "auth.password_changed", target: user.id });
+  return c.body(null, 204);
+});
+
+authRoutes.post("/auth/password-reset", async (c) => {
+  const body = await parseJson(c, resetPasswordBodySchema);
+  const passwordHash = await hashPassword(body.password);
+  const userId = await consumePasswordReset(c.env.DB, body.token, passwordHash, Date.now());
+  if (!userId) throw new ApiError(404, "not_found", "Link is invalid or has expired");
+  await revokeUserSessions(c.env.DB, userId);
+  const user = await findUserById(c.env.DB, userId);
+  await recordAudit(c, {
+    action: "auth.password_reset",
+    actor: { type: "user", id: userId, label: user?.email ?? null },
+    target: userId,
+  });
+  return c.body(null, 204);
+});
+
+authRoutes.get("/auth/sessions", async (c) => {
+  const principal = requireUser(c);
+  const sessions = await listSessions(c.env.DB, principal.userId, principal.sessionId);
+  return c.json<{ sessions: SessionDto[] }>({ sessions });
+});
+
+authRoutes.delete("/auth/sessions/:id", async (c) => {
+  const principal = requireUser(c);
+  const shortId = c.req.param("id");
+  if (!isSessionShortId(shortId)) throw new ApiError(400, "bad_request", "invalid fields: id");
+  if (!(await revokeSessionByShortId(c.env.DB, principal.userId, shortId))) {
+    throw new ApiError(404, "not_found", "Session not found");
+  }
+  await recordAudit(c, { action: "session.revoked", target: shortId });
+  return c.body(null, 204);
 });

@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import { authenticate, checkOrigin } from "./auth/middleware";
+import { authRoutes } from "./auth/routes";
 import type { AppEnv } from "./env";
 import { errorHandler, notFoundHandler } from "./lib/errors";
 
@@ -10,7 +12,11 @@ export function createApp(): Hono<AppEnv> {
     c.header("Cache-Control", "no-store");
   });
 
+  app.use("/api/*", authenticate);
+  app.use("/api/*", checkOrigin);
+
   app.get("/api/v1/health", (c) => c.json({ status: "ok" }));
+  app.route("/api/v1", authRoutes);
 
   app.onError(errorHandler);
   app.notFound(notFoundHandler);

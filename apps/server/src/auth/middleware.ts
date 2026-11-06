@@ -1,0 +1,47 @@
+import type { Context, MiddlewareHandler } from "hono";
+import { getCookie } from "hono/cookie";
+import type { AppEnv, Principal } from "../env";
+import { ApiError } from "../lib/errors";
+import { findPrincipalBySessionToken, SESSION_COOKIE } from "./sessions";
+
+const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/** The credential the request presents: the Authorization header wins over the cookie. */
+export function readPresentedToken(c: Context): { token: string; via: "cookie" | "bearer" } | null {
+  const header = c.req.header("authorization");
+  if (header !== undefined) {
+    const match = /^Bearer (\S+)$/.exec(header);
+    return match?.[1] ? { token: match[1], via: "bearer" } : null;
+  }
+  const cookie = getCookie(c, SESSION_COOKIE);
+  return cookie ? { token: cookie, via: "cookie" } : null;
+}
+
+/** Sets c.var.principal/authVia for a valid credential. Never throws for missing/bad ones. */
+export const authenticate: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const presented = readPresentedToken(c);
+  if (presented) {
+    const principal = await findPrincipalBySessionToken(c.env.DB, presented.token, Date.now());
+    if (principal) {
+      c.set("principal", principal);
+      c.set("authVia", presented.via);
+    }
+  }
+  await next();
+};
+
+/** CSRF defence: cookie-authenticated unsafe requests must come from our own origin. */
+export const checkOrigin: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (UNSAFE_METHODS.has(c.req.method) && c.get("authVia") === "cookie") {
+    if (c.req.header("origin") !== new URL(c.req.url).origin) {
+      throw new ApiError(403, "forbidden", "Origin check failed");
+    }
+  }
+  await next();
+};
+
+export function requireUser(c: Context<AppEnv>): Principal {
+  const principal = c.get("principal");
+  if (!principal) throw new ApiError(401, "unauthenticated", "Authentication required");
+  return principal;
+}

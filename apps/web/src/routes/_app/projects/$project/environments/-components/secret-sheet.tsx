@@ -6,6 +6,7 @@ import { errorMessage } from "@/components/data/table-states";
 import { Field } from "@/components/forms/field";
 import { type FieldErrors, validate } from "@/components/forms/validate";
 import { FormSheet } from "@/components/overlays/form-sheet";
+import { ResolvedPreview } from "@/components/references/resolved-preview";
 import { SecretValueField } from "@/components/secrets/secret-value-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -123,6 +124,9 @@ export function SecretSheet({
           onLoadCurrent={editing ? loadCurrent : undefined}
         />
       </Field>
+      {editing ? (
+        <ResolvedPreview project={project} env={env} path={path} secretKey={secret.key} />
+      ) : null}
       <Field htmlFor="secret-comment" label="Comment" hint="Optional" error={errors.comment}>
         <Textarea
           id="secret-comment"

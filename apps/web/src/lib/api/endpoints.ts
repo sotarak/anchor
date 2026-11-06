@@ -110,10 +110,16 @@ export const api = {
       (await apiFetch<{ secrets: SecretDto[] }>(`${envUrl(p, env)}/secrets`, { query: { path } }))
         .secrets,
     /** The one value-returning call. Never wrap it in useQuery. */
-    get: async (p: string, env: string, key: string, path: string) =>
+    get: async (
+      p: string,
+      env: string,
+      key: string,
+      path: string,
+      opts: { expand?: boolean } = {},
+    ) =>
       (
         await apiFetch<{ secret: SecretDto }>(`${envUrl(p, env)}/secrets/${e(key)}`, {
-          query: { path },
+          query: { path, expand: opts.expand },
         })
       ).secret,
     put: async (

@@ -10,7 +10,7 @@ import {
 import { toast } from "sonner";
 import { TableSkeletonRows } from "@/components/data/table-states";
 import { FolderRows } from "@/components/folders/folder-rows";
-import { MaskedValue } from "@/components/secrets/masked-value";
+import { ReferenceValue } from "@/components/references/reference-value";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -28,7 +28,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip } from "@/components/ui/tooltip";
-import { api } from "@/lib/api/endpoints";
 import { formatDate, formatRelative } from "@/lib/format";
 
 /**
@@ -111,13 +110,14 @@ export function SecretsTable({
                   </div>
                 </TableCell>
                 <TableCell className="max-w-64">
-                  <MaskedValue
+                  <ReferenceValue
                     // Any write (edit, or delete then re-add) remounts it: a revealed or copied
                     // value is never the stale plaintext of an earlier version.
                     key={`${s.version}:${s.updatedAt}`}
-                    reveal={async () =>
-                      (await api.secrets.get(project, env, s.key, path)).value ?? ""
-                    }
+                    project={project}
+                    env={env}
+                    path={path}
+                    secretKey={s.key}
                   />
                 </TableCell>
                 <TableCell className="text-paragraph-sm">{`v${s.version}`}</TableCell>

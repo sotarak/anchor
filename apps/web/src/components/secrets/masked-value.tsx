@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { RiCheckLine, RiEyeLine, RiEyeOffLine, RiFileCopyLine } from "react-icons/ri";
 import { toast } from "sonner";
 import { errorMessage } from "@/components/data/table-states";
@@ -13,9 +13,18 @@ export const MASK = "••••••••";
 export function MaskedValue({
   reveal,
   onCopied,
+  render = (v) => v,
+  actions,
+  onHide,
 }: {
   reveal: () => Promise<string>;
   onCopied?: () => void;
+  /** How a revealed value is shown (default: plain text). */
+  render?: (value: string) => ReactNode;
+  /** Extra buttons while revealed. */
+  actions?: (value: string) => ReactNode;
+  /** Called when the value is hidden again, so callers drop derived state. */
+  onHide?: () => void;
 }) {
   const [value, setValue] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -48,6 +57,7 @@ export function MaskedValue({
   const toggle = async () => {
     if (value !== null) {
       setValue(null);
+      onHide?.();
       return;
     }
     const v = await load();
@@ -72,7 +82,9 @@ export function MaskedValue({
   const revealed = value !== null;
   return (
     <div className="group/value flex min-w-0 items-center gap-1">
-      <span className="min-w-0 truncate text-code-xs text-text-sub">{revealed ? value : MASK}</span>
+      <span className="min-w-0 truncate text-code-xs text-text-sub">
+        {revealed ? render(value) : MASK}
+      </span>
       <div className="flex shrink-0 items-center opacity-0 transition group-hover/value:opacity-100 group-focus-within/value:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
         <Button
           variant="ghost"
@@ -92,6 +104,7 @@ export function MaskedValue({
         >
           {copied ? <RiCheckLine aria-hidden /> : <RiFileCopyLine aria-hidden />}
         </Button>
+        {revealed ? actions?.(value) : null}
       </div>
     </div>
   );

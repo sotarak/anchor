@@ -1,11 +1,17 @@
-import { type LoginResponse, type SetupStatusDto, setupBodySchema } from "@anchor/shared";
+import {
+  type LoginResponse,
+  loginBodySchema,
+  type SetupStatusDto,
+  setupBodySchema,
+} from "@anchor/shared";
 import { Hono } from "hono";
-import { hashPassword } from "../crypto/password";
+import { hashPassword, verifyAgainstDummy, verifyPassword } from "../crypto/password";
 import type { AppEnv } from "../env";
 import { utf8Encode } from "../lib/encoding";
 import { ApiError } from "../lib/errors";
 import { parseJson } from "../lib/validate";
-import { insertFirstOwner, toUserDto } from "../users/repo";
+import { findUserByEmail, insertFirstOwner, toUserDto, updateLoginState } from "../users/repo";
+import { isLocked, nextLockState } from "./lockout";
 import { readPresentedToken, requireUser } from "./middleware";
 import { clearSessionCookie, createSession, revokeSession, setSessionCookie } from "./sessions";
 
@@ -62,4 +68,39 @@ authRoutes.post("/setup", async (c) => {
   setSessionCookie(c, token, expiresAt);
   const user = toUserDto({ id: userId, email: body.email, name: body.name, role: "owner" });
   return c.json<LoginResponse>({ user, expiresAt }, 201);
+});
+
+const INVALID_CREDENTIALS = "Invalid email or password";
+
+// No checkOrigin special case: it only applies to cookie-authenticated requests.
+authRoutes.post("/auth/login", async (c) => {
+  const body = await parseJson(c, loginBodySchema);
+  const now = Date.now();
+  const user = await findUserByEmail(c.env.DB, body.email);
+  if (!user) {
+    await verifyAgainstDummy(body.password);
+    throw new ApiError(401, "invalid_credentials", INVALID_CREDENTIALS);
+  }
+  const lock = { failedLogins: user.failed_logins, lockedUntil: user.locked_until };
+  if (isLocked(lock, now)) {
+    throw new ApiError(429, "rate_limited", "Too many failed attempts, try again later");
+  }
+  if (!(await verifyPassword(body.password, user.password_hash))) {
+    await updateLoginState(c.env.DB, user.id, nextLockState(lock, "failure", now));
+    throw new ApiError(401, "invalid_credentials", INVALID_CREDENTIALS);
+  }
+  await updateLoginState(c.env.DB, user.id, nextLockState(lock, "success", now));
+  const { token, expiresAt } = await createSession(
+    c.env.DB,
+    user.id,
+    body.client,
+    c.req.header("user-agent") ?? null,
+    now,
+  );
+  const dto = toUserDto(user);
+  if (body.client === "web") {
+    setSessionCookie(c, token, expiresAt);
+    return c.json<LoginResponse>({ user: dto, expiresAt });
+  }
+  return c.json<LoginResponse>({ user: dto, token, expiresAt });
 });

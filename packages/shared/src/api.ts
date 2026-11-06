@@ -47,6 +47,10 @@ export type SecretDto = {
   comment: string;
   updatedAt: number;
   value?: string;
+  /** The stored value, present only when `value` was expanded and differs from it (M5). */
+  rawValue?: string;
+  /** Set on a secret that comes from a folder import; it is read-only here (M5). */
+  importedFrom?: { environment: string; path: string };
 };
 
 /** One stored version of a secret, without its value (spec §13.5). */

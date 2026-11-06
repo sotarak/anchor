@@ -44,8 +44,23 @@ function assertNoForbiddenKeys(value: unknown): void {
   }
 }
 
-/** Byte budget for the key names, leaving room under MAX_METADATA_BYTES for path and framing. */
-const MAX_KEYS_BYTES = 12_288;
+/** Byte budgets inside MAX_METADATA_BYTES, leaving room for the path and framing. */
+const MAX_KEYS_BYTES = 10_240;
+const MAX_REFERENCED_BYTES = 3_072;
+const MAX_IMPORTS_BYTES = 1_024;
+
+/** Keeps leading items while their JSON stays within `maxBytes` and `maxItems`. */
+function capList<T>(items: T[], maxBytes: number, maxItems = Number.POSITIVE_INFINITY) {
+  const kept: T[] = [];
+  let bytes = 2; // []
+  for (const item of items) {
+    const size = new TextEncoder().encode(JSON.stringify(item)).byteLength + 1; // item + comma
+    if (kept.length === maxItems || bytes + size > maxBytes) return { kept, truncated: true };
+    kept.push(item);
+    bytes += size;
+  }
+  return { kept, truncated: false };
+}
 
 /**
  * Key lists for secret.read: at most 500 names and at most MAX_KEYS_BYTES of JSON, flagged when
@@ -53,17 +68,30 @@ const MAX_KEYS_BYTES = 12_288;
  * metadata limit and every reveal of it would fail closed with a 500.
  */
 export function capKeys(keys: string[]): { keys: string[]; keysTruncated?: true } {
-  const kept: string[] = [];
-  let bytes = 2; // []
-  for (const key of keys) {
-    const size = new TextEncoder().encode(JSON.stringify(key)).byteLength + 1; // name + comma
-    if (kept.length === MAX_KEYS || bytes + size > MAX_KEYS_BYTES) {
-      return { keys: kept, keysTruncated: true };
-    }
-    kept.push(key);
-    bytes += size;
+  const { kept, truncated } = capList(keys, MAX_KEYS_BYTES, MAX_KEYS);
+  return truncated ? { keys: kept, keysTruncated: true } : { keys: kept };
+}
+
+/**
+ * secret.read extras (M5): the secrets references were expanded from and the imports read.
+ * Omitted when empty; capped by bytes like the key list.
+ */
+export function readSources(
+  referenced: { environment: string; path: string; key: string }[],
+  imports: { environment: string; path: string }[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (referenced.length > 0) {
+    const r = capList(referenced, MAX_REFERENCED_BYTES);
+    out.referenced = r.kept;
+    if (r.truncated) out.referencedTruncated = true;
   }
-  return { keys: kept };
+  if (imports.length > 0) {
+    const i = capList(imports, MAX_IMPORTS_BYTES);
+    out.imports = i.kept;
+    if (i.truncated) out.importsTruncated = true;
+  }
+  return out;
 }
 
 /**

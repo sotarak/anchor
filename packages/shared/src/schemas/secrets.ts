@@ -47,12 +47,18 @@ export const putSecretBodySchema = z.object({
   path: secretPathSchema.default("/"),
 });
 
+const queryFlag = z
+  .enum(["true", "false"])
+  .default("false")
+  .transform((v) => v === "true");
+
 export const secretQuerySchema = z.object({
   path: secretPathSchema.default("/"),
-  reveal: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((v) => v === "true"),
+  reveal: queryFlag,
+  /** Expand ${...} references in returned values (M5). */
+  expand: queryFlag,
+  /** Add the secrets of this folder's imports (M5). */
+  includeImports: queryFlag,
 });
 
 /** A version number in a URL: a positive integer without sign or leading zeros. */

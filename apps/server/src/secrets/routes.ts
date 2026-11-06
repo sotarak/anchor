@@ -8,7 +8,7 @@ import {
   secretVersionParamSchema,
 } from "@anchor/shared";
 import { type Context, Hono } from "hono";
-import { capKeys, recordAudit } from "../audit/record";
+import { capKeys, readSources, recordAudit } from "../audit/record";
 import { requirePrincipal } from "../auth/middleware";
 import { type Action, authorize } from "../authz/policy";
 import { getRootKey } from "../crypto/keyring";
@@ -21,8 +21,9 @@ import {
   getProjectBySlug,
   type ProjectRow,
 } from "../projects/repo";
-import { deleteSecret, getSecret, listSecrets, putSecret, type SecretContext } from "./service";
+import { deleteSecret, putSecret, type SecretContext } from "./service";
 import { getVersionValue, listVersions, rollbackSecret } from "./versions";
+import { composeSecret, composeSecrets } from "./view";
 
 /** Mounted at /api/v1/projects/:project/environments/:env/secrets. */
 export const secretRoutes = new Hono<AppEnv>();
@@ -72,14 +73,21 @@ secretRoutes.get("/", async (c) => {
   const target = await resolveTarget(c);
   const query = parseQuery(c, secretQuerySchema);
   const ctx = await secretContext(c, target, "secret:read", query.path);
-  const secrets = await listSecrets(ctx, query);
+  const { secrets, referenced, imports } = await composeSecrets(
+    { ...ctx, principal: target.principal },
+    query,
+  );
   // Values are about to leave: the read must be on record first (fails closed with a 500).
   if (query.reveal) {
     await recordAudit(c, {
       action: "secret.read",
       projectId: target.project.id,
       environmentId: target.environment.id,
-      metadata: { path: query.path, ...capKeys(secrets.map((s) => s.key)) },
+      metadata: {
+        path: query.path,
+        ...capKeys(secrets.map((s) => s.key)),
+        ...readSources(referenced, imports),
+      },
     });
   }
   return c.json<{ secrets: SecretDto[] }>({ secrets });
@@ -146,15 +154,18 @@ secretRoutes.post("/:key/rollback", async (c) => {
 secretRoutes.get("/:key", async (c) => {
   const target = await resolveTarget(c);
   const key = keyParam(c);
-  const { path } = parseQuery(c, secretQuerySchema);
-  const ctx = await secretContext(c, target, "secret:read", path);
-  const secret = await getSecret(ctx, { path, key });
+  const query = parseQuery(c, secretQuerySchema);
+  const ctx = await secretContext(c, target, "secret:read", query.path);
+  const { secret, referenced, imports } = await composeSecret(
+    { ...ctx, principal: target.principal },
+    { ...query, key },
+  );
   await recordAudit(c, {
     action: "secret.read",
     projectId: target.project.id,
     environmentId: target.environment.id,
     target: key,
-    metadata: { path, ...capKeys([key]) },
+    metadata: { path: query.path, ...capKeys([key]), ...readSources(referenced, imports) },
   });
   return c.json<{ secret: SecretDto }>({ secret });
 });

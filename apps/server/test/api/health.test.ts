@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { api } from "./helpers";
+import { api } from "#test/support";
 
 describe("GET /api/v1/health", () => {
   it("returns ok with no-store caching", async () => {

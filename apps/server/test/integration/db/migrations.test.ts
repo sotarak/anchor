@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { resetDb } from "./helpers";
+import { resetDb } from "#test/support";
 
 const now = Date.now();
 const db = env.DB;

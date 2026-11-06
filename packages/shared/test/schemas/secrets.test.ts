@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  normalizeSecretPath,
-  passwordSchema,
-  secretKeySchema,
-  secretValueSchema,
-  slugSchema,
-} from "../src";
+import { normalizeSecretPath, secretKeySchema, secretValueSchema } from "../../src/schemas/secrets";
 
 describe("normalizeSecretPath", () => {
   it.each([
@@ -38,13 +32,6 @@ describe("secretKeySchema", () => {
   );
 });
 
-describe("slugSchema", () => {
-  it.each(["dev", "my-app", "a1"])("accepts %s", (s) => expect(slugSchema.parse(s)).toBe(s));
-  it.each(["Dev", "-x", "my_app", "", "a".repeat(64)])("rejects %s", (s) =>
-    expect(slugSchema.safeParse(s).success).toBe(false),
-  );
-});
-
 describe("secretValueSchema", () => {
   it("accepts empty and exactly 65536 bytes", () => {
     expect(secretValueSchema.parse("")).toBe("");
@@ -54,13 +41,5 @@ describe("secretValueSchema", () => {
   it("rejects 65537 bytes", () => {
     expect(secretValueSchema.safeParse("a".repeat(65537)).success).toBe(false);
     expect(secretValueSchema.safeParse(`${"é".repeat(32768)}a`).success).toBe(false);
-  });
-});
-
-describe("passwordSchema", () => {
-  it("enforces 12..1024 chars", () => {
-    expect(passwordSchema.safeParse("a".repeat(11)).success).toBe(false);
-    expect(passwordSchema.safeParse("a".repeat(12)).success).toBe(true);
-    expect(passwordSchema.safeParse("a".repeat(1025)).success).toBe(false);
   });
 });

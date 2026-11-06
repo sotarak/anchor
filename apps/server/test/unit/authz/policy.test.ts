@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { type Action, authorize } from "../src/authz/policy";
-import type { Principal } from "../src/env";
-import { ApiError } from "../src/lib/errors";
+import { type Action, authorize } from "#src/authz/policy";
+import type { Principal } from "#src/env";
+import { ApiError } from "#src/lib/errors";
 
 const ACTIONS: Action[] = [
   "project:create",

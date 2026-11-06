@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { DecryptError, importAesKey, open, type Sealed, seal } from "../src/crypto/aead";
-import { toBase64, utf8Decode, utf8Encode } from "../src/lib/encoding";
-import { randomBytes } from "../src/lib/random";
+import { DecryptError, importAesKey, open, type Sealed, seal } from "#src/crypto/aead";
+import { toBase64, utf8Decode, utf8Encode } from "#src/lib/encoding";
+import { randomBytes } from "#src/lib/random";
 
 const AAD = "anchor/secret/v1|p|e|s|1";
 const newKey = () => importAesKey(randomBytes(32));

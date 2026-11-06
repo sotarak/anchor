@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { open, seal } from "../src/crypto/aead";
+import { open, seal } from "#src/crypto/aead";
 import {
   createWrappedKek,
   getRootKey,
@@ -8,10 +8,10 @@ import {
   secretAad,
   unwrapKek,
   type WrappedKek,
-} from "../src/crypto/keyring";
-import { toBase64, utf8Encode } from "../src/lib/encoding";
-import { ConfigError, IntegrityError } from "../src/lib/errors";
-import { randomBytes } from "../src/lib/random";
+} from "#src/crypto/keyring";
+import { toBase64, utf8Encode } from "#src/lib/encoding";
+import { ConfigError, IntegrityError } from "#src/lib/errors";
+import { randomBytes } from "#src/lib/random";
 
 const rootB64 = () => toBase64(randomBytes(32));
 const rootKey = () => getRootKey({ ANCHOR_ROOT_KEY: rootB64() });

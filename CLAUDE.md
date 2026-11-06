@@ -22,6 +22,9 @@ Status: greenfield. No stack decisions are final until recorded in `docs/`.
     `workers-profiling` — platform work. Prefer retrieving current Cloudflare docs over memory.
 - The Cloudflare MCP server is configured in `.mcp.json` (docs search + account API).
 
+- Tests live in a layered `test/` tree beside `src/` (`unit/`, `integration/`, `api/`, ... mirroring
+  `src/`), with helpers in `test/support/`. Follow `docs/testing.md`.
+
 ## Hard rules
 
 - Never commit secrets, `.dev.vars`, or real tokens. Never log secret values.

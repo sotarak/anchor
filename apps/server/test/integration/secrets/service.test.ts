@@ -1,18 +1,18 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { getRootKey } from "../src/crypto/keyring";
-import { toBase64, utf8Encode } from "../src/lib/encoding";
-import { ApiError, IntegrityError } from "../src/lib/errors";
-import { randomBytes } from "../src/lib/random";
-import { createProject, listEnvironments } from "../src/projects/repo";
+import { getRootKey } from "#src/crypto/keyring";
+import { toBase64, utf8Encode } from "#src/lib/encoding";
+import { ApiError, IntegrityError } from "#src/lib/errors";
+import { randomBytes } from "#src/lib/random";
+import { createProject, listEnvironments } from "#src/projects/repo";
 import {
   deleteSecret,
   getSecret,
   listSecrets,
   putSecret,
   type SecretContext,
-} from "../src/secrets/service";
-import { resetDb } from "./helpers";
+} from "#src/secrets/service";
+import { resetDb } from "#test/support";
 
 const db = env.DB;
 let dev: SecretContext;

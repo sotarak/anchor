@@ -9,7 +9,7 @@ dashboard and a CLI are on the way (see `docs/superpowers/plans/`).
 
 ```sh
 pnpm install
-pnpm test        # all packages
+pnpm test        # all packages (server layers: pnpm --filter ./apps/server test:unit | test:integration | test:api)
 pnpm lint
 pnpm typecheck
 
@@ -19,4 +19,5 @@ pnpm exec wrangler d1 migrations apply anchor --local
 pnpm dev                         # http://localhost:8787
 ```
 
-Deploying to Cloudflare: see [`docs/deploy.md`](docs/deploy.md).
+Deploying to Cloudflare: see [`docs/deploy.md`](docs/deploy.md). Test layout and conventions:
+[`docs/testing.md`](docs/testing.md).

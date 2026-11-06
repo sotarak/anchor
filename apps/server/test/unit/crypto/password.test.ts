@@ -4,7 +4,7 @@ import {
   PBKDF2_ITERATIONS,
   verifyAgainstDummy,
   verifyPassword,
-} from "../src/crypto/password";
+} from "#src/crypto/password";
 
 const PW = "correct horse battery staple";
 

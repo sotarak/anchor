@@ -18,6 +18,6 @@ export default defineConfig({
     })),
   ],
   test: {
-    setupFiles: ["./test/apply-migrations.ts"],
+    setupFiles: ["./test/support/apply-migrations.ts"],
   },
 });

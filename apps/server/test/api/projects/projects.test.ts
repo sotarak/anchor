@@ -1,12 +1,12 @@
 import { env } from "cloudflare:workers";
 import type { ApiErrorBody, EnvironmentDto, ProjectDto } from "@anchor/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createApp } from "../src/app";
-import { open, seal } from "../src/crypto/aead";
-import { getRootKey } from "../src/crypto/keyring";
-import { utf8Encode } from "../src/lib/encoding";
-import { getProjectBySlug, getProjectKek } from "../src/projects/repo";
-import { api, createUserWithSession, json, jsonInit, resetDb, TEST_ORIGIN } from "./helpers";
+import { createApp } from "#src/app";
+import { open, seal } from "#src/crypto/aead";
+import { getRootKey } from "#src/crypto/keyring";
+import { utf8Encode } from "#src/lib/encoding";
+import { getProjectBySlug, getProjectKek } from "#src/projects/repo";
+import { api, createUserWithSession, json, jsonInit, resetDb, TEST_ORIGIN } from "#test/support";
 
 let token: string;
 const bearer = () => ({ authorization: `Bearer ${token}` });

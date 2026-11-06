@@ -1,8 +1,8 @@
 import { env } from "cloudflare:workers";
 import type { ApiErrorBody, SecretDto } from "@anchor/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createApp } from "../src/app";
-import { api, createUserWithSession, json, jsonInit, resetDb, TEST_ORIGIN } from "./helpers";
+import { createApp } from "#src/app";
+import { api, createUserWithSession, json, jsonInit, resetDb, TEST_ORIGIN } from "#test/support";
 
 const BASE = "/api/v1/projects/app/environments/dev/secrets";
 let token: string;

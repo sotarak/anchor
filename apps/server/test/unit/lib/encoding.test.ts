@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { fromBase64, fromBase64Url, toBase64, toBase64Url, toHex } from "../src/lib/encoding";
-import { newSessionToken, sha256Hex } from "../src/lib/random";
+import { fromBase64, fromBase64Url, toBase64, toBase64Url, toHex } from "#src/lib/encoding";
+import { newSessionToken, sha256Hex } from "#src/lib/random";
 
 describe("encoding helpers", () => {
   it("base64 and base64url round-trip all byte values", () => {

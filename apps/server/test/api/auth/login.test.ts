@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import type { ApiErrorBody, LoginResponse } from "@anchor/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, createUserWithSession, json, jsonInit, resetDb, TEST_PASSWORD } from "./helpers";
+import { api, createUserWithSession, json, jsonInit, resetDb, TEST_PASSWORD } from "#test/support";
 
 const EMAIL = "dev@example.io";
 const login = (b: Record<string, unknown>) => api("/api/v1/auth/login", jsonInit("POST", b));

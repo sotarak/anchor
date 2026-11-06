@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import type { LoginResponse } from "@anchor/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, json, jsonInit, resetDb } from "./helpers";
+import { api, json, jsonInit, resetDb } from "#test/support";
 
 const SECRET_CANARY = "LEAK-CANARY-7f3a";
 const PASSWORD_CANARY = "PW-CANARY-9b2c-wrong-password";

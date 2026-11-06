@@ -5,7 +5,7 @@ import {
   type LockState,
   MAX_FAILED_LOGINS,
   nextLockState,
-} from "../src/auth/lockout";
+} from "#src/auth/lockout";
 
 const now = 1_000_000;
 const fresh: LockState = { failedLogins: 0, lockedUntil: null };

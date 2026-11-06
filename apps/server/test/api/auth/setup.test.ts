@@ -1,8 +1,8 @@
 import { env } from "cloudflare:workers";
 import type { ApiErrorBody, LoginResponse, SetupStatusDto } from "@anchor/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createApp } from "../src/app";
-import { api, json, jsonInit, resetDb, TEST_ORIGIN } from "./helpers";
+import { createApp } from "#src/app";
+import { api, json, jsonInit, resetDb, TEST_ORIGIN } from "#test/support";
 
 const SETUP_TOKEN = "test-setup-token-0123456789abcdef";
 const body = (overrides: Record<string, unknown> = {}) => ({

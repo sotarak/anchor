@@ -1,10 +1,10 @@
 import { env } from "cloudflare:workers";
 import { type ApiErrorBody, putSecretBodySchema } from "@anchor/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createApp } from "../src/app";
-import { ApiError, IntegrityError } from "../src/lib/errors";
-import { parseJson } from "../src/lib/validate";
-import { json } from "./helpers";
+import { createApp } from "#src/app";
+import { ApiError, IntegrityError } from "#src/lib/errors";
+import { parseJson } from "#src/lib/validate";
+import { json } from "#test/support";
 
 const app = createApp();
 app.get("/api/v1/__boom", () => {

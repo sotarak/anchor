@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import type { ApiErrorBody, EnvironmentDto } from "@anchor/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, createUserWithSession, json, jsonInit, resetDb } from "./helpers";
+import { api, createUserWithSession, json, jsonInit, resetDb } from "#test/support";
 
 let token: string;
 const base = (project = "app") => `/api/v1/projects/${project}/environments`;

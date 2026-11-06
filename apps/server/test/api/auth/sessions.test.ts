@@ -1,8 +1,8 @@
 import { env } from "cloudflare:workers";
 import type { ApiErrorBody, UserDto } from "@anchor/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { sha256Hex } from "../src/lib/random";
-import { api, createUserWithSession, json, jsonInit, resetDb } from "./helpers";
+import { sha256Hex } from "#src/lib/random";
+import { api, createUserWithSession, json, jsonInit, resetDb } from "#test/support";
 
 beforeEach(resetDb);
 

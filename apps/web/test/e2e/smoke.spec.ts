@@ -62,6 +62,20 @@ test("setup → project → secret reveal/re-mask → logout → login, with no 
     await page.locator("[data-sonner-toaster]").evaluate((el) => getComputedStyle(el).position),
   ).toBe("fixed");
 
+  // Overlays that inject styles at runtime must also work under the CSP: Select (Radix renders a
+  // <style> in its viewport) and Popover (environment switcher).
+  await page.getByRole("combobox", { name: "Rows per page" }).click();
+  await expect(page.getByRole("listbox")).toBeVisible();
+  expect(
+    await page
+      .locator("[data-radix-select-viewport]")
+      .evaluate((el) => getComputedStyle(el).scrollbarWidth),
+  ).toBe("none");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /^Environment: / }).click();
+  await expect(page.getByRole("option", { name: /Development/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+
   const row = page.getByRole("row", { name: /HELLO/ });
   await expect(row).toContainText("••••••••");
   await expect(page.locator("body")).not.toContainText(VALUE);

@@ -6,6 +6,8 @@ import type { Plugin } from "vite";
  *
  * - sonner injects its whole stylesheet as a <style> at import time. That call becomes a no-op and
  *   the app imports `sonner/dist/styles.css` instead, served from 'self' like any other CSS.
+ * - @radix-ui/react-select renders a <style> inside every Select viewport to hide its scrollbar.
+ *   That element is dropped; the same rule lives in src/styles/globals.css.
  * - react-style-singleton (Radix scroll lock, via react-remove-scroll-bar) adds a <style> whenever
  *   a modal opens. Its one DOM-touching module is replaced with a constructable-stylesheet version:
  *   CSSOM sheets in `document.adoptedStyleSheets` are not subject to style-src.
@@ -23,6 +25,13 @@ export function cspSafeStyles(): Plugin {
         const head = "function __insertCSS(code) {";
         if (!code.includes(head)) this.error("sonner: __insertCSS not found; recheck the CSP shim");
         return { code: code.replace(head, `${head}\n  return;`), map: null };
+      }
+      if (/\/@radix-ui\/react-select\/dist\/index\.mjs$/.test(path)) {
+        const style =
+          /\/\* @__PURE__ \*\/ jsx\(\s*"style",\s*\{\s*dangerouslySetInnerHTML: \{\s*__html: `\[data-radix-select-viewport\][^`]*`\s*\},\s*nonce\s*\}\s*\)/;
+        if (!style.test(code))
+          this.error("react-select: viewport <style> not found; recheck the CSP shim");
+        return { code: code.replace(style, "null"), map: null };
       }
       if (/\/react-style-singleton\/dist\/es2015\/singleton\.js$/.test(path)) {
         if (!code.includes("export var stylesheetSingleton")) {

@@ -261,3 +261,14 @@
     outline-color: var(--brand-base);
   }
 }
+
+/* Radix Select hides its viewport scrollbar with a runtime <style>, which the CSP blocks; the
+   element is stripped at build time (scripts/vite-plugin-csp-styles.ts) and the rule lives here. */
+[data-radix-select-viewport] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+[data-radix-select-viewport]::-webkit-scrollbar {
+  display: none;
+}

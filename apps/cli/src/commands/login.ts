@@ -9,7 +9,7 @@ import { isInteractive, stripOneNewline } from "../interactive";
 
 export async function login(
   ctx: CommandContext,
-  opts: { email?: string; passwordStdin: boolean },
+  opts: { email?: string; passwordStdin?: boolean },
 ): Promise<void> {
   const { io, prompts } = ctx.deps;
   const interactive = isInteractive(ctx);

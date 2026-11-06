@@ -19,22 +19,25 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
   const program = new Command("anchor")
     .description("Anchor secrets manager CLI")
     .version(CLI_VERSION, "--version", "print the CLI version")
-    .option("--json", "print machine-readable JSON on stdout", false)
-    .option("-q, --quiet", "suppress progress messages", false)
+    .option("--json", "print machine-readable JSON on stdout")
+    .option("-q, --quiet", "suppress progress messages")
     .option("--no-color", "disable colored output")
-    .option("--debug", "print request diagnostics to stderr (never secret values)", false)
+    .option("--debug", "print request diagnostics to stderr (never secret values)")
     .option("--api-url <url>", "Anchor server URL")
     .option("--project <slug>", "project slug")
     .option("--env <slug>", "environment slug")
     .option("--path <path>", "secret folder path")
-    .option("-y, --yes", "skip confirmations", false)
+    .option("-y, --yes", "skip confirmations")
     // Settings below are copied to every subcommand created afterwards.
     .exitOverride()
     .configureOutput({
       writeOut: (s) => deps.io.stdout.write(s),
       writeErr: (s) => deps.io.stderr.write(s),
+      // Help and usage errors are plain text: deterministic, and safe to pipe.
+      getOutHasColors: () => false,
+      getErrHasColors: () => false,
     })
-    .configureHelp({ helpWidth: 100 })
+    .configureHelp({ helpWidth: 100, showGlobalOptions: true })
     .showHelpAfterError("(run with --help for usage)");
 
   const act = actionFor(program, deps, state);
@@ -45,7 +48,7 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     .command("login")
     .description("Log in with email and password and store a CLI session (30 days)")
     .option("--email <email>", "account email (prompted when omitted in a terminal)")
-    .option("--password-stdin", "read the password from stdin (for scripts)", false)
+    .option("--password-stdin", "read the password from stdin (for scripts)")
     .addHelpText(
       "after",
       examples(
@@ -53,7 +56,7 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
         "printf '%s' \"$PASSWORD\" | anchor login --email me@example.com --password-stdin",
       ),
     )
-    .action(act((ctx, opts: { email?: string; passwordStdin: boolean }) => login(ctx, opts)));
+    .action(act((ctx, opts: { email?: string; passwordStdin?: boolean }) => login(ctx, opts)));
 
   program
     .command("logout")
@@ -93,22 +96,28 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
   secrets
     .command("list")
     .description("List secret names and metadata (values only with --reveal)")
-    .option("--reveal", "include values", false)
+    .option("--reveal", "include values")
     .addHelpText(
       "after",
       examples("anchor secrets list", "anchor secrets list --env prod --path /api --json"),
     )
-    .action(act((ctx, opts: { reveal: boolean }) => secretsList(ctx, opts)));
+    .action(
+      act((ctx, opts: { reveal?: boolean }) => secretsList(ctx, { reveal: opts.reveal === true })),
+    );
   secrets
     .command("get")
     .description("Print one secret (the value is masked in a terminal unless --reveal)")
     .argument("<key>", "secret key")
-    .option("--reveal", "show the value in a terminal", false)
+    .option("--reveal", "show the value in a terminal")
     .addHelpText(
       "after",
       examples("anchor secrets get DB_URL --reveal", "anchor secrets get DB_URL > db-url.txt"),
     )
-    .action(act((ctx, key: string, opts: { reveal: boolean }) => secretsGet(ctx, key, opts)));
+    .action(
+      act((ctx, key: string, opts: { reveal?: boolean }) =>
+        secretsGet(ctx, key, { reveal: opts.reveal === true }),
+      ),
+    );
   secrets
     .command("set")
     .description("Create or update a secret; the value comes from stdin, --from-file or a prompt")
@@ -228,7 +237,16 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
 export function actionFor(program: Command, deps: CliDeps, state: RunState) {
   return <A extends unknown[]>(handler: (ctx: CommandContext, ...args: A) => Promise<unknown>) =>
     async (...args: A) => {
-      const code = await handler(await createContext(deps, program.opts<GlobalFlags>()), ...args);
+      const o = program.opts<Partial<GlobalFlags>>();
+      const flags: GlobalFlags = {
+        ...o,
+        json: o.json === true,
+        quiet: o.quiet === true,
+        color: o.color !== false,
+        debug: o.debug === true,
+        yes: o.yes === true,
+      };
+      const code = await handler(await createContext(deps, flags), ...args);
       if (typeof code === "number") state.exitCode = code;
     };
 }

@@ -1,5 +1,6 @@
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import { envsList } from "./commands/envs";
+import { EXPORT_FORMATS, type ExportFormat, exportCommand } from "./commands/export";
 import { init } from "./commands/init";
 import { login } from "./commands/login";
 import { logout } from "./commands/logout";
@@ -148,6 +149,24 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     )
     .action(
       act((ctx, command: string[], opts: { override: boolean }) => runCommand(ctx, command, opts)),
+    );
+
+  program
+    .command("export")
+    .description("Write the environment's secrets as dotenv, JSON or YAML (file mode 0600)")
+    .addOption(
+      new Option("--format <format>", "output format").choices(EXPORT_FORMATS).default("dotenv"),
+    )
+    .option("--output <file>", "write to a file instead of stdout")
+    .addHelpText(
+      "after",
+      examples(
+        "anchor export --output .env.local",
+        "anchor export --format json --env prod > secrets.json",
+      ),
+    )
+    .action(
+      act((ctx, opts: { format: ExportFormat; output?: string }) => exportCommand(ctx, opts)),
     );
 
   return program;

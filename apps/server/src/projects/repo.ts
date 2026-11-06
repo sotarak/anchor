@@ -125,3 +125,78 @@ export function toProjectDto(row: ProjectRow): ProjectDto {
 export function toEnvironmentDto(row: EnvironmentRow): EnvironmentDto {
   return { id: row.id, slug: row.slug, name: row.name, position: row.position };
 }
+
+const ENV_COLUMNS = "id, project_id, slug, name, position";
+
+export async function listEnvironments(
+  db: D1Database,
+  projectId: string,
+): Promise<EnvironmentRow[]> {
+  const { results } = await db
+    .prepare(`SELECT ${ENV_COLUMNS} FROM environments WHERE project_id = ? ORDER BY position`)
+    .bind(projectId)
+    .all<EnvironmentRow>();
+  return results;
+}
+
+export async function getEnvironmentBySlug(
+  db: D1Database,
+  projectId: string,
+  slug: string,
+): Promise<EnvironmentRow> {
+  const row = await db
+    .prepare(`SELECT ${ENV_COLUMNS} FROM environments WHERE project_id = ? AND slug = ?`)
+    .bind(projectId, slug)
+    .first<EnvironmentRow>();
+  if (!row) throw new ApiError(404, "not_found", "Environment not found");
+  return row;
+}
+
+export async function createEnvironment(
+  db: D1Database,
+  projectId: string,
+  input: { name: string; slug: string },
+  now: number,
+): Promise<EnvironmentRow> {
+  const id = newId();
+  try {
+    await db
+      .prepare(
+        `INSERT INTO environments (id, project_id, slug, name, position, created_at)
+         SELECT ?, ?, ?, ?, COALESCE(MAX(position), -1) + 1, ? FROM environments WHERE project_id = ?`,
+      )
+      .bind(id, projectId, input.slug, input.name, now, projectId)
+      .run();
+  } catch (err) {
+    if (isUniqueViolation(err))
+      throw new ApiError(409, "conflict", "Environment slug already exists");
+    throw err;
+  }
+  return getEnvironmentBySlug(db, projectId, input.slug);
+}
+
+export async function renameEnvironment(
+  db: D1Database,
+  envId: string,
+  name: string,
+): Promise<void> {
+  await db.prepare("UPDATE environments SET name = ? WHERE id = ?").bind(name, envId).run();
+}
+
+/** Deletes atomically unless it is the project's last environment (409). Cascades secrets. */
+export async function deleteEnvironment(
+  db: D1Database,
+  projectId: string,
+  envId: string,
+): Promise<void> {
+  const result = await db
+    .prepare(
+      `DELETE FROM environments WHERE id = ? AND project_id = ?
+       AND (SELECT count(*) FROM environments WHERE project_id = ?) > 1`,
+    )
+    .bind(envId, projectId, projectId)
+    .run();
+  if (result.meta.changes === 0) {
+    throw new ApiError(409, "conflict", "A project must keep at least one environment");
+  }
+}

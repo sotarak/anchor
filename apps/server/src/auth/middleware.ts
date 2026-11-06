@@ -2,6 +2,7 @@ import type { Context, MiddlewareHandler } from "hono";
 import { getCookie } from "hono/cookie";
 import type { AppEnv, Principal, UserPrincipal } from "../env";
 import { ApiError } from "../lib/errors";
+import { findPrincipalByServiceToken } from "../service-tokens/repo";
 import { findPrincipalBySessionToken, SESSION_COOKIE } from "./sessions";
 
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -21,7 +22,12 @@ export function readPresentedToken(c: Context): { token: string; via: "cookie" |
 export const authenticate: MiddlewareHandler<AppEnv> = async (c, next) => {
   const presented = readPresentedToken(c);
   if (presented) {
-    const principal = await findPrincipalBySessionToken(c.env.DB, presented.token, Date.now());
+    const now = Date.now();
+    // Service tokens are bearer-only; a cookie can only ever carry a session.
+    const principal =
+      presented.via === "bearer" && presented.token.startsWith("anc_st_")
+        ? await findPrincipalByServiceToken(c.env.DB, presented.token, now)
+        : await findPrincipalBySessionToken(c.env.DB, presented.token, now);
     if (principal) {
       c.set("principal", principal);
       c.set("authVia", presented.via);

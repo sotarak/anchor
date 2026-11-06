@@ -1,6 +1,7 @@
 import {
   type LoginResponse,
   loginBodySchema,
+  type ServiceTokenDto,
   type SetupStatusDto,
   setupBodySchema,
 } from "@anchor/shared";
@@ -10,6 +11,7 @@ import type { AppEnv } from "../env";
 import { utf8Encode } from "../lib/encoding";
 import { ApiError } from "../lib/errors";
 import { parseJson } from "../lib/validate";
+import { loadServiceTokenDto } from "../service-tokens/repo";
 import {
   findUserByEmail,
   insertFirstOwner,
@@ -18,13 +20,18 @@ import {
   updateLoginState,
 } from "../users/repo";
 import { LOCKOUT_MS, MAX_FAILED_LOGINS } from "./lockout";
-import { readPresentedToken, requireUser } from "./middleware";
+import { readPresentedToken, requirePrincipal } from "./middleware";
 import { clearSessionCookie, createSession, revokeSession, setSessionCookie } from "./sessions";
 
 export const authRoutes = new Hono<AppEnv>();
 
-authRoutes.get("/auth/me", (c) => {
-  const p = requireUser(c);
+authRoutes.get("/auth/me", async (c) => {
+  const p = requirePrincipal(c);
+  if (p.type === "service_token") {
+    const serviceToken = await loadServiceTokenDto(c.env.DB, p.tokenId);
+    if (!serviceToken) throw new ApiError(401, "unauthenticated", "Authentication required");
+    return c.json<{ serviceToken: ServiceTokenDto }>({ serviceToken });
+  }
   return c.json({ user: toUserDto({ id: p.userId, email: p.email, name: p.name, role: p.role }) });
 });
 

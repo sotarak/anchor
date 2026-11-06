@@ -14,7 +14,7 @@
     "test:api": "vitest run test/api",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
-    "deploy": "wrangler deploy"
+    "deploy:worker": "wrangler deploy"
   },
   "dependencies": {
     "@anchor/shared": "workspace:*",

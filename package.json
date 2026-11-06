@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "pnpm --filter @anchor/web build",
-    "deploy": "pnpm build && pnpm --filter ./apps/server deploy",
+    "deploy:worker": "pnpm build && pnpm --filter ./apps/server run deploy:worker",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome check .",

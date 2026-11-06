@@ -62,14 +62,15 @@ Keep the printed value for step 6. It is only needed once.
 From the repository root:
 
 ```sh
-pnpm deploy
+pnpm deploy:worker
 ```
 
-`pnpm deploy` builds the dashboard first (`pnpm build` writes `apps/web/dist`) and then runs
+`pnpm deploy:worker` builds the dashboard first (`pnpm build` writes `apps/web/dist`) and then runs
 `wrangler deploy` for `apps/server`. The Worker serves the dashboard as static assets in
 single-page-application mode: `/api/*` always reaches the Worker, and every other path that is not a
 file serves `index.html`. Security headers (CSP, `X-Frame-Options`, ...) come from
 `apps/web/public/_headers`. Running `wrangler deploy` alone ships whatever is in `apps/web/dist`.
+(The script is not called `deploy`: `pnpm deploy` is a pnpm built-in and would run instead.)
 
 The deploy also registers the daily Cron Trigger (`0 3 * * *`, from `triggers.crons` in
 `wrangler.jsonc`). There is nothing to set up by hand: it purges audit events past retention (see

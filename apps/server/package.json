@@ -4,9 +4,13 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "pretest": "node -e \"require('node:fs').mkdirSync('../web/dist',{recursive:true})\"",
     "test": "vitest run",
+    "pretest:unit": "node -e \"require('node:fs').mkdirSync('../web/dist',{recursive:true})\"",
     "test:unit": "vitest run test/unit",
+    "pretest:integration": "node -e \"require('node:fs').mkdirSync('../web/dist',{recursive:true})\"",
     "test:integration": "vitest run test/integration",
+    "pretest:api": "node -e \"require('node:fs').mkdirSync('../web/dist',{recursive:true})\"",
     "test:api": "vitest run test/api",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",

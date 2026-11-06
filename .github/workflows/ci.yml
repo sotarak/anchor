@@ -17,6 +17,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm --filter @anchor/web lint:tokens
       - run: pnpm test
 
   cli-e2e:

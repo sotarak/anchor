@@ -2,6 +2,8 @@ import type { InstanceRole } from "@anchor/shared";
 
 export type Bindings = {
   DB: D1Database;
+  /** Static assets (the dashboard build); the Worker itself only serves /api/*. */
+  ASSETS: Fetcher;
   ANCHOR_ROOT_KEY: string;
   ANCHOR_SETUP_TOKEN?: string;
 };

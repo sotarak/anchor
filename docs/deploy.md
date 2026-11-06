@@ -59,9 +59,17 @@ Keep the printed value for step 6. It is only needed once.
 
 ## 5. Deploy
 
+From the repository root:
+
 ```sh
-pnpm exec wrangler deploy
+pnpm deploy
 ```
+
+`pnpm deploy` builds the dashboard first (`pnpm build` writes `apps/web/dist`) and then runs
+`wrangler deploy` for `apps/server`. The Worker serves the dashboard as static assets in
+single-page-application mode: `/api/*` always reaches the Worker, and every other path that is not a
+file serves `index.html`. Security headers (CSP, `X-Frame-Options`, ...) come from
+`apps/web/public/_headers`. Running `wrangler deploy` alone ships whatever is in `apps/web/dist`.
 
 The deploy also registers the daily Cron Trigger (`0 3 * * *`, from `triggers.crons` in
 `wrangler.jsonc`). There is nothing to set up by hand: it purges audit events past retention (see
@@ -134,6 +142,10 @@ cp .dev.vars.example .dev.vars   # then fill in both values with openssl rand -b
 pnpm exec wrangler d1 migrations apply anchor --local
 pnpm dev
 ```
+
+`pnpm dev` (in `apps/server`) serves the API and the last dashboard build. For dashboard work, run
+`pnpm --filter @anchor/web dev` as well: Vite serves the UI with hot reload and proxies `/api` to
+`http://localhost:8787`.
 
 To exercise the Cron Trigger locally, run `pnpm exec wrangler dev --test-scheduled` and request
 `http://localhost:8787/__scheduled?cron=0+3+*+*+*`; the console shows an `audit_purged` line.

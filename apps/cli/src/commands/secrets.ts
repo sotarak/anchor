@@ -103,9 +103,16 @@ export async function secretsGet(
       }),
     );
   } else {
-    const found = (
-      await api.listSecrets(s.project, s.env, { path: s.path, reveal: false, includeImports: true })
-    ).find((x) => x.key === key);
+    // Local first: a local key must not depend on whether every import is readable.
+    const lookup = async (includeImports: boolean) =>
+      (
+        await api.listSecrets(s.project, s.env, {
+          path: s.path,
+          reveal: false,
+          ...(includeImports ? { includeImports } : {}),
+        })
+      ).find((x) => x.key === key);
+    const found = (await lookup(false)) ?? (await lookup(true));
     if (!found) throw new CliError(EXIT.NOT_FOUND, `Secret ${key} not found in ${where(s)}`);
     secret = found;
   }

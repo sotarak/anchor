@@ -183,9 +183,28 @@ describe("reference expansion", () => {
     expect(JSON.parse(body).error.message).toBe(
       "You do not have permission to read the import dev:/billing of dev:/api",
     );
-    const single = await get("dev", "OWN", "path=/api&includeImports=true", token);
-    expect(single.status).toBe(403);
     expect((await get("dev", "OWN", "path=/api", token)).status).toBe(200);
+  });
+
+  it("single get with includeImports: a local key never needs the imports; an imported or missing key does", async () => {
+    await put("dev", "/billing", "KEY", "BILLING-CANARY");
+    await put("dev", "/api", "OWN", "own");
+    await addImport("dev", "/api", { environment: "dev", path: "/billing" });
+    const { token } = await createServiceToken("app", {
+      permission: "read",
+      scopes: [{ environment: "dev", path: "/api" }],
+    });
+    const local = await get("dev", "OWN", "path=/api&includeImports=true", token);
+    expect(local.status).toBe(200);
+    const { secret } = await json<{ secret: SecretDto }>(local);
+    expect(secret.value).toBe("own");
+    expect(secret.importedFrom).toBeUndefined();
+
+    const imported = await get("dev", "KEY", "path=/api&includeImports=true", token);
+    expect(imported.status).toBe(403);
+    expect(await imported.text()).not.toContain("BILLING-CANARY");
+    // Missing locally: the answer depends on the forbidden import, so it is a 403, not a 404.
+    expect((await get("dev", "NOPE", "path=/api&includeImports=true", token)).status).toBe(403);
   });
 
   it('value "echo ${HOME}" with expand -> 400 naming secret, reference and $${ hint; without -> 200', async () => {

@@ -57,30 +57,37 @@ function createReadSession(ctx: ComposeContext) {
     },
   });
 
-  /** The requested folder, then each import (authorized up front: one forbidden source = 403). */
-  async function sources(path: string, includeImports: boolean): Promise<Source[]> {
+  /** Throws a 403 naming the import when the caller cannot read its source folder. */
+  async function authorizeImport(source: Source, path: string): Promise<void> {
+    try {
+      await authorize(ctx.db, ctx.principal, "secret:read", {
+        projectId: ctx.project.id,
+        environmentId: source.environment.id,
+        path: source.path,
+      });
+    } catch (e) {
+      // The caller can list this folder's imports, so naming the source reveals nothing new.
+      if (e instanceof ApiError && e.status === 403) {
+        throw new ApiError(
+          403,
+          "forbidden",
+          `You do not have permission to read the import ${source.environment.slug}:${source.path} of ${ctx.environment.slug}:${path}`,
+        );
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * The requested folder, then each import, NOT yet authorized: the caller authorizes an import
+   * (`authorizeImport`) before reading from it.
+   */
+  async function candidates(path: string, includeImports: boolean): Promise<Source[]> {
     const out: Source[] = [{ environment: ctx.environment, path }];
     if (!includeImports) return out;
     for (const row of await listImports(ctx.db, ctx.environment.id, path)) {
       const environment = await byId(row.source_environment_id);
       if (!environment) continue; // deleted concurrently; its import row cascades away
-      try {
-        await authorize(ctx.db, ctx.principal, "secret:read", {
-          projectId: ctx.project.id,
-          environmentId: row.source_environment_id,
-          path: row.source_path,
-        });
-      } catch (e) {
-        // The caller can list this folder's imports, so naming the source reveals nothing new.
-        if (e instanceof ApiError && e.status === 403) {
-          throw new ApiError(
-            403,
-            "forbidden",
-            `You do not have permission to read the import ${environment.slug}:${row.source_path} of ${ctx.environment.slug}:${path}`,
-          );
-        }
-        throw e;
-      }
       out.push({
         environment,
         path: row.source_path,
@@ -104,7 +111,13 @@ function createReadSession(ctx: ComposeContext) {
     }
   }
 
-  return { sources, decrypt, expandInto, referenced: () => [...referenced.values()] };
+  return {
+    candidates,
+    authorizeImport,
+    decrypt,
+    expandInto,
+    referenced: () => [...referenced.values()],
+  };
 }
 
 function toDto(found: SecretWithVersion, source: Source, value?: string): SecretDto {
@@ -132,7 +145,11 @@ export async function composeSecrets(
   opts: { path: string; reveal: boolean; expand: boolean; includeImports: boolean },
 ): Promise<{ secrets: SecretDto[] } & Composed> {
   const session = createReadSession(ctx);
-  const sources = await session.sources(opts.path, opts.includeImports);
+  const sources = await session.candidates(opts.path, opts.includeImports);
+  // A list covers every source, so every import is authorized up front: one forbidden source = 403.
+  for (const source of sources) {
+    if (source.importedFrom) await session.authorizeImport(source, opts.path);
+  }
   const taken = new Set<string>();
   const secrets: SecretDto[] = [];
   for (const source of sources) {
@@ -148,19 +165,25 @@ export async function composeSecrets(
   return { secrets, referenced: session.referenced(), imports: importsOf(sources) };
 }
 
-/** One secret with its value: local first, then the imports in order. */
+/**
+ * One secret with its value: local first, then the imports in order. An import is authorized
+ * only when the lookup reaches it, so a local key never depends on the imports, while an imported
+ * or missing key behind a forbidden import is a 403 (its answer would come from that import).
+ */
 export async function composeSecret(
   ctx: ComposeContext,
   opts: { path: string; key: string; expand: boolean; includeImports: boolean },
 ): Promise<{ secret: SecretDto } & Composed> {
   const session = createReadSession(ctx);
-  const sources = await session.sources(opts.path, opts.includeImports);
-  for (const source of sources) {
+  const consulted: Source[] = [];
+  for (const source of await session.candidates(opts.path, opts.includeImports)) {
+    if (source.importedFrom) await session.authorizeImport(source, opts.path);
+    consulted.push(source);
     const found = await findSecretWithVersion(ctx.db, source.environment.id, source.path, opts.key);
     if (!found) continue;
     const dto = toDto(found, source, await session.decrypt(source.environment, found));
     if (opts.expand) await session.expandInto(dto, source);
-    return { secret: dto, referenced: session.referenced(), imports: importsOf(sources) };
+    return { secret: dto, referenced: session.referenced(), imports: importsOf(consulted) };
   }
   throw new ApiError(404, "not_found", "Secret not found");
 }

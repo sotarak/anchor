@@ -220,6 +220,43 @@ describe("anchor secrets get", () => {
     expect(JSON.parse(pj.out)).toEqual({ secret: withValue });
   });
 
+  it("masked get finds a local key without the imports, so a forbidden import does not block it", async () => {
+    const IMPORT_DENIED = "You do not have permission to read the import dev:/billing of dev:/";
+    const listSecrets = async (_p: string, _e: string, q: { includeImports?: boolean }) => {
+      if (q.includeImports) throw apiError(403, "forbidden", IMPORT_DENIED);
+      return [meta("DB_URL", 3)];
+    };
+    const tty = await loggedIn({ tty: true });
+    const r = await tty.run(["secrets", "get", "DB_URL", ...P], { listSecrets });
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("DB_URL");
+    expect(r.fake.called("listSecrets")).toHaveLength(1);
+
+    // Not local: the imports decide, and the server's 403 stands.
+    const other = await loggedIn({ tty: true });
+    const missing = await other.run(["secrets", "get", "KEY", ...P], { listSecrets });
+    expect(missing.code).toBe(4);
+    expect(missing.err).toContain(IMPORT_DENIED);
+  });
+
+  it("masked get falls back to the imports for a key that is not local", async () => {
+    const tty = await loggedIn({ tty: true });
+    const imported = {
+      ...meta("SHARED", 1),
+      importedFrom: { environment: "dev", path: "/billing" },
+    };
+    const r = await tty.run(["secrets", "get", "SHARED", ...P], {
+      listSecrets: async (_p: string, _e: string, q: { includeImports?: boolean }) =>
+        q.includeImports ? [meta("DB_URL"), imported] : [meta("DB_URL")],
+    });
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("dev:/billing");
+    expect(r.fake.called("listSecrets").map((c) => c.args[2])).toEqual([
+      { path: "/", reveal: false },
+      { path: "/", reveal: false, includeImports: true },
+    ]);
+  });
+
   it("masked get of a missing key exits 5", async () => {
     const cli = await loggedIn({ tty: true });
     const r = await cli.run(["secrets", "get", "NOPE", ...P], { listSecrets: async () => [] });

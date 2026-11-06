@@ -1,0 +1,33 @@
+/** Audit action names (spec §13.6). M5 appends its actions; never rename or remove one. */
+export const AUDIT_ACTIONS = [
+  "auth.setup",
+  "auth.login",
+  "auth.login_failed",
+  "auth.logout",
+  "auth.password_changed",
+  "auth.password_reset",
+  "session.revoked",
+  "user.updated",
+  "user.deleted",
+  "invite.created",
+  "invite.revoked",
+  "invite.accepted",
+  "password_reset.created",
+  "project.created",
+  "project.updated",
+  "project.deleted",
+  "environment.created",
+  "environment.updated",
+  "environment.deleted",
+  "member.added",
+  "member.updated",
+  "member.removed",
+  "service_token.created",
+  "service_token.revoked",
+  "secret.read",
+  "secret.created",
+  "secret.updated",
+  "secret.deleted",
+] as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];

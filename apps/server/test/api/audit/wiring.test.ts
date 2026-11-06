@@ -210,7 +210,7 @@ describe("secret events", () => {
     expect(metadata.keys.length).toBeGreaterThan(100);
     expect(metadata.keys).toEqual(keys.slice(0, metadata.keys.length));
     expect(new TextEncoder().encode(row?.metadata ?? "").byteLength).toBeLessThanOrEqual(16_384);
-  });
+  }, 60_000); // 400 real encrypted writes: well over the 5 s default on CI runners.
 
   it("service-token reads are audited with actor service_token and its name", async () => {
     await createAppProject();

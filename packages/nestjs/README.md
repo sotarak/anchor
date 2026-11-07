@@ -73,10 +73,16 @@ secrets into the environment before Nest starts:
 
 ```ts
 // main.ts
+import { NestFactory } from "@nestjs/core";
 import { loadAnchorEnv } from "@anchor-secrets/nestjs";
+import { AppModule } from "./app.module";
 
-await loadAnchorEnv({ project: "shop", environment: "prod", path: "/api" });
-const app = await NestFactory.create(AppModule);
+async function bootstrap() {
+  await loadAnchorEnv({ project: "shop", environment: "prod", path: "/api" });
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);
+}
+void bootstrap();
 ```
 
 Values are written as the strings Anchor stores. Variables that are already set win unless you

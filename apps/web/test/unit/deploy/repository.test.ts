@@ -434,6 +434,20 @@ describe("open-source repository", () => {
     expect(sdk).toContain("npm install @anchor-secrets/nestjs");
   });
 
+  it("loadAnchorEnv examples run inside bootstrap(), since CommonJS Nest apps reject top-level await", () => {
+    for (const file of ["apps/docs/src/content/docs/guides/sdk.md", "packages/nestjs/README.md"]) {
+      const doc = read(file);
+      const example = doc.slice(
+        doc.indexOf("// main.ts"),
+        doc.indexOf("```", doc.indexOf("// main.ts")),
+      );
+      expect(example, file).toContain("async function bootstrap() {");
+      expect(example, file).toMatch(/^ {2}await loadAnchorEnv\(/m);
+      expect(example, file).not.toMatch(/^await /m);
+      expect(example, file).toMatch(/^void bootstrap\(\);$/m);
+    }
+  });
+
   it("the agent-skills guide installs the three skills by name and the README links it", () => {
     const guide = read("apps/docs/src/content/docs/guides/agent-skills.md");
     expect(guide).toContain(

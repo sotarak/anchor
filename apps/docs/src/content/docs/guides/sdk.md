@@ -105,9 +105,12 @@ import { NestFactory } from "@nestjs/core";
 import { loadAnchorEnv } from "@anchor-secrets/nestjs";
 import { AppModule } from "./app.module";
 
-await loadAnchorEnv({ project: "zepo", environment: "prod", path: "/shared" });
-const app = await NestFactory.create(AppModule);
-await app.listen(3000);
+async function bootstrap() {
+  await loadAnchorEnv({ project: "zepo", environment: "prod", path: "/shared" });
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);
+}
+void bootstrap();
 ```
 
 `loadAnchorEnv` writes each value as the string Anchor stores. A variable that is already set

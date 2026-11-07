@@ -64,6 +64,8 @@ export type ClientCore = {
   /** `strict`: a failed fetch rejects instead of returning the cached fallback. */
   loadEntry(q: ListQuery, o?: RequestOptions & { strict?: boolean }): Promise<CacheEntry>;
   ttlMs: number;
+  /** How long past `ttlMs` a folder may serve values after a failed refresh. */
+  maxStaleMs: number;
   emit: (event: AnchorEvent) => void;
 };
 
@@ -75,6 +77,7 @@ export function createClientCore(options: ClientOptions): ClientCore {
 
   return {
     ttlMs: policy ? policy.ttlMs : DEFAULT_TTL_MS,
+    maxStaleMs: policy ? policy.maxStaleMs : Number.POSITIVE_INFINITY,
     emit,
     async loadEntry(q, o = {}) {
       // Configuration errors surface before any cache lookup.

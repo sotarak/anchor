@@ -84,6 +84,8 @@ export interface AnchorClient {
 /**
  * One folder's decoded secrets. Reads are synchronous and never wait for the network: a read of
  * values older than the cache ttl starts one background refresh and returns the current values.
+ * Once a refresh has failed past `ttlMs + maxStaleMs`, reads throw `AnchorError` code `stale`
+ * until Anchor answers again.
  */
 export interface AnchorFolder {
   /** The value of `key`, or `undefined` when the folder has no such secret. */

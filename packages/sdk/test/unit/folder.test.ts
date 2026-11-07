@@ -183,4 +183,36 @@ describe("AnchorFolder", () => {
     );
     await expect(client(s).folder(QUERY)).rejects.toMatchObject({ status: 401 });
   });
+
+  it("stops serving values once a refresh fails past ttl + maxStaleMs", async () => {
+    const s = server();
+    const folder = await client(s, { cache: { ttlMs: 1_000, maxStaleMs: 1_000 } }).folder(QUERY);
+    s.serve(unavailable);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(folder.get("A")).toBe("v1");
+    await flush();
+    expect(folder.get("A")).toBe("v1");
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(folder.get("A")).toBe("v1");
+    await flush();
+    expect(() => folder.get("A")).toThrow(expect.objectContaining({ code: "stale" }));
+    expect(() => folder.getOrThrow("A")).toThrow(expect.objectContaining({ code: "stale" }));
+    s.serve(() => body("v2"));
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(() => folder.get("A")).toThrow(expect.objectContaining({ code: "stale" }));
+    await flush();
+    expect(folder.get("A")).toBe("v2");
+  });
+
+  it("serves old values forever by default", async () => {
+    const s = server();
+    const folder = await client(s).folder(QUERY);
+    s.serve(unavailable);
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(TTL * 10);
+      expect(folder.get("A")).toBe("v1");
+      await flush();
+    }
+    expect(folder.get("A")).toBe("v1");
+  });
 });

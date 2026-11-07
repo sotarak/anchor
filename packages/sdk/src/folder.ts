@@ -18,9 +18,12 @@ export async function openFolder(
   let snapshot = snapshotOf(await core.loadEntry(query, { signal: options.signal }));
   /** When values were last asked for, successfully or not; staleness counts from here. */
   let checkedAt = Date.now();
+  /** Whether the last refresh failed without even a cached fallback (past `maxStaleMs`). */
+  let failed = false;
   let pending: Promise<void> | undefined;
 
   const accept = (entry: CacheEntry) => {
+    failed = false;
     // Decode once per fetch: a cache hit returns the very entry this snapshot came from.
     if (entry !== snapshot.entry) snapshot = snapshotOf(entry);
   };
@@ -29,7 +32,8 @@ export async function openFolder(
     pending = core
       .loadEntry(query)
       .then(accept, (error: unknown) => {
-        // Without a cache nothing reported the failure yet; never let it reject unobserved.
+        failed = true;
+        // Nothing reported this failure yet; never let it reject unobserved.
         if (error instanceof AnchorError) {
           const staleForMs = Math.max(0, Date.now() - snapshot.entry.fetchedAt - core.ttlMs);
           core.emit({ type: "refresh_failed", error, staleForMs });
@@ -43,6 +47,13 @@ export async function openFolder(
 
   const values = () => {
     if (!pending && Date.now() - checkedAt >= core.ttlMs) refreshInBackground();
+    if (failed && Date.now() - snapshot.entry.fetchedAt > core.ttlMs + core.maxStaleMs) {
+      throw new AnchorError(
+        0,
+        "stale",
+        "Anchor values are older than ttlMs + maxStaleMs and refreshing them failed",
+      );
+    }
     return snapshot.values;
   };
 
@@ -58,8 +69,11 @@ export async function openFolder(
     keys: () => Object.keys(values()),
     toObject: values,
     async refresh() {
-      accept(await core.loadEntry(query, { fresh: true, strict: true }));
-      checkedAt = Date.now();
+      try {
+        accept(await core.loadEntry(query, { fresh: true, strict: true }));
+      } finally {
+        checkedAt = Date.now();
+      }
     },
   };
 }

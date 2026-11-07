@@ -202,10 +202,12 @@ the token, never the token itself.
   reports `refresh_failed`. It then waits one `ttlMs` before asking Anchor again. This holds for a
   revoked token (`401`) too: the service keeps what it had, and new reads stop.
 - `maxStaleMs` limits how long past `ttlMs` old values may be served; by default there is no
-  limit.
+  limit. Past it, `listSecrets` and `loadSecrets` throw the refresh error, and an `AnchorFolder`
+  or `AnchorService` read throws an `AnchorError` with code `stale` until Anchor answers again.
+  Set it only if serving old values is worse for you than failing.
 - The first load has nothing to fall back on: it fails, and a NestJS app does not start.
-- An `AnchorFolder` or `AnchorService` read never fails because of the network; a background
-  refresh that fails only reports `refresh_failed`.
+- Without `maxStaleMs`, an `AnchorFolder` or `AnchorService` read never fails because of the
+  network; a background refresh that fails only reports `refresh_failed`.
 
 ## Events
 
@@ -234,6 +236,7 @@ Every failure is an `AnchorError` with a `status` (0 when there was no response)
 | `config` | `ANCHOR_API_URL` or `ANCHOR_TOKEN` is missing; nothing was sent |
 | `network`, `timeout` | Anchor could not be reached, or did not answer within `timeoutMs` |
 | `aborted` | The caller's `AbortSignal` cancelled the call |
+| `stale` | A folder's values are older than `ttlMs + maxStaleMs` and refreshing them failed |
 | `unauthenticated` | The token is wrong, expired or revoked |
 | `forbidden` | The token's scopes do not cover this environment or folder |
 | `not_found` | The project, environment or folder does not exist |

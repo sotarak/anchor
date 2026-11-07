@@ -7,7 +7,7 @@ export type AnchorErrorOptions = {
 };
 
 /**
- * Every failure of the client. `code` is `config`, `network`, `timeout`, `aborted`,
+ * Every failure of the client. `code` is `config`, `network`, `timeout`, `aborted`, `stale`,
  * `bad_response`, `http_error` or the API's error code (`unauthenticated`, `forbidden`,
  * `not_found`, ...). `status` is the HTTP status, or 0 when there was no response. Messages never
  * contain tokens or values.

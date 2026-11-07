@@ -63,14 +63,15 @@ createAnchorClient({
   values: encrypt them. A store that throws never fails a read (`store_failed` is emitted).
 - **Failures:** network errors, timeouts and HTTP 429/502/503/504 are retried with jittered
   backoff, honoring `Retry-After`. When a refresh fails, the last good values are served (up to
-  `maxStaleMs` past the ttl), `refresh_failed` is emitted, and Anchor is not asked again for one
-  ttl. The first load has nothing to fall back on and throws.
+  `maxStaleMs` past the ttl; past it a folder read throws code `stale`), `refresh_failed` is
+  emitted, and Anchor is not asked again for one ttl. The first load has nothing to fall back on
+  and throws.
 
 ## Errors
 
 Every failure is an `AnchorError` with `status` (0 when there was no response), `code` and
 `retryable`: `config` (URL or token missing, before any request), `network`, `timeout`,
-`aborted`, or the server's error code such as `unauthenticated`, `forbidden` or `not_found`.
+`aborted`, `stale`, or the server's error code such as `unauthenticated`, `forbidden` or `not_found`.
 Messages and events never contain tokens or values.
 
 Every value the client reads is recorded in the project's audit log under the token's name.

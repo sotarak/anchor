@@ -52,7 +52,8 @@ export class Database {
   parsed.
 - Values refresh in the background: a read of values older than `cache.ttlMs` (default one
   minute) returns them at once and starts one refresh. If Anchor is down, the app keeps its
-  values and `onEvent` receives `refresh_failed`.
+  values and `onEvent` receives `refresh_failed`; with `cache.maxStaleMs` set, reads throw
+  `AnchorError` code `stale` once that limit is passed.
 - The module is global unless you pass `isGlobal: false`. `ANCHOR_OPTIONS` injects the options.
 - Options are the SDK's: `project`, `environment`, `path?`, `expand?`, `includeImports?`,
   `apiUrl?`, `token?`, `timeoutMs?`, `retry?`, `cache?`, `onEvent?`, `fetch?`.

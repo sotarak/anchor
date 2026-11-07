@@ -1,0 +1,87 @@
+# @anchor-secrets/nestjs
+
+Load configuration and secrets from [Anchor](https://sotarak.github.io/anchor/), a self-hosted
+secrets manager on your own Cloudflare account, when a NestJS application starts. Built on
+[`@anchor-secrets/sdk`](https://www.npmjs.com/package/@anchor-secrets/sdk).
+
+## Install
+
+```sh
+npm install @anchor-secrets/nestjs
+```
+
+Requires Node.js 20 or later and NestJS 10, 11 or 12. ESM and CommonJS, with types. (NestJS 12
+is ESM-only; a CommonJS app on it needs a Node version with `require(esm)`, 20.19 or 22.12 and
+later.)
+
+Create a `read` service token for the environment and folder, and give the service
+`ANCHOR_API_URL` and `ANCHOR_TOKEN`.
+
+## AnchorModule
+
+```ts
+import { Module } from "@nestjs/common";
+import { AnchorModule } from "@anchor-secrets/nestjs";
+
+@Module({
+  imports: [AnchorModule.forRoot({ project: "shop", environment: "prod", path: "/api" })],
+})
+export class AppModule {}
+```
+
+```ts
+import { Injectable } from "@nestjs/common";
+import { AnchorService } from "@anchor-secrets/nestjs";
+
+@Injectable()
+export class Database {
+  constructor(private readonly anchor: AnchorService) {}
+
+  url() {
+    return this.anchor.getOrThrow<string>("DATABASE_URL");
+  }
+}
+```
+
+- Secrets load once while the application initializes. If loading fails, startup fails with an
+  `AnchorError`, so the app never runs without its configuration.
+- `AnchorService`: `get<T>(key)` (or `undefined`), `getOrThrow<T>(key)` (throws
+  `Anchor secret KEY is not set`), `has(key)`, `keys()`. Typed values are decoded: a `number`
+  secret is a number, `json` and `list` are parsed.
+- The module is global unless you pass `isGlobal: false`. The `ANCHOR_SECRETS` token injects the
+  raw `{ KEY: value }` record, `ANCHOR_OPTIONS` the options.
+- Options are the SDK's: `project`, `environment`, `path?`, `expand?`, `includeImports?`,
+  `apiUrl?`, `token?`, `fetch?`, `timeoutMs?`.
+
+Options from other providers:
+
+```ts
+AnchorModule.forRootAsync({
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({
+    project: "shop",
+    environment: config.getOrThrow("APP_ENV"),
+  }),
+});
+```
+
+## loadAnchorEnv
+
+For apps that read configuration from `process.env` (including `@nestjs/config`), copy the
+secrets into the environment before Nest starts:
+
+```ts
+// main.ts
+import { loadAnchorEnv } from "@anchor-secrets/nestjs";
+
+await loadAnchorEnv({ project: "shop", environment: "prod", path: "/api" });
+const app = await NestFactory.create(AppModule);
+```
+
+Values are written as the strings Anchor stores. Variables that are already set win unless you
+pass `override: true`. Nothing is written unless the whole folder loads, and nothing is logged.
+
+## License
+
+Apache-2.0

@@ -7,12 +7,8 @@ sidebar:
 
 Anchor runs as one Cloudflare Worker with one D1 database. One deployment serves one organization.
 
-Runbooks after the first deploy:
-
-- [Rotating a project key](#rotating-a-project-key) (background re-encryption through Queues)
-- [Rotating the root key](#rotating-the-root-key) (re-wrap every project key)
-- [Audit retention](#audit-retention) and [rate-limiting the auth endpoints](#rate-limit-the-public-auth-endpoints)
-- [Break-glass: lost owner recovery](#break-glass-lost-owner-recovery)
+This guide covers the first deploy. The runbooks for a running instance (key rotation, audit
+retention, rate limiting, recovery, upgrades) are under **Operations**.
 
 ## Prerequisites
 
@@ -96,8 +92,8 @@ file serves `index.html`. Security headers (CSP, `X-Frame-Options`, ...) come fr
 
 The deploy also registers the daily Cron Trigger (`0 3 * * *`, from `triggers.crons` in
 `wrangler.jsonc`). There is nothing to set up by hand: it purges audit events past retention (see
-[Audit retention](#audit-retention)) and resumes stalled project key rotations (see
-[Rotating a project key](#rotating-a-project-key)).
+[Audit retention](/anchor/operations/audit-retention/)) and resumes stalled project key rotations (see
+[Rotating a project key](/anchor/operations/project-key-rotation/)).
 
 ## 6. Create the first owner
 
@@ -125,116 +121,19 @@ With the token unset, `POST /api/v1/setup` returns `503 setup_disabled`.
 
 ## 8. Manage users
 
-The first owner manages everyone else through the API at `/api/v1/users` (list, change role,
-disable, delete, create password-reset links) and `/api/v1/invites` (invite links, valid 72 hours).
-The dashboard UI for this arrives in M4. An instance always keeps at least one active owner: the
-API refuses to demote, disable or delete the last one.
+The first owner manages everyone else on the dashboard's **Users** page (invite links valid 72
+hours, role changes, disable, delete, password-reset links), or through the API at
+`/api/v1/users` and `/api/v1/invites`. An instance always keeps at least one active owner: the API
+refuses to demote, disable or delete the last one.
 
-## Audit retention
+## Next steps
 
-Audit events are kept for **365 days**. The table is append-only: a database trigger rejects every
-`UPDATE`, and rejects `DELETE` of any row younger than 365 days. The daily Cron Trigger deletes the
-older rows and logs an `audit_purged` line with the count.
-
-### Rate-limit the public auth endpoints
-
-Every failed login, including one for an email that does not exist, writes an audit row that
-cannot be deleted for 365 days. Anchor itself does not rate-limit by IP yet. Without a limit,
-anonymous traffic can grow the database until audit inserts fail, and because secret reads fail
-closed when they cannot be audited, secret reads then fail too. Add a Cloudflare rate-limiting rule
-(dashboard → Security → WAF → Rate limiting rules) for `POST /api/v1/auth/*` and
-`POST /api/v1/invites/*`, for example 20 requests per minute per IP, and watch the D1 size.
-
-## Rotating a project key
-
-Each project has a key (KEK) that encrypts its secret values. A project admin rotates it with
-`POST /api/v1/projects/<slug>/keys/rotate` (202). That creates a new key version for new writes,
-marks the old one `retiring`, and re-encrypts existing values in the background, 100 versions per
-queue message. Every value stays readable throughout. `GET /api/v1/projects/<slug>/keys` shows the
-key versions and the rotation progress (`done` / `total`). In the dashboard, the same controls are
-on the project's **Encryption** page (project admins), which polls while a rotation runs.
-
-- The old key becomes `retired` only when no stored version uses it any more.
-- Calling rotate again while a rotation runs resumes it (re-sends its message) instead of starting
-  a second one.
-- A batch that keeps throwing (for example a project key that no longer unwraps) is retried with
-  backoff (30 s, doubling, capped at an hour: about three hours in all); on its 10th attempt the rotation stops with status `failed` and error `retries_exhausted`, and
-  `reencrypt_rotation_failed` is logged. Fix the cause, then start a new rotation. The daily Cron
-  Trigger re-sends the message of any rotation still `running` but idle for 15 minutes, as does
-  the next rotate call.
-- A stored value that fails its integrity check stops the rotation with status `failed` and error
-  `decrypt_failed`, and logs `secret_decrypt_failed` with the ids. Treat it as an incident:
-  investigate, then start a new rotation.
-
-## Rotating the root key
-
-The root key wraps every project key (KEK). Rotating it re-wraps those keys; secret values are
-not touched. Every root key has an id, stored with each KEK it wraps: `ANCHOR_ROOT_KEY_ID`
-(default `rk1`, format `^[a-z0-9-]{1,32}$`). While rotating, the old key stays configured as
-`ANCHOR_ROOT_KEY_PREVIOUS` so existing data keeps working.
-
-Each `wrangler secret put` deploys a new Worker version immediately, and the intermediate states
-(a previous key without its id, or a previous id equal to the current id) fail closed: every
-secret read and write would return 500 until the last variable is set. So the four variables
-change together, in one `wrangler secret bulk` request.
-
-1. Generate the new key and back it up offline (see step 3 above):
-   `umask 077 && openssl rand -base64 32 > anchor-root-new.key`. Restore the current key from its
-   offline backup into `anchor-root.key` (same `umask 077` shell).
-2. Write the four variables to a private JSON file, set them in one request, then delete the file.
-   `OLD_ID` is the current id (`rk1` if you never set one); `NEW_ID` is the new one, for example
-   `rk2`:
-
-   ```sh
-   umask 077
-   OLD_ID=rk1 NEW_ID=rk2 node -e '
-     const fs = require("node:fs");
-     const read = (f) => fs.readFileSync(f, "utf8").trim();
-     process.stdout.write(JSON.stringify({
-       ANCHOR_ROOT_KEY_PREVIOUS: read("anchor-root.key"),
-       ANCHOR_ROOT_KEY_PREVIOUS_ID: process.env.OLD_ID,
-       ANCHOR_ROOT_KEY: read("anchor-root-new.key"),
-       ANCHOR_ROOT_KEY_ID: process.env.NEW_ID,
-     }));' > root-rotation.json
-   pnpm exec wrangler secret bulk root-rotation.json
-   rm root-rotation.json anchor-root.key anchor-root-new.key
-   ```
-
-   Both keys must already be in your offline backup before the `rm`.
-3. Check the deployment: `GET /api/v1/health` answers, and a secret read still works.
-4. As an instance owner, re-wrap every project key:
-   `curl -X POST https://<host>/api/v1/admin/root-key/rewrap -H 'authorization: Bearer <token>'`
-5. Check that `rewrapped` equals the number of project key rows, then call it again and expect
-   `{ "rewrapped": 0 }`.
-6. Remove the previous key and its id together (a previous key left without its id fails
-   closed):
-
-   ```sh
-   echo '{"ANCHOR_ROOT_KEY_PREVIOUS": null, "ANCHOR_ROOT_KEY_PREVIOUS_ID": null}' > drop.json
-   pnpm exec wrangler secret bulk drop.json && rm drop.json
-   ```
-
-7. Confirm the offline backup of the new key, then destroy the old key's backups only after you
-   no longer need to restore a database backup taken before step 4.
-
-A misconfiguration fails closed with `500 internal` and a `config_error` log: a previous key
-without its id, a previous id equal to the current id, or project keys under an id that is not
-configured. A previous key that does not match fails the rewrap with `secret_decrypt_failed` and
-writes nothing.
-
-## Break-glass: lost owner recovery
-
-If no active owner can sign in (for example, the only owner was disabled or forgot their password
-and no other owner exists), re-enable and promote a known account directly in D1:
-
-```sh
-pnpm exec wrangler d1 execute anchor --remote \
-  --command "UPDATE users SET disabled_at = NULL, role = 'owner' WHERE email = '...'"
-```
-
-Then send that person a password-reset link from the API, or let them sign in if they know their
-password. **This bypasses the API, so it leaves no audit event.** Record who ran it, when and why
-in your own change log, and review the instance's users and audit log right after.
+- [Rate-limit the public auth endpoints](/anchor/operations/rate-limiting/) before you share the URL.
+- [Audit retention](/anchor/operations/audit-retention/)
+- [Rotate a project key](/anchor/operations/project-key-rotation/) and
+  [the root key](/anchor/operations/root-key-rotation/)
+- [Break-glass: lost owner recovery](/anchor/operations/break-glass/)
+- [Upgrade an instance](/anchor/operations/upgrading/)
 
 ## Local development
 

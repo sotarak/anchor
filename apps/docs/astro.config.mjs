@@ -19,8 +19,13 @@ export default defineConfig({
       customCss: ["./src/styles/theme.css"],
       plugins: [starlightLinksValidator()],
       sidebar: [
+        { label: "Start here", items: [{ autogenerate: { directory: "start" } }] },
         { label: "Guides", items: [{ autogenerate: { directory: "guides" } }] },
+        { label: "Operations", items: [{ autogenerate: { directory: "operations" } }] },
+        { label: "Security", items: [{ autogenerate: { directory: "security" } }] },
+        { label: "Reference", items: [{ autogenerate: { directory: "reference" } }] },
         { label: "Contributing", items: [{ autogenerate: { directory: "contributing" } }] },
+        { label: "Troubleshooting", slug: "troubleshooting" },
       ],
     }),
   ],

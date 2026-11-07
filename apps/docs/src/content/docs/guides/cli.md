@@ -38,6 +38,10 @@ your user config. `anchor init` writes `.anchor.json`, which is meant to be comm
 
 Run `anchor <command> --help` for the options and examples of each command.
 
+`get`, `run` and `export` expand [references](/anchor/guides/references-imports/) and include the
+folder's imports by default; `--no-expand` uses the stored values. History and rollback are
+described in [Versions and rollback](/anchor/guides/versions/).
+
 | Command | Purpose |
 |---------|---------|
 | `anchor login [--email <email>] [--password-stdin]` | Log in and store a CLI session |
@@ -47,11 +51,16 @@ Run `anchor <command> --help` for the options and examples of each command.
 | `anchor projects list` | List the projects you can access |
 | `anchor envs list` | List the environments of the current project |
 | `anchor secrets list [--reveal]` | List secret names and metadata (values only with `--reveal`) |
-| `anchor secrets get <key> [--reveal]` | Print one secret; masked in a terminal unless `--reveal` |
+| `anchor secrets get <key> [--reveal] [--no-expand] [--at-version <n>]` | Print one secret; masked in a terminal unless `--reveal` |
+| `anchor secrets history <key>` | List the versions of a secret (no values) |
+| `anchor secrets rollback <key> --to <n>` | Restore a past version as a new version |
 | `anchor secrets set <key> [--from-file <path>] [--comment <text>]` | Create or update a secret |
 | `anchor secrets delete <key>` | Delete a secret |
-| `anchor run [--no-override] -- <command> [args...]` | Run a command with secrets in its environment |
-| `anchor export [--format dotenv\|json\|yaml] [--output <file>]` | Write secrets to a file or a pipe |
+| `anchor folders list` | List the subfolders of `--path` (default `/`) |
+| `anchor folders create <path>` | Create a folder and its parents (no-op if it exists) |
+| `anchor folders delete <path> [--force]` | Delete an empty folder; `--force` deletes its contents too |
+| `anchor run [--no-override] [--no-expand] -- <command> [args...]` | Run a command with secrets in its environment |
+| `anchor export [--format dotenv\|json\|yaml] [--output <file>] [--no-expand]` | Write secrets to a file or a pipe |
 | `anchor tokens create --name <name> [--scope <env[:path]>]... [--permission read\|read-write] [--expires-in <days>]` | Create a service token |
 | `anchor tokens list` | List the project's service tokens |
 | `anchor tokens revoke <id>` | Revoke a service token |
@@ -228,29 +237,6 @@ The CLI honors `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` (lowercase variants to
 requests through undici's `EnvHttpProxyAgent` when one of these is set. The Bun release binaries use
 Bun's own proxy support for the same variables.
 
-## CI example (GitHub Actions)
+## CI
 
-Create a read-only token for the production environment and store it as the repository secret
-`ANCHOR_TOKEN`:
-
-```sh
-anchor tokens create --name github-deploy --scope prod --permission read --project my-app
-```
-
-```yaml
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    env:
-      ANCHOR_API_URL: https://anchor.example.com
-      ANCHOR_TOKEN: ${{ secrets.ANCHOR_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install anchor
-        run: |
-          curl -fsSL -o anchor https://github.com/OWNER/REPO/releases/download/cli-vX.Y.Z/anchor-linux-x64
-          chmod +x anchor && sudo mv anchor /usr/local/bin/anchor
-      - run: anchor run --project my-app --env prod -- npm run deploy
-```
-
-`ANCHOR_API_URL` must be set alongside `ANCHOR_TOKEN` (see "Environment variables").
+CI jobs authenticate with a service token in `ANCHOR_TOKEN`; see [Use Anchor in CI](/anchor/guides/ci/).

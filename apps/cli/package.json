@@ -1,7 +1,14 @@
 {
   "name": "@anchor-secrets/cli",
   "version": "0.1.0",
-  "private": true,
+  "description": "CLI for Anchor, a self-hosted secrets manager on Cloudflare Workers",
+  "keywords": [
+    "secrets",
+    "env",
+    "cloudflare",
+    "cli",
+    "dotenv"
+  ],
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -14,11 +21,15 @@
   },
   "type": "module",
   "bin": {
-    "anchor": "dist/anchor.mjs"
+    "anchor": "dist/anchor.mjs",
+    "anchor-secrets": "dist/anchor.mjs"
   },
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=22.19"
   },
@@ -29,28 +40,27 @@
     "test:integration": "vitest run test/integration",
     "test:e2e": "vitest run -c vitest.e2e.config.ts",
     "typecheck": "tsc --noEmit",
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "prepack": "node build.mjs"
   },
   "imports": {
     "#src/*": "./src/*.ts",
     "#test/support": "./test/support/index.ts"
   },
   "devDependencies": {
+    "@anchor/shared": "workspace:*",
+    "@inquirer/prompts": "^8.7.5",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^22.20.5",
+    "commander": "^15.0.0",
+    "cross-spawn": "^7.0.6",
     "dotenv": "^18.0.9",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
+    "undici": "^8.12.4",
     "vitest": "^5.1.0",
     "wrangler": "^4.158.0",
-    "yaml": "^2.9.1"
-  },
-  "dependencies": {
-    "@anchor/shared": "workspace:*",
-    "@inquirer/prompts": "^8.7.5",
-    "commander": "^15.0.0",
-    "cross-spawn": "^7.0.6",
-    "undici": "^8.12.4",
+    "yaml": "^2.9.1",
     "zod": "^4.6.7"
   }
 }

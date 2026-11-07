@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 
 const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
@@ -25,3 +26,13 @@ it("is a public package at the workspace version", () => {
   expect(pkg.publishConfig).toEqual({ access: "public" });
   expect(pkg.license).toBe("Apache-2.0");
 });
+
+it("emits one declaration pair per source module", () => {
+  const dir = new URL("../../", import.meta.url);
+  execFileSync(process.execPath, ["build.mjs"], { cwd: dir, stdio: "pipe" });
+  const dist = (name: string) => new URL(`dist/${name}`, dir);
+  expect(existsSync(dist("client.d.ts"))).toBe(true);
+  expect(existsSync(dist("client.d.cts"))).toBe(true);
+  expect(readFileSync(dist("index.d.cts"), "utf8")).toContain('"./client.cjs"');
+  expect(readFileSync(dist("index.d.ts"), "utf8")).toContain('"./client.js"');
+}, 60_000);

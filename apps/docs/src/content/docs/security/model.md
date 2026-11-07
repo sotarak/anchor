@@ -51,6 +51,16 @@ rotation work, and it lets CI read secrets with a plain bearer token.
 - The dashboard session is an `HttpOnly`, `Secure` `__Host-` cookie. State-changing requests
   authenticated by cookie must carry the instance's own `Origin`, or they are rejected (CSRF).
 - Service tokens are accepted only as `Authorization: Bearer`, never from a cookie.
+- `anchor login` (0.4.0) uses a browser flow modeled on the OAuth device authorization grant. The
+  CLI keeps a 256-bit device code (prefix `anc_dc_`, only its SHA-256 hash is stored) and polls;
+  the person approves the short code shown in the terminal on the dashboard's `/cli/login` page.
+  Only a dashboard (`web`) session sent as the cookie can approve or deny: a CLI session, even
+  pasted into the cookie, and a service token are refused, so a stolen CLI token cannot mint more
+  sessions. Requests expire after 10 minutes, a device code yields at most one session, and
+  approvals, denials and the resulting login are audited. Residual risk, as with `gh auth login`:
+  someone who starts a login and talks you into approving their code gets a session as you. The
+  approval page shows the code, the client name, the IP and the request's age; approve only a
+  code you just saw in your own terminal.
 
 ## Authorization
 

@@ -56,6 +56,10 @@ All paths are relative to `/api/v1`. `:project` and `:env` are slugs.
 | `GET /setup/status`, `POST /setup` | First-run setup: the first `POST` creates the owner, later ones get `409` |
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | Sessions |
 | `POST /auth/password`, `POST /auth/password-reset` | Change your password; complete a reset link |
+| `POST /auth/cli/start` | Start a browser login for the CLI (no session): `{ clientName? }` → `{ deviceCode, userCode, verificationUri, verificationUriComplete, expiresAt, interval }` |
+| `POST /auth/cli/token` | Poll a browser login with `{ deviceCode }` (no session): `202 { status: "pending" }`, `200` with a CLI session token, `429` when polled sooner than `interval` seconds, `403` when denied, `404` when expired, unknown or already used |
+| `GET /auth/cli/requests/:userCode` | A pending browser login, for the approval page (dashboard session only) |
+| `POST /auth/cli/requests/:userCode/approve`, `POST …/deny` | Approve or deny it (dashboard session only, same `Origin`): `204`, or `404` when it is no longer pending |
 | `GET /auth/sessions`, `DELETE /auth/sessions/:id` | List and revoke your sessions |
 | `GET /users`, `PATCH /users/:id`, `DELETE /users/:id`, `POST /users/:id/password-reset` | User management (owners and admins) |
 | `GET /invites`, `POST /invites`, `DELETE /invites/:id` | Invite links (owners and admins) |

@@ -74,7 +74,7 @@ describe("auth events", () => {
       actor_id: owner.userId,
       actor_label: "owner@example.test",
     });
-    expect(meta(ok)).toEqual({ client: "cli" });
+    expect(meta(ok)).toEqual({ client: "cli", method: "password" });
     const failed = await auditRows("auth.login_failed");
     expect(failed.map((r) => [r.actor_type, r.actor_id, r.actor_label, meta(r)])).toEqual([
       ["anonymous", null, "owner@example.test", { reason: "invalid_credentials" }],

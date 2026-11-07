@@ -141,7 +141,7 @@ authRoutes.post("/auth/login", async (c) => {
   await recordAudit(c, {
     action: "auth.login",
     actor: { type: "user", id: user.id, label: user.email },
-    metadata: { client: body.client },
+    metadata: { client: body.client, method: "password" },
   });
   const dto = toUserDto(user);
   if (body.client === "web") {

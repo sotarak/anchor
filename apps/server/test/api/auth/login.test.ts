@@ -1,7 +1,15 @@
 import { env } from "cloudflare:workers";
 import type { ApiErrorBody, LoginResponse } from "@anchor/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, createUserWithSession, json, jsonInit, resetDb, TEST_PASSWORD } from "#test/support";
+import {
+  api,
+  auditRows,
+  createUserWithSession,
+  json,
+  jsonInit,
+  resetDb,
+  TEST_PASSWORD,
+} from "#test/support";
 
 const EMAIL = "dev@example.io";
 const login = (b: Record<string, unknown>) => api("/api/v1/auth/login", jsonInit("POST", b));
@@ -34,6 +42,14 @@ describe("POST /auth/login", () => {
     expect(data.expiresAt - Date.now()).toBeGreaterThan(29 * 86_400_000);
     const me = await api("/api/v1/auth/me", { headers: { authorization: `Bearer ${data.token}` } });
     expect(me.status).toBe(200);
+  });
+
+  it("password login records method password", async () => {
+    expect((await login({ email: EMAIL, password: TEST_PASSWORD, client: "cli" })).status).toBe(
+      200,
+    );
+    const [event] = await auditRows("auth.login");
+    expect(JSON.parse(event?.metadata ?? "null")).toEqual({ client: "cli", method: "password" });
   });
 
   it("wrong password and unknown email return identical status and body", async () => {

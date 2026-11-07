@@ -1,6 +1,8 @@
+import { decodeTypedValue, type SecretValueType } from "@anchor/shared";
 import { CliError, EXIT } from "../errors";
 
-export type Entry = [key: string, value: string];
+/** One secret to write: its key, its stored (canonical) text and its type. */
+export type Entry = { key: string; value: string; type: SecretValueType };
 
 const BARE = /^[A-Za-z0-9_./:@+,-]*$/;
 
@@ -10,7 +12,7 @@ const BARE = /^[A-Za-z0-9_./:@+,-]*$/;
  * none of them fails instead of being written corrupted.
  */
 export function formatDotenv(entries: Entry[]): string {
-  return entries.map(([key, value]) => `${key}=${quoteDotenv(key, value)}\n`).join("");
+  return entries.map(({ key, value }) => `${key}=${quoteDotenv(key, value)}\n`).join("");
 }
 
 function quoteDotenv(key: string, value: string): string {
@@ -28,12 +30,18 @@ function quoteDotenv(key: string, value: string): string {
   );
 }
 
+/** JSON and YAML carry types: a `number` is written as a number, a `json` value as its JSON. */
+const typed = (e: Entry): unknown => decodeTypedValue(e.type, e.value);
+
 export function formatJson(entries: Entry[]): string {
-  const sorted = [...entries].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  return `${JSON.stringify(Object.fromEntries(sorted), null, 2)}\n`;
+  const sorted = [...entries].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  return `${JSON.stringify(Object.fromEntries(sorted.map((e) => [e.key, typed(e)])), null, 2)}\n`;
 }
 
-/** JSON strings are valid YAML double-quoted scalars; keys are quoted so NULL/true stay strings. */
+/**
+ * JSON is valid YAML flow syntax: strings are double-quoted scalars, objects and arrays flow
+ * collections. Keys are quoted so NULL/true stay strings.
+ */
 export function formatYaml(entries: Entry[]): string {
-  return entries.map(([k, v]) => `${JSON.stringify(k)}: ${JSON.stringify(v)}\n`).join("");
+  return entries.map((e) => `${JSON.stringify(e.key)}: ${JSON.stringify(typed(e))}\n`).join("");
 }

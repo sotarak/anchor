@@ -44,8 +44,8 @@ export async function exportCommand(
   );
   const entries: Entry[] = secrets
     .filter((s) => s.value !== undefined)
-    .map((s): Entry => [s.key, s.value as string])
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    .map((s): Entry => ({ key: s.key, value: s.value as string, type: s.type }))
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
   // Format first: a value that cannot be represented fails before any file is touched.
   const content = FORMATTERS[opts.format](entries);
 

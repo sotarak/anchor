@@ -170,6 +170,9 @@ anchor secrets set TLS_CERT --from-file cert.pem --type pem
   when the file is not gitignored. `--format dotenv` fails with a hint when a value cannot be written
   so that a dotenv parser reads it back exactly (a value that contains both `"` and a newline); use
   `--format json` or `--format yaml` for such values.
+- `--format json` and `--format yaml` write typed values: a `number` as a number, a `boolean` as
+  `true`/`false`, a `list` as an array and a `json` value as its JSON. `dotenv` and `anchor run`
+  always use the stored text (`PORT=8080`, `MODELS=["a","b"]`).
 - `--debug` prints one line per request (`debug: GET /api/v1/... -> 200 (12ms)`): never headers,
   bodies, tokens or values.
 

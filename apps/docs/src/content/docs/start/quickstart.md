@@ -41,9 +41,13 @@ create a project and its environments in the dashboard.
 
 ## 3. Use the CLI
 
-Download the binary for your platform from the
-[latest release](https://github.com/sotarak/anchor/releases/latest) and put it on your `PATH` as
-`anchor`.
+```sh
+npm install -g @anchor-secrets/cli      # Node.js 22.19+, or:
+brew install sotarak/tap/anchor
+```
+
+The [CLI guide](/anchor/guides/cli/#install) lists the other ways (install script, release
+binaries).
 
 ```sh
 anchor login --api-url https://<your-worker>

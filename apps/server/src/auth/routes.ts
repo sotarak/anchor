@@ -12,7 +12,6 @@ import { Hono } from "hono";
 import { recordAudit } from "../audit/record";
 import { hashPassword, verifyAgainstDummy, verifyPassword } from "../crypto/password";
 import type { AppEnv } from "../env";
-import { utf8Encode } from "../lib/encoding";
 import { ApiError } from "../lib/errors";
 import { parseJson } from "../lib/validate";
 import { loadServiceTokenDto } from "../service-tokens/repo";
@@ -62,27 +61,16 @@ authRoutes.post("/auth/logout", async (c) => {
   return c.body(null, 204);
 });
 
-/** Constant-time string comparison via SHA-256 digests (equal length by construction). */
-async function digestsEqual(a: string, b: string): Promise<boolean> {
-  const [da, db] = await Promise.all([
-    crypto.subtle.digest("SHA-256", utf8Encode(a)),
-    crypto.subtle.digest("SHA-256", utf8Encode(b)),
-  ]);
-  return crypto.subtle.timingSafeEqual(da, db);
-}
-
 authRoutes.get("/setup/status", async (c) => {
   const row = await c.env.DB.prepare("SELECT 1 AS one FROM users LIMIT 1").first();
   return c.json<SetupStatusDto>({ needsSetup: row === null });
 });
 
+// The first submission creates the owner (no setup token since 0.3.0). insertFirstOwner is one
+// atomic INSERT ... WHERE NOT EXISTS, so concurrent requests yield exactly one owner and every
+// later request gets 409 without touching the existing account.
 authRoutes.post("/setup", async (c) => {
-  const expected = c.env.ANCHOR_SETUP_TOKEN;
-  if (!expected) throw new ApiError(503, "setup_disabled", "Setup is disabled");
   const body = await parseJson(c, setupBodySchema);
-  if (!(await digestsEqual(body.setupToken, expected))) {
-    throw new ApiError(403, "forbidden", "Invalid setup token");
-  }
   const now = Date.now();
   const passwordHash = await hashPassword(body.password);
   const userId = await insertFirstOwner(

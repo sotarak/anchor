@@ -4,15 +4,15 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "#src/app";
 import { api, json, jsonInit, resetDb, TEST_ORIGIN } from "#test/support";
 
-const SETUP_TOKEN = "test-setup-token-0123456789abcdef";
 const body = (overrides: Record<string, unknown> = {}) => ({
-  setupToken: SETUP_TOKEN,
   email: "Owner@Example.io",
   name: "Owner",
   password: "correct horse battery staple",
   ...overrides,
 });
 const setup = (b: unknown) => api("/api/v1/setup", jsonInit("POST", b));
+const login = (email: string, password: string) =>
+  api("/api/v1/auth/login", jsonInit("POST", { email, password }));
 const userCount = async () =>
   (await env.DB.prepare("SELECT count(*) AS n FROM users").first<{ n: number }>())?.n;
 
@@ -27,7 +27,7 @@ describe("setup", () => {
     expect(after).toEqual({ needsSetup: false });
   });
 
-  it("setup creates an owner, sets the cookie and the cookie works on /auth/me", async () => {
+  it("setup needs no token: it creates an owner, sets the cookie and the cookie works on /auth/me", async () => {
     const res = await setup(body());
     expect(res.status).toBe(201);
     const data = await json<LoginResponse>(res);
@@ -44,51 +44,58 @@ describe("setup", () => {
     expect(me.status).toBe(200);
   });
 
-  it("wrong setup token -> 403 and no user created", async () => {
-    const res = await setup(body({ setupToken: "test-setup-token-0123456789abcdeX" }));
-    expect(res.status).toBe(403);
-    expect((await json<ApiErrorBody>(res)).error).toEqual({
-      code: "forbidden",
-      message: "Invalid setup token",
-    });
-    expect(await userCount()).toBe(0);
-  });
-
-  it("setup token of different length -> 403", async () => {
-    for (const setupToken of ["x", `${SETUP_TOKEN}-longer`]) {
-      expect((await setup(body({ setupToken }))).status).toBe(403);
+  it("works on a Worker with no ANCHOR_SETUP_TOKEN and ignores one that is still set", async () => {
+    for (const token of [undefined, "", "left-over-secret-from-0.2"]) {
+      await resetDb();
+      const res = await createApp().request(
+        `${TEST_ORIGIN}/api/v1/setup`,
+        jsonInit("POST", body()),
+        { ...env, ANCHOR_SETUP_TOKEN: token },
+      );
+      expect(res.status, `ANCHOR_SETUP_TOKEN=${String(token)}`).toBe(201);
     }
-    expect(await userCount()).toBe(0);
   });
 
-  it("missing ANCHOR_SETUP_TOKEN -> 503 setup_disabled even with a body", async () => {
-    for (const disabled of [undefined, ""]) {
-      const app = createApp();
-      const res = await app.request(`${TEST_ORIGIN}/api/v1/setup`, jsonInit("POST", body()), {
-        ...env,
-        ANCHOR_SETUP_TOKEN: disabled,
-      });
-      expect(res.status).toBe(503);
-      expect((await json<ApiErrorBody>(res)).error.code).toBe("setup_disabled");
-    }
-    expect(await userCount()).toBe(0);
+  it("a body that still carries setupToken (older clients) is accepted and the field ignored", async () => {
+    const res = await setup(body({ setupToken: "anything at all" }));
+    expect(res.status).toBe(201);
+    expect(await userCount()).toBe(1);
   });
 
-  it("second setup -> 409 and the first owner is unchanged", async () => {
+  it("second setup -> 409 and the first owner keeps their email and password", async () => {
     await setup(body());
-    const res = await setup(body({ email: "intruder@evil.io", password: "another long password" }));
+    const res = await setup(
+      body({ email: "Owner@Example.io", name: "Intruder", password: "another long password" }),
+    );
     expect(res.status).toBe(409);
     expect((await json<ApiErrorBody>(res)).error).toEqual({
       code: "conflict",
       message: "Instance already set up",
     });
-    const rows = await env.DB.prepare("SELECT email FROM users").all<{ email: string }>();
-    expect(rows.results.map((r) => r.email)).toEqual(["owner@example.io"]);
+    expect(res.headers.get("set-cookie")).toBeNull();
+    const rows = await env.DB.prepare("SELECT email, name FROM users").all();
+    expect(rows.results).toEqual([{ email: "owner@example.io", name: "Owner" }]);
+    expect((await login("owner@example.io", "correct horse battery staple")).status).toBe(200);
+    expect((await login("owner@example.io", "another long password")).status).toBe(401);
   });
 
-  it("weak password -> 400 and no user", async () => {
-    const res = await setup(body({ password: "short" }));
-    expect(res.status).toBe(400);
+  it("concurrent setups create exactly one owner", async () => {
+    const results = await Promise.all(
+      ["a@example.io", "b@example.io", "c@example.io"].map((email) => setup(body({ email }))),
+    );
+    expect(results.map((r) => r.status).sort()).toEqual([201, 409, 409]);
+    expect(await userCount()).toBe(1);
+  });
+
+  it("invalid input -> 400 and no user", async () => {
+    for (const bad of [
+      body({ password: "short" }),
+      body({ email: "not-an-email" }),
+      body({ name: "" }),
+      {},
+    ]) {
+      expect((await setup(bad)).status).toBe(400);
+    }
     expect(await userCount()).toBe(0);
   });
 

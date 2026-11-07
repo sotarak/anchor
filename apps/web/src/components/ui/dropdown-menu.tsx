@@ -2,6 +2,7 @@ import { DropdownMenu as MenuPrimitive } from "radix-ui";
 import type { ComponentProps } from "react";
 import { RiArrowRightSLine, RiCheckLine } from "react-icons/ri";
 import { cn } from "@/lib/cn";
+import { popMotion } from "./motion";
 
 export const DropdownMenu = MenuPrimitive.Root;
 export const DropdownMenuTrigger = MenuPrimitive.Trigger;
@@ -9,9 +10,9 @@ export const DropdownMenuSub = MenuPrimitive.Sub;
 export const DropdownMenuGroup = MenuPrimitive.Group;
 export const DropdownMenuRadioGroup = MenuPrimitive.RadioGroup;
 
-const content = "z-50 min-w-40 rounded-lg border bg-bg-white p-1 shadow-md";
+const content = `z-50 min-w-40 rounded-lg border bg-bg-white p-1 shadow-md ${popMotion}`;
 const item =
-  "relative flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-label-sm text-text-sub outline-none " +
+  "relative flex select-none items-center gap-2 rounded-md px-2 py-1.5 text-label-sm text-text-sub outline-none " +
   "focus:bg-neutral-alpha-100 focus:text-text-strong data-[disabled]:pointer-events-none data-[disabled]:text-text-disabled [&_svg]:size-4";
 
 export function DropdownMenuContent({

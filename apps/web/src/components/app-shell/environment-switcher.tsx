@@ -65,7 +65,7 @@ export function EnvironmentSwitcher({
                   choose(e.slug);
                 }
               }}
-              className="flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-label-sm text-text-sub outline-none hover:bg-neutral-alpha-100 focus:bg-neutral-alpha-100 focus:text-text-strong"
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-label-sm text-text-sub outline-none hover:bg-neutral-alpha-100 focus:bg-neutral-alpha-100 focus:text-text-strong"
             >
               <EnvTile slug={e.slug} small />
               <span className="flex-1 truncate">{e.name}</span>

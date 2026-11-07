@@ -51,7 +51,8 @@ describe("folders in the environment view", () => {
     await screen.findByText("API_KEY");
     const rows = bodyRows();
     expect(within(rows[0] as HTMLElement).getByText("api")).toBeInTheDocument();
-    expect(within(rows[0] as HTMLElement).getByText("/api")).toBeInTheDocument();
+    // One line: the path is already in the breadcrumb.
+    expect(within(rows[0] as HTMLElement).queryByText("/api")).toBeNull();
     expect(within(rows[1] as HTMLElement).getByText("web")).toBeInTheDocument();
     expect(within(rows[2] as HTMLElement).getByText("API_KEY")).toBeInTheDocument();
 

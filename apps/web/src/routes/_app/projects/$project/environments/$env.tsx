@@ -81,7 +81,7 @@ function SecretsPage() {
 
   const envName = envQuery.data?.find((e) => e.slug === env)?.name ?? env;
   const projectName = projectQuery.data?.name;
-  useSetHeader({ title: projectName ? `${projectName} · ${envName}` : "" });
+  useSetHeader({ parent: projectName, title: projectName ? envName : "" });
 
   const access = projectQuery.data?.access;
   const canWrite =

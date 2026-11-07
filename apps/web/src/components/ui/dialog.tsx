@@ -2,6 +2,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import type { ComponentProps } from "react";
 import { RiCloseLine } from "react-icons/ri";
 import { cn } from "@/lib/cn";
+import { overlayMotion, popMotion } from "./motion";
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
@@ -17,14 +18,14 @@ export function DialogContent({
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
         data-slot="dialog-overlay"
-        className="fixed inset-0 z-50 bg-black/10 data-[state=open]:animate-in data-[state=open]:fade-in-0"
+        className={cn("fixed inset-0 z-50 bg-black/10", overlayMotion)}
       />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-[28rem] min-w-[320px] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2",
           "gap-3 rounded-xl border bg-bg-white p-4 shadow-md outline-none",
-          "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+          popMotion,
           className,
         )}
         {...props}

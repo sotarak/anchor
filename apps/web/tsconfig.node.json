@@ -6,5 +6,12 @@
     "lib": ["ES2023", "DOM"],
     "types": ["node"]
   },
-  "include": ["vite.config.ts", "playwright.config.ts", "scripts", "test/e2e"]
+  "include": [
+    "vite.config.ts",
+    "playwright.config.ts",
+    "playwright.media.config.ts",
+    "scripts",
+    "test/e2e",
+    "test/media"
+  ]
 }

@@ -40,7 +40,6 @@ Every error has the same body:
 | `conflict` | 409 | Already exists, or a concurrent write won; retry |
 | `payload_too_large` | 413 | A secret value over 65,536 bytes |
 | `rate_limited` | 429 | Too many failed logins; the account is locked for 15 minutes |
-| `setup_disabled` | 503 | `POST /setup` after setup, or without `ANCHOR_SETUP_TOKEN` |
 | `internal` | 500 | Server error, including a misconfigured root key (`config_error` in the logs) |
 
 Messages never contain secret values.
@@ -54,7 +53,7 @@ All paths are relative to `/api/v1`. `:project` and `:env` are slugs.
 | Method and path | Purpose |
 |-----------------|---------|
 | `GET /health` | Liveness: `{ "status": "ok" }`, no authentication |
-| `GET /setup/status`, `POST /setup` | First-run setup with the setup token |
+| `GET /setup/status`, `POST /setup` | First-run setup: the first `POST` creates the owner, later ones get `409` |
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | Sessions |
 | `POST /auth/password`, `POST /auth/password-reset` | Change your password; complete a reset link |
 | `GET /auth/sessions`, `DELETE /auth/sessions/:id` | List and revoke your sessions |

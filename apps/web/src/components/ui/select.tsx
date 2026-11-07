@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 import { RiArrowDownSLine, RiCheckLine } from "react-icons/ri";
 import { cn } from "@/lib/cn";
 import { fieldClasses } from "./input";
+import { popMotion } from "./motion";
 
 export const Select = SelectPrimitive.Root;
 export const SelectValue = SelectPrimitive.Value;
@@ -49,6 +50,7 @@ export function SelectContent({
         className={cn(
           "z-50 max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-y-auto rounded-lg border bg-bg-white p-1 shadow-md",
           position === "popper" && "mt-1",
+          popMotion,
           className,
         )}
         {...props}
@@ -72,7 +74,7 @@ export function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2 rounded-md py-1.5 pr-8 pl-2 text-label-sm text-text-sub outline-none",
+        "relative flex select-none items-center gap-2 rounded-md py-1.5 pr-8 pl-2 text-label-sm text-text-sub outline-none",
         "focus:bg-neutral-alpha-100 focus:text-text-strong data-[disabled]:text-text-disabled",
         className,
       )}

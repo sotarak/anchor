@@ -4,8 +4,8 @@ import { log } from "../lib/log";
 import { processRotationBatch, type ReencryptMessage } from "./rotation";
 
 /**
- * wrangler.jsonc sets max_retries 10 for anchor-reencrypt. The 10th failing attempt marks the
- * rotation failed and acks: a rotation must not stay "running" forever while its message cycles
+ * The root wrangler.jsonc sets max_retries 10 for anchor-reencrypt. The 10th failing attempt marks
+ * the rotation failed and acks: a rotation must not stay "running" forever while its message cycles
  * through the dead letter queue and the daily sweep (whether the platform delivers 10 or 11 times).
  */
 export const REENCRYPT_MAX_ATTEMPTS = 10;

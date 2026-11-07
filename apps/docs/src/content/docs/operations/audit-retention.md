@@ -14,6 +14,6 @@ are on the dashboard's **Audit** pages and at `GET /api/v1/projects/<slug>/audit
 `GET /api/v1/audit`. An event records the actor, the action, the target, the time, the IP
 address and user agent, and metadata (capped at 16,384 bytes). Events never contain secret values.
 
-To exercise the purge locally, run `pnpm exec wrangler dev --test-scheduled` in `apps/server` and
+To exercise the purge locally, run `pnpm exec wrangler dev --test-scheduled` at the repository root and
 request `http://localhost:8787/__scheduled?cron=0+3+*+*+*`; the console shows an `audit_purged`
 line.

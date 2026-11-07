@@ -16,10 +16,10 @@ it up), and `openssl`.
 ```sh
 pnpm install
 
-cd apps/server
-cp .dev.vars.example .dev.vars   # fill in both values with: openssl rand -base64 32
-pnpm exec wrangler d1 migrations apply anchor --local
-pnpm dev                         # API and last dashboard build on http://localhost:8787
+# from the repository root, where wrangler.jsonc lives
+cp .dev.vars.example .dev.vars   # fill in ANCHOR_ROOT_KEY with: openssl rand -base64 32
+pnpm db:migrate:local
+pnpm --filter @anchor/server dev # API and last dashboard build on http://localhost:8787
 ```
 
 `.dev.vars` is git-ignored. Never commit it, real tokens, or any secret value.
@@ -30,7 +30,7 @@ For dashboard work, run the API as above and, in a second terminal:
 cd apps/web && pnpm dev          # http://localhost:5173, /api proxied to :8787
 ```
 
-A fresh instance opens on `/setup`; use the `ANCHOR_SETUP_TOKEN` from `apps/server/.dev.vars`.
+A fresh instance opens on `/setup`, where the first account you create becomes the owner.
 
 The docs site lives in `apps/docs` ([Starlight](https://starlight.astro.build)):
 

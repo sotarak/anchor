@@ -26,7 +26,6 @@ beforeAll(async () => {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      setupToken: anchor.setupToken,
       email: "owner@example.com",
       name: "Owner",
       password: OWNER_PASSWORD,

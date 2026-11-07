@@ -78,7 +78,7 @@ describe("encryption settings", () => {
     expect(badge(rowWith("v2"), "Retiring")?.className).toContain("warning");
     expect(badge(rowWith("v1"), "Retired")?.className).toContain("faded");
     expect(within(rowWith("v3")).getByText("rk1")).toBeInTheDocument();
-    expect(badge(rowWith("v2 → v3"), "Failed · decrypt_failed")?.className).toContain("error");
+    expect(badge(rowWith("v2 → v3"), "Failed: decrypt_failed")?.className).toContain("error");
     expect(badge(rowWith("v1 → v2"), "Completed")?.className).toContain("success");
   });
 
@@ -94,9 +94,9 @@ describe("encryption settings", () => {
       },
     );
     await renderApp(PAGE);
-    expect(await screen.findByText("Running · 50 / 150")).toBeInTheDocument();
+    expect(await screen.findByText("Running 50 of 150")).toBeInTheDocument();
     await act(() => vi.advanceTimersByTimeAsync(3000));
-    expect(await screen.findByText("Running · 100 / 150")).toBeInTheDocument();
+    expect(await screen.findByText("Running 100 of 150")).toBeInTheDocument();
     await act(() => vi.advanceTimersByTimeAsync(3000));
     expect(await screen.findByText("Completed")).toBeInTheDocument();
     const afterDone = gets();
@@ -124,7 +124,7 @@ describe("encryption settings", () => {
     expect(dialog.getByText(/re-encrypted in the background/)).toBeInTheDocument();
     await user.click(dialog.getByRole("button", { name: "Rotate key" }));
     expect(await screen.findByText("Key rotation started")).toBeInTheDocument();
-    expect(await screen.findByText("Running · 0 / 150")).toBeInTheDocument();
+    expect(await screen.findByText("Running 0 of 150")).toBeInTheDocument();
     expect(posts).toHaveLength(1);
   });
 

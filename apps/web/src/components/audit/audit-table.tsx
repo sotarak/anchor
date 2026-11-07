@@ -28,6 +28,18 @@ export function actorLabel(e: AuditEventDto): string {
   return e.actor.label ?? (e.actor.type === "anonymous" ? "Anonymous" : (e.actor.id ?? "Unknown"));
 }
 
+/** What the Target column shows: a name or email from the metadata beats a raw ID. */
+export function auditTargetLabel(e: {
+  target: string | null;
+  metadata: Record<string, unknown> | null;
+}): string | null {
+  const name = e.metadata?.name;
+  if (typeof name === "string" && name) return name;
+  const email = e.metadata?.email;
+  if (typeof email === "string" && email) return email;
+  return e.target;
+}
+
 function Actor({ event }: { event: AuditEventDto }) {
   const label = actorLabel(event);
   return (
@@ -91,7 +103,7 @@ export function AuditTable({
                   <Tag tone="neutral">{e.action}</Tag>
                 </button>
               </TableCell>
-              <TableCell className={code}>{e.target ?? DASH}</TableCell>
+              <TableCell className={code}>{auditTargetLabel(e) ?? DASH}</TableCell>
               <TableCell className={code}>
                 {e.projectId ? (projectSlugs.get(e.projectId) ?? e.projectId) : DASH}
               </TableCell>

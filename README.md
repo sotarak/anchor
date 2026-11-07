@@ -7,10 +7,33 @@ Cloudflare account.**
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-sotarak.github.io%2Fanchor-dd224e.svg)](https://sotarak.github.io/anchor/)
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/sotarak/anchor)
+
+Needs a Cloudflare account on the Workers Paid plan. Read the
+[deploy guide](https://sotarak.github.io/anchor/guides/deploy/) first: it shows how to generate and
+back up the root key before you paste it.
+
+![The Anchor dashboard: the secrets of a project's production environment, values masked](docs/media/secrets.png)
+
 Anchor is a secrets manager in the spirit of Infisical, built on Cloudflare's developer platform:
 one Worker serves the API and the dashboard, D1 stores everything, and Queues re-encrypt values in
 the background when a key rotates. The `anchor` CLI injects secrets into local processes and CI
 jobs.
+
+```sh
+npm install -g @anchor-secrets/cli                            # Node.js 22.19+
+brew install sotarak/tap/anchor                               # macOS and Linux
+curl -fsSL https://sotarak.github.io/anchor/install.sh | sh   # standalone binary
+```
+
+![The anchor CLI: log in, list a project's secrets, and run a command with them injected](docs/media/cli.gif)
+
+|                                                                                        |                                                                              |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| ![Overview: which keys exist in each environment](docs/media/overview.png)             | ![History: every version of a secret, with rollback](docs/media/history.png) |
+| **Overview.** See at a glance which keys are missing from an environment.              | **History.** Every write keeps a version; reveal or roll back any of them.   |
+| ![Service tokens: scoped, expiring tokens for CI](docs/media/service-tokens.png)       | ![Audit log: logins, reads and changes, never values](docs/media/audit.png)  |
+| **Service tokens.** Read or write, scoped to environments and folders, with an expiry. | **Audit log.** Who did what, to which secret, from where. Never the value.   |
 
 ## Why Anchor
 
@@ -57,30 +80,30 @@ More in [Architecture](https://sotarak.github.io/anchor/start/architecture/) and
 
 ## Quickstart
 
-Deploy your own instance (Workers Paid plan, Node.js 22+, pnpm):
+**With the button.** Click **Deploy to Cloudflare** above. Cloudflare copies this repository to
+your GitHub account, creates the D1 database and the queues, and asks for one secret,
+`ANCHOR_ROOT_KEY`. Generate it with `openssl rand -base64 32` and back it up offline before you
+paste it. Every push to your copy redeploys.
+
+**By hand** (Workers Paid plan, Node.js 22+, pnpm), from the repository root:
 
 ```sh
 git clone https://github.com/sotarak/anchor.git && cd anchor && pnpm install
-cd apps/server && pnpm exec wrangler d1 create anchor   # put the database_id in wrangler.jsonc
-pnpm exec wrangler d1 migrations apply anchor --remote
+pnpm exec wrangler d1 create anchor        # add the database_id to wrangler.jsonc
 pnpm exec wrangler queues create anchor-reencrypt && pnpm exec wrangler queues create anchor-reencrypt-dlq
-# generate and back up the root key, set ANCHOR_ROOT_KEY and ANCHOR_SETUP_TOKEN (see the guide)
-cd ../.. && pnpm deploy:worker
+# generate and back up the root key, then set ANCHOR_ROOT_KEY (see the guide)
+pnpm deploy:worker                         # applies migrations, then deploys
 ```
 
-Then open `https://<your-worker>/setup` to create the first owner. **Read the
+Either way, open `https://<your-worker>/setup` as soon as the deploy finishes: the first account
+created there owns the instance. **Read the
 [deploy guide](https://sotarak.github.io/anchor/guides/deploy/) before storing real secrets**: it
 covers backing up the root key, which cannot be recovered if lost.
 
 ## The CLI
 
-```sh
-npm install -g @anchor-secrets/cli      # Node.js 22.19+, or:
-brew install sotarak/tap/anchor         # or: curl -fsSL https://sotarak.github.io/anchor/install.sh | sh
-```
-
-Release binaries and the GitHub Action for CI are in the
-[CLI guide](https://sotarak.github.io/anchor/guides/cli/). Then:
+Install it with one of the commands at the top. Release binaries and the GitHub Action for CI are
+in the [CLI guide](https://sotarak.github.io/anchor/guides/cli/). Then:
 
 ```sh
 anchor login --api-url https://anchor.example.com

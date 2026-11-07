@@ -170,6 +170,7 @@ describe("/users", () => {
     expect(dialog).toHaveTextContent(
       "Send this link to Max Member. It works once and expires in 1 hour.",
     );
+    expect(dialog).toHaveTextContent(/Max Member, expires /);
     expectUndismissable("Copy the password reset link");
     await user.click(within(dialog).getByRole("button", { name: "I've copied it" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());

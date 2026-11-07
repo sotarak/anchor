@@ -57,8 +57,11 @@ export async function selectCredentialStore(
   io: Io,
   deps: { spawner: Spawner; out: Output },
 ): Promise<CredentialStore> {
-  const file = createFileStore(join(userConfigDir(io), "credentials.json"), deps.out);
-  if (io.env.ANCHOR_CREDENTIAL_STORE === "file") return file;
+  const path = join(userConfigDir(io), "credentials.json");
+  if (io.env.ANCHOR_CREDENTIAL_STORE === "file") {
+    return createFileStore(path, deps.out, { chosen: true });
+  }
+  const file = createFileStore(path, deps.out);
   if (io.platform === "darwin" && (await canSpawn(deps.spawner, "security", ["list-keychains"]))) {
     return withFileFallback(createMacosKeychainStore(deps.spawner), file, deps.out);
   }

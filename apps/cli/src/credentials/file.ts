@@ -7,9 +7,16 @@ import { type CredentialStore, parseCredential, type StoredCredential } from "./
 
 type FileShape = { version: 1; credentials: Record<string, unknown> };
 
-/** Fallback store: one JSON file, mode 0600, in a 0700 directory. */
-export function createFileStore(path: string, out: Output): CredentialStore {
-  let warned = false;
+/**
+ * Fallback store: one JSON file, mode 0600, in a 0700 directory. It warns on first write unless the
+ * user chose it (`ANCHOR_CREDENTIAL_STORE=file`): the warning exists for a fallback they did not pick.
+ */
+export function createFileStore(
+  path: string,
+  out: Output,
+  opts: { chosen?: boolean } = {},
+): CredentialStore {
+  let warned = opts.chosen === true;
 
   async function load(): Promise<FileShape> {
     let mode: number;

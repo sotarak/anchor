@@ -220,6 +220,116 @@ describe("open-source repository", () => {
     );
   });
 
+  const MEDIA = ["secrets", "overview", "history", "service-tokens", "audit"]
+    .map((n) => `docs/media/${n}.png`)
+    .concat("docs/media/cli.gif");
+  it.each(MEDIA)("%s exists and is under 1 MB", (f) => {
+    expect(existsSync(path(f))).toBe(true);
+    expect(statSync(path(f)).size).toBeLessThan(1_000_000);
+  });
+
+  it("the README leads with the Deploy button, the paid-plan note and the hero shot", () => {
+    const readme = read("README.md");
+    const button =
+      "[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/sotarak/anchor)";
+    expect(readme).toContain(button);
+    const near = readme.slice(readme.indexOf(button), readme.indexOf(button) + 400);
+    expect(near).toMatch(/Workers Paid/);
+    expect(readme.indexOf("docs/media/secrets.png")).toBeLessThan(readme.indexOf("## Why Anchor"));
+    for (const m of ["overview", "history", "service-tokens", "audit"]) {
+      expect(readme).toContain(`docs/media/${m}.png`);
+    }
+    expect(readme).toContain("docs/media/cli.gif");
+    expect(readme).not.toContain("cd apps/server");
+  });
+
+  it("the deploy guide offers the button and a manual path from the repo root", () => {
+    const g = read("apps/docs/src/content/docs/guides/deploy.md");
+    expect(g).toContain(
+      "https://deploy.workers.cloudflare.com/?url=https://github.com/sotarak/anchor",
+    );
+    expect(g).toMatch(/^## Deploy with the button$/m);
+    expect(g).toMatch(/^## Deploy manually$/m);
+    expect(g).not.toContain("cd apps/server");
+    expect(g).toContain("/setup");
+  });
+
+  it("the upgrade guide covers button clones, manual checkouts and every CLI install", () => {
+    const u = read("apps/docs/src/content/docs/operations/upgrading.md");
+    expect(u).not.toContain("git checkout v0.1.0");
+    for (const s of [
+      "upstream",
+      "npm install -g @anchor-secrets/cli@",
+      "brew upgrade anchor",
+      "install.sh",
+      "setup-action@v",
+      "database_id",
+    ]) {
+      expect(u).toContain(s);
+    }
+  });
+
+  it("the CLI guide explains upgrade and uninstall", () => {
+    expect(read("apps/docs/src/content/docs/guides/cli.md")).toMatch(/^## Upgrade and uninstall$/m);
+  });
+
+  it("troubleshooting covers install and deploy failures", () => {
+    const t = read("apps/docs/src/content/docs/troubleshooting.md");
+    for (const s of ["checksum mismatch", "PATH", "22.19", "Workers Builds", "Free plan"]) {
+      expect(t).toContain(s);
+    }
+  });
+
+  it("the button upgrade path covers a copy with unrelated history", () => {
+    const u = read("apps/docs/src/content/docs/operations/upgrading.md");
+    expect(u).toContain("refusing to merge unrelated histories");
+    expect(u).toContain("--allow-unrelated-histories");
+  });
+
+  it("the docs home sends the Deploy action through the guide (paid plan, root key backup)", () => {
+    const home = read("apps/docs/src/content/docs/index.mdx");
+    expect(home).not.toContain("deploy.workers.cloudflare.com");
+    expect(home).toContain("/anchor/guides/deploy/#deploy-with-the-button");
+  });
+
+  it("troubleshooting names the errors a failed button build prints", () => {
+    const t = read("apps/docs/src/content/docs/troubleshooting.md");
+    expect(t).toContain("Couldn't find a D1 DB");
+    expect(t).toContain("anchor-reencrypt-dlq");
+  });
+
+  it("no doc asks for a setup token any more (only the changelog and upgrade guide mention it)", () => {
+    const docs = readdirSync(path("apps/docs/src/content/docs"), { recursive: true })
+      .map(String)
+      .filter((f) => /\.mdx?$/.test(f))
+      .map((f) => `apps/docs/src/content/docs/${f}`)
+      .filter((f) => !f.endsWith("operations/upgrading.md"));
+    const offenders = [...docs, "README.md", "CONTRIBUTING.md", ".dev.vars.example"].filter((f) =>
+      /ANCHOR_SETUP_TOKEN|setup token|setupToken/i.test(read(f)),
+    );
+    expect(offenders).toEqual([]);
+    expect(read("apps/docs/src/content/docs/operations/upgrading.md")).toContain(
+      "ANCHOR_SETUP_TOKEN",
+    );
+  });
+
+  it("the deploy guide says to create the owner right after the deploy, and how to recover", () => {
+    const g = read("apps/docs/src/content/docs/guides/deploy.md");
+    expect(g).toMatch(/right after the deploy/i);
+    expect(g).toMatch(/first account created at `\/setup` owns the\s+(>\s*)?instance/i);
+    const t = read("apps/docs/src/content/docs/troubleshooting.md");
+    expect(t).toMatch(/^## `\/setup` says the instance already has an owner$/m);
+  });
+
+  it("the 0.3.0 changelog tells manual installs to move database_id", () => {
+    const c = read("CHANGELOG.md");
+    const section = c.slice(c.indexOf("## [0.3.0]"), c.indexOf("## [0.2.0]"));
+    expect(section).toMatch(/### Upgrade notes/);
+    expect(section).toContain("database_id");
+    expect(section).toContain("wrangler.jsonc");
+    expect(section).toContain(".dev.vars");
+  });
+
   it("README links the docs site", () => {
     expect(read("README.md")).toContain("https://sotarak.github.io/anchor/");
   });

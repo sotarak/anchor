@@ -7,10 +7,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { countLabel } from "@/lib/format";
 
 const pagerButton = "disabled:bg-bg-white disabled:ring-stroke-soft disabled:text-text-disabled";
 
-/** Footer row inside the table container: count · pager · page size. */
+/** Footer row inside the table container: count, pager, page size. */
 export function TableFooter({
   total,
   shown,
@@ -38,7 +39,7 @@ export function TableFooter({
   return (
     <div className="flex items-center justify-between border-t px-4 py-3">
       <span className="text-paragraph-sm text-text-sub">
-        {total === null ? `${shown ?? 0} shown` : `${total} ${label}`}
+        {total === null ? `${shown ?? 0} shown` : countLabel(total, label)}
       </span>
       <div className="flex">
         <Button

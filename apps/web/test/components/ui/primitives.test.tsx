@@ -1,7 +1,22 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetBody,
@@ -22,6 +37,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tag } from "@/components/ui/tag";
+import {
+  TooltipContent,
+  TooltipProvider,
+  TooltipRoot,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 describe("Button", () => {
   it("button primary uses brand tokens", () => {
@@ -112,6 +133,88 @@ describe("Sheet", () => {
     expect(screen.getByText("New project").className).toContain("text-label-md");
     expect(screen.getByText("Fields").className).toContain("p-6");
     expect(screen.getByText("Buttons").className).toContain("bg-bg-weak");
+  });
+});
+
+describe("Motion", () => {
+  const slot = (name: string) =>
+    document.querySelector(`[data-slot="${name}"]`)?.className ?? `missing ${name}`;
+
+  it("overlays animate in and out", () => {
+    render(
+      <>
+        <Dialog open>
+          <DialogContent aria-describedby={undefined}>
+            <DialogTitle>Dialog</DialogTitle>
+          </DialogContent>
+        </Dialog>
+        <Popover open>
+          <PopoverTrigger>Open popover</PopoverTrigger>
+          <PopoverContent>Popover</PopoverContent>
+        </Popover>
+        <DropdownMenu open modal={false}>
+          <DropdownMenuTrigger>Open menu</DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem>Item</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <TooltipProvider>
+          <TooltipRoot open>
+            <TooltipTrigger>Hover</TooltipTrigger>
+            <TooltipContent>Tip</TooltipContent>
+          </TooltipRoot>
+        </TooltipProvider>
+      </>,
+    );
+    for (const name of ["dialog-content", "popover-content", "dropdown-menu-content"]) {
+      expect(slot(name), name).toMatch(/data-\[state=open\]:animate-in/);
+      expect(slot(name), name).toMatch(/data-\[state=closed\]:animate-out/);
+    }
+    expect(slot("tooltip-content")).toMatch(/data-\[state=delayed-open\]:animate-in/);
+    expect(slot("tooltip-content")).toMatch(/data-\[state=closed\]:animate-out/);
+  });
+
+  it("the sheet slides in and out", () => {
+    render(
+      <Sheet open>
+        <SheetContent aria-describedby={undefined}>
+          <SheetTitle>Sheet</SheetTitle>
+        </SheetContent>
+      </Sheet>,
+    );
+    expect(slot("sheet-content")).toMatch(/data-\[state=open\]:slide-in-from-right/);
+    expect(slot("sheet-content")).toMatch(/data-\[state=closed\]:slide-out-to-right/);
+  });
+
+  it("the select menu animates in and out", () => {
+    render(
+      <Select open value="a">
+        <SelectTrigger aria-label="Pick">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="a">A</SelectItem>
+        </SelectContent>
+      </Select>,
+    );
+    expect(slot("select-content")).toMatch(/data-\[state=open\]:animate-in/);
+    expect(slot("select-content")).toMatch(/data-\[state=closed\]:animate-out/);
+  });
+
+  it("rows transition their hover color", () => {
+    render(
+      <Table>
+        <TableBody>
+          <TableRow>
+            <TableCell>Cell</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>,
+    );
+    const row = screen.getByRole("row");
+    expect(row.className).toContain("transition-colors");
+    expect(row.className).toContain("duration-150");
+    expect(row.parentElement?.className).toMatch(/\[&>tr\]:animate-in/);
   });
 });
 

@@ -1,10 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
 
-// One random root key and setup token per run, generated in memory. Set on process.env so the
-// webServer launcher and the test workers (which re-load this file) all see the same values.
+// One random root key per run, generated in memory. Set on process.env so the
+// webServer launcher and the test workers (which re-load this file) all see the same value.
 process.env.E2E_ROOT_KEY ??= randomBytes(32).toString("base64");
-process.env.E2E_SETUP_TOKEN ??= `e2e_setup_${randomBytes(16).toString("hex")}`;
 
 const PORT = 8788;
 
@@ -30,13 +29,19 @@ export default defineConfig({
       dependencies: ["smoke"],
       use: { ...devices["Desktop Chrome"] },
     },
+    {
+      name: "cursor",
+      testMatch: /cursor\.spec\.ts$/,
+      dependencies: ["smoke"],
+      use: { ...devices["Desktop Chrome"] },
+    },
   ],
   webServer: {
     // CI builds the dashboard in an earlier step; locally the smoke always tests a fresh build.
     command: process.env.CI ? "node test/e2e/serve.mjs" : "pnpm build && node test/e2e/serve.mjs",
     url: `http://localhost:${PORT}/api/v1/setup/status`,
     env: { E2E_PORT: String(PORT) },
-    // A reused server would hold another run's state and setup token.
+    // A reused server would hold another run's state.
     reuseExistingServer: false,
     timeout: 180_000,
     stdout: "pipe",

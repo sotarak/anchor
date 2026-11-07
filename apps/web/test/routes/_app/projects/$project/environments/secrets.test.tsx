@@ -56,7 +56,7 @@ describe("/projects/$project/environments/$env", () => {
     await renderApp("/projects/app/environments/dev?path=%2Fapi");
     const header = screen.getByRole("banner");
     expect(
-      await within(header).findByRole("heading", { name: "App · Development" }),
+      await within(header).findByRole("heading", { name: "App / Development" }),
     ).toBeInTheDocument();
     expect(await screen.findByText("Secrets in /api")).toBeInTheDocument();
   });
@@ -72,6 +72,31 @@ describe("/projects/$project/environments/$env", () => {
     expect(document.body.textContent).not.toContain(CANARY);
     expect(listUrls.length).toBeGreaterThan(0);
     for (const url of listUrls) expect(url.searchParams.has("reveal")).toBe(false);
+  });
+
+  it("shows the comment in its own column", async () => {
+    setup();
+    await renderApp("/projects/app/environments/dev");
+    const row = await rowOf("API_KEY");
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).toEqual(["Key", "Value", "Comment", "Version", "Updated", "Actions"]);
+    const cells = within(row).getAllByRole("cell");
+    expect(cells[0]).not.toHaveTextContent("Stripe key");
+    expect(cells[2]).toHaveTextContent("Stripe key");
+    const empty = within(await rowOf("DATABASE_URL")).getAllByRole("cell");
+    expect(empty[2]).toHaveTextContent("–");
+  });
+
+  it("a long comment is truncated in its own column", async () => {
+    const long = "c".repeat(300);
+    setup({ secrets: [{ key: "LONG", path: "/", version: 1, comment: long, updatedAt: 0 }] });
+    const { user } = await renderApp("/projects/app/environments/dev");
+    const cell = within(await rowOf("LONG")).getAllByRole("cell")[2] as HTMLElement;
+    const text = within(cell).getByText(long);
+    expect(text.className).toMatch(/\btruncate\b/);
+    expect(text.className).toMatch(/\bmax-w-/);
+    await user.hover(text);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(long);
   });
 
   it("reveal calls GET secrets/:key once and shows the value; toggling re-masks", async () => {
@@ -122,7 +147,7 @@ describe("/projects/$project/environments/$env", () => {
         params: { project: "app", env: "staging" },
       }),
     );
-    expect(await screen.findByRole("heading", { name: "App · Staging" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "App / Staging" })).toBeInTheDocument();
     await screen.findByText("API_KEY");
     expect(document.body.textContent).not.toContain(CANARY);
     await act(() =>
@@ -131,7 +156,7 @@ describe("/projects/$project/environments/$env", () => {
         params: { project: "app", env: "dev" },
       }),
     );
-    expect(await screen.findByRole("heading", { name: "App · Development" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "App / Development" })).toBeInTheDocument();
     expect(within(await rowOf("API_KEY")).getByText(MASK)).toBeInTheDocument();
     expect(document.body.textContent).not.toContain(CANARY);
   });

@@ -22,6 +22,7 @@ rotation work, and it lets CI read secrets with a plain bearer token.
 | Steals a service token | Reads (or writes, for `read-write`) only the environments and folders in its scopes, until it expires or is revoked; every value read and every write is audited with the token's id (listing names is not) |
 | Steals a session | Acts as that user until the session expires (7 days for the dashboard, 30 days for the CLI) or is revoked from the **Account** page |
 | A malicious project member | Limited to the member's role and allowed environments; cannot read the audit log unless a project admin |
+| Reaches a freshly deployed instance's URL before its owner exists | **Becomes the owner**: the first account created at `/setup` owns the instance. Nothing is stored yet at that point, but create the owner right after the deploy, and start over with an empty database if `/setup` says an owner exists that you did not create (see [Troubleshooting](/anchor/troubleshooting/#setup-says-the-instance-already-has-an-owner)) |
 | Controls your Cloudflare account, or the Worker and its secrets | **Reads everything.** Anchor cannot protect against the platform it runs on |
 
 ## Encryption
@@ -80,5 +81,7 @@ access to `prod:/db`, and a forbidden target is a `403` whether it exists or not
   [Rate limiting](/anchor/operations/rate-limiting/).
 - **Break-glass recovery leaves no audit event.** It is a direct D1 update; see
   [Break-glass recovery](/anchor/operations/break-glass/).
+- **First-run setup is open until the owner exists.** `/setup` asks for no token; the first account
+  created there owns the instance. Create it right after deploying.
 - **No SSO or MFA yet.** Accounts are email and password.
 - **Pre-1.0.** Only the latest release gets security fixes.

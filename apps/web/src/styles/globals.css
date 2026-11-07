@@ -260,6 +260,40 @@
   :focus-visible {
     outline-color: var(--brand-base);
   }
+  /* Tailwind 4's preflight gives buttons `cursor: default`; everything clickable shows a pointer. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="option"],
+  [role="tab"],
+  [role="checkbox"],
+  [role="switch"],
+  select,
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+  :disabled,
+  [aria-disabled="true"],
+  [data-disabled] {
+    cursor: not-allowed;
+  }
+}
+
+/* Motion is decoration only: people who ask for less get none (WCAG 2.3.3). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    /* biome-ignore lint/complexity/noImportantStyles: must beat every duration utility */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must beat every duration utility */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must beat every animation utility */
+    animation-iteration-count: 1 !important;
+  }
 }
 
 /* Radix Select hides its viewport scrollbar with a runtime <style>, which the CSP blocks; the

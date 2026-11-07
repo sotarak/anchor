@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Fails on raw Tailwind palette colors, arbitrary text sizes and `uppercase` in dashboard source.
+// Fails on raw Tailwind palette colors, arbitrary text sizes, `uppercase`, `cursor-default` and
+// middle-dot separators in dashboard source.
 // Colors and sizes must come from the dashboard-ui tokens (see .claude/skills/dashboard-ui).
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
@@ -11,6 +12,11 @@ const RULES = [
   },
   { re: /text-\[/, why: "arbitrary text size (use a text-* token)" },
   { re: /\buppercase\b/, why: "uppercase (sentence case only)" },
+  {
+    re: /\bcursor-default\b/,
+    why: "cursor-default (base styles give interactive elements a pointer)",
+  },
+  { re: /·/, why: "middle dot (use layout, a breadcrumb or words)" },
 ];
 const EXCLUDED = `styles${sep}globals.css`;
 

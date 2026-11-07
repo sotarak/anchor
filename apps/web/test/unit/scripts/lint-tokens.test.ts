@@ -47,4 +47,16 @@ describe("lint-tokens", () => {
     });
     expect(r.code).toBe(0);
   });
+
+  it("flags the middle dot separator", () => {
+    const r = lint({ "title.tsx": "export const t = (a: string, b: string) => `${a} · ${b}`;" });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("title.tsx:1: middle dot (use layout, a breadcrumb or words)");
+  });
+
+  it("flags cursor-default", () => {
+    const r = lint({ "menu.tsx": 'export const A = () => <div className="cursor-default" />;' });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("menu.tsx:1: cursor-default");
+  });
 });

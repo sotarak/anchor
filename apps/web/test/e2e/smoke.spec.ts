@@ -12,9 +12,6 @@ const VALUE = "world-smoke-123";
 test("setup → project → secret reveal/re-mask → logout → login, with no CSP violations", async ({
   page,
 }) => {
-  const setupToken = process.env.E2E_SETUP_TOKEN;
-  if (!setupToken) throw new Error("E2E_SETUP_TOKEN is not set (see playwright.config.ts)");
-
   const violations: string[] = [];
   page.on("console", (msg) => {
     const text = msg.text();
@@ -29,7 +26,7 @@ test("setup → project → secret reveal/re-mask → logout → login, with no 
   expect(first?.headers()["content-security-policy"]).toBe(CSP);
   await expect(page).toHaveURL(/\/setup$/);
 
-  await page.getByLabel("Setup token").fill(setupToken);
+  await expect(page.getByLabel("Setup token")).toHaveCount(0);
   await page.getByLabel("Name").fill(OWNER.name);
   await page.getByLabel("Email").fill(OWNER.email);
   await page.getByLabel("Password", { exact: true }).fill(OWNER.password);

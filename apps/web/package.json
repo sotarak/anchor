@@ -1,6 +1,6 @@
 {
   "name": "@anchor/web",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -16,7 +16,8 @@
     "test:routes": "vitest run test/routes",
     "typecheck": "tsc -b --noEmit",
     "lint:tokens": "node scripts/lint-tokens.mjs src",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "media": "playwright test -c playwright.media.config.ts"
   },
   "dependencies": {
     "@anchor/shared": "workspace:*",

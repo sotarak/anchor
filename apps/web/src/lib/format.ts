@@ -42,3 +42,8 @@ export function formatRelative(ms: number, now = Date.now()): string {
   }
   return relativeFormat.format(0, "second");
 }
+
+/** "1 token", "3 tokens": `plural` is a regular English plural ending in "s". */
+export function countLabel(n: number, plural: string): string {
+  return `${n} ${n === 1 ? plural.replace(/s$/, "") : plural}`;
+}

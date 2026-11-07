@@ -228,6 +228,21 @@ describe("open-source repository", () => {
     expect(statSync(path(f)).size).toBeLessThan(1_000_000);
   });
 
+  it("the README leads with the Deploy button, the paid-plan note and the hero shot", () => {
+    const readme = read("README.md");
+    const button =
+      "[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/sotarak/anchor)";
+    expect(readme).toContain(button);
+    const near = readme.slice(readme.indexOf(button), readme.indexOf(button) + 400);
+    expect(near).toMatch(/Workers Paid/);
+    expect(readme.indexOf("docs/media/secrets.png")).toBeLessThan(readme.indexOf("## Why Anchor"));
+    for (const m of ["overview", "history", "service-tokens", "audit"]) {
+      expect(readme).toContain(`docs/media/${m}.png`);
+    }
+    expect(readme).toContain("docs/media/cli.gif");
+    expect(readme).not.toContain("cd apps/server");
+  });
+
   it("README links the docs site", () => {
     expect(read("README.md")).toContain("https://sotarak.github.io/anchor/");
   });

@@ -33,6 +33,23 @@ dashboard and CLI.
   `--overwrite`, `--non-sensitive <glob>` marks plain config, and `--dry-run` shows the plan. The
   whole file is validated before anything is written, values are never printed, and an
   interrupted import resumes when run again.
+- **Service tokens without an expiry.** `anchor tokens create --expires-in never` (and **No
+  expiry** in the dashboard) creates a token that stays valid until it is revoked, for machines
+  nobody rotates. The CLI warns, and token lists show `never`.
+- **MCP server for AI agents.** `POST /mcp` serves Claude Code, Codex and other MCP clients over
+  Streamable HTTP with eight tools: `list_projects`, `list_environments`, `list_folders`,
+  `list_secrets`, `get_secret`, `secret_history`, `set_secret` and `delete_secret`. Agents sign in
+  with OAuth 2.1 (authorization code with PKCE, dynamic client registration, RFC 8414/9728
+  metadata, token revocation): the dashboard shows an approval page, and **Account → Connected
+  apps** lists and revokes approved agents. Permissions are `secrets:read`, `secrets:write` and
+  the opt-in `secrets:reveal` for sensitive values.
+- **Node SDK and NestJS module.** `@anchor-secrets/sdk` loads a folder of secrets in any Node 20+
+  service (typed values decoded, retries and timeouts, no runtime dependencies);
+  `@anchor-secrets/nestjs` adds `AnchorModule.forRoot` / `forRootAsync`, `AnchorService` and
+  `loadAnchorEnv` for NestJS 10 to 12. Both ship ESM and CommonJS and are published with the CLI.
+- **Agent skills.** `npx skills add sotarak/anchor --skill anchor-cli --skill anchor-migrate
+  --skill anchor-ci` installs skills that teach coding agents to run apps with `anchor run`, keep
+  secret values out of their context, migrate config files and set up CI tokens.
 
 ### Changed
 
@@ -52,13 +69,32 @@ dashboard and CLI.
   get `403`. Approvals and denials are audited (`auth.cli_login_approved`,
   `auth.cli_login_denied`), and the token endpoint is polled with a single-use, rate-limited
   device code.
+- OAuth codes and tokens for MCP clients are random 256-bit values stored only as SHA-256 hashes.
+  Access tokens last 1 hour, refresh tokens 30 days and rotate on every use; presenting a used
+  refresh token or authorization code revokes the whole grant. Only a dashboard session can
+  approve an agent, `/mcp` accepts only OAuth access tokens, and those tokens work nowhere else.
+- Reading sensitive values over MCP needs `secrets:reveal`, granted only when the person ticks it
+  on the approval page; every reveal and every write is audited with `via: "mcp"` and the client
+  id. Approving, denying and revoking agents are audited (`oauth.authorized`, `oauth.denied`,
+  `oauth.revoked`).
+- A token created with `--expires-in never` is a standing credential: nothing retires it if it
+  leaks. Its creation is audited with `expiresAt: null`; scope it narrowly and revoke it when the
+  machine goes away.
 
 ### Upgrade notes
 
-- **Migrations** `0005_typed_values` and `0006_cli_logins` are applied by `pnpm deploy` and by
-  Workers Builds (button deploys). Manual deploys run
-  `pnpm exec wrangler d1 migrations apply DB --remote` from the repository root before deploying.
-  No data is rewritten: existing secrets read as sensitive `string` values.
+- **Migrations** `0005_typed_values`, `0006_cli_logins`, `0007_service_token_no_expiry` and
+  `0008_oauth` are applied by `pnpm deploy` and by Workers Builds (button deploys). Manual deploys
+  run `pnpm exec wrangler d1 migrations apply DB --remote` from the repository root before
+  deploying. No data is rewritten: existing secrets read as sensitive `string` values, and existing
+  service tokens keep their expiry.
+- **`run_worker_first` grows.** The Worker must answer the OAuth and MCP paths before static
+  assets: `/mcp`, `/.well-known/oauth-authorization-server`,
+  `/.well-known/oauth-protected-resource` (and `/*` below it), `/oauth/token`, `/oauth/register`
+  and `/oauth/revoke`, next to `/api/*`. The repository's `wrangler.jsonc` has the new list; a
+  deploy that keeps its own `wrangler.jsonc` must copy it, or MCP clients get the dashboard's HTML.
+- **Rate limiting.** If you put a WAF rate-limiting rule in front of the login endpoints, extend it
+  to `/oauth/*` (see [Rate limiting](https://sotarak.github.io/anchor/operations/rate-limiting/)).
 - **CLI 0.3.x** keeps working against a 0.4.0 server, but cannot set types or log in through the
   browser.
 - **CLI 0.4.0 against a 0.3.x server** cannot use browser login; it says so and points at

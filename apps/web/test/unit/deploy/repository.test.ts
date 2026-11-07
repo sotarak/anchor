@@ -347,6 +347,29 @@ describe("open-source repository", () => {
     );
   });
 
+  it("the 0.4.0 changelog covers agents, the SDK packages and tokens without expiry", () => {
+    const c = read("CHANGELOG.md");
+    const section = c.slice(c.indexOf("## [0.4.0]"), c.indexOf("## [0.3.0]"));
+    for (const s of [
+      "--expires-in never",
+      "MCP",
+      "secrets:reveal",
+      "0007",
+      "0008",
+      "@anchor-secrets/sdk",
+      "@anchor-secrets/nestjs",
+      "npx skills add",
+      "run_worker_first",
+      "/oauth/*",
+    ]) {
+      expect(section, s).toContain(s);
+    }
+    const upgrading = read("apps/docs/src/content/docs/operations/upgrading.md");
+    expect(upgrading).toContain("0007_service_token_no_expiry");
+    expect(upgrading).toContain("0008_oauth");
+    expect(upgrading).toContain("run_worker_first");
+  });
+
   it("every workspace package is version 0.4.0", () => {
     for (const f of [
       "package.json",

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { AnchorError, abortedError } from "./errors.js";
 import type {
   AnchorEvent,
@@ -25,15 +26,8 @@ export function memoryStore(): CacheStore {
  * The cache key of one folder as one token sees it. The token is reduced to a SHA-256
  * fingerprint, so two tokens never share an entry and the key never holds a credential.
  */
-export async function cacheKey(
-  origin: string,
-  token: string,
-  q: Required<ListQuery>,
-): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
-  const fingerprint = Array.from(new Uint8Array(digest).subarray(0, 8), (b) =>
-    b.toString(16).padStart(2, "0"),
-  ).join("");
+export function cacheKey(origin: string, token: string, q: Required<ListQuery>): string {
+  const fingerprint = createHash("sha256").update(token).digest("hex").slice(0, 16);
   return JSON.stringify([
     origin,
     fingerprint,

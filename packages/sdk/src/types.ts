@@ -30,6 +30,8 @@ export type ClientOptions = {
   timeoutMs?: number;
   /** Retries of network errors, timeouts and HTTP 429/502/503/504; `false` turns them off. */
   retry?: RetryOptions | false;
+  /** Caching of fetched folders; `false` turns it off. */
+  cache?: CacheOptions | false;
   /** Receives retries and failed refreshes. Exceptions it throws are ignored. */
   onEvent?: (event: AnchorEvent) => void;
 };
@@ -61,11 +63,18 @@ export type ListQuery = {
   includeImports?: boolean;
 };
 
+export type RequestOptions = {
+  /** Cancels the call; it rejects with code `aborted`. */
+  signal?: AbortSignal;
+  /** Ask the server even when the cached folder is fresh; still falls back to it on failure. */
+  fresh?: boolean;
+};
+
 export interface AnchorClient {
   /** The secrets of one folder, with values. */
-  listSecrets(query: ListQuery): Promise<AnchorSecret[]>;
+  listSecrets(query: ListQuery, options?: RequestOptions): Promise<AnchorSecret[]>;
   /** The same secrets as `{ KEY: value }`, with typed values decoded. */
-  loadSecrets(query: ListQuery): Promise<Record<string, AnchorValue>>;
+  loadSecrets(query: ListQuery, options?: RequestOptions): Promise<Record<string, AnchorValue>>;
 }
 
 /** What the cache keeps per folder. `secrets` hold plaintext values. */

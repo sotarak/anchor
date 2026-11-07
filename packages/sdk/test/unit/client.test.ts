@@ -312,3 +312,90 @@ describe("retries", () => {
     expect(signals[0]?.aborted).toBe(true);
   });
 });
+
+describe("caching", () => {
+  const ok = () => json({ secrets: [secret("A", "string", "a")] });
+
+  it("a second loadSecrets within ttl makes no request", async () => {
+    const f = fakeFetch(ok());
+    const c = client(f.fetch);
+    expect(await c.loadSecrets(QUERY)).toEqual({ A: "a" });
+    expect(await c.loadSecrets(QUERY)).toEqual({ A: "a" });
+    expect(f.calls).toHaveLength(1);
+  });
+
+  it("cache: false requests every time", async () => {
+    const f = fakeFetch(ok());
+    const c = client(f.fetch, { cache: false });
+    await c.listSecrets(QUERY);
+    await c.listSecrets(QUERY);
+    expect(f.calls).toHaveLength(2);
+  });
+
+  it("fresh: true requests even within ttl", async () => {
+    const f = fakeFetch(ok());
+    const c = client(f.fetch);
+    await c.listSecrets(QUERY);
+    await c.listSecrets(QUERY, { fresh: true });
+    expect(f.calls).toHaveLength(2);
+  });
+
+  it("different folders are cached separately", async () => {
+    const f = fakeFetch(ok());
+    const c = client(f.fetch);
+    await c.listSecrets(QUERY);
+    await c.listSecrets({ ...QUERY, path: "/api" });
+    await c.listSecrets({ ...QUERY, path: "/api" });
+    expect(f.calls).toHaveLength(2);
+  });
+
+  it("returns copies, so callers cannot change the cache", async () => {
+    const f = fakeFetch(
+      json({
+        secrets: [
+          secret("A", "string", "a", { importedFrom: { environment: "prod", path: "/c" } }),
+        ],
+      }),
+    );
+    const c = client(f.fetch);
+    const first = await c.listSecrets(QUERY);
+    (first[0] as { value: string }).value = "changed";
+    (first[0]?.importedFrom as { path: string }).path = "/changed";
+    const second = await c.listSecrets(QUERY);
+    expect(second[0]?.value).toBe("a");
+    expect(second[0]?.importedFrom?.path).toBe("/c");
+  });
+
+  it("a config error is thrown before any cache lookup", async () => {
+    const get = vi.fn();
+    const c = createAnchorClient({ token: TOKEN, cache: { store: { get, set: vi.fn() } } });
+    vi.stubEnv("ANCHOR_API_URL", "");
+    await expect(c.listSecrets(QUERY)).rejects.toMatchObject({ code: "config" });
+    expect(get).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+  });
+
+  it("a caller signal cancels the request when caching is off", async () => {
+    let seen: AbortSignal | undefined;
+    const hang = ((_i: string, init?: RequestInit) =>
+      new Promise<Response>((_r, reject) => {
+        seen = init?.signal ?? undefined;
+        seen?.addEventListener("abort", () => reject(new DOMException("x", "AbortError")));
+      })) as unknown as typeof fetch;
+    const controller = new AbortController();
+    const pending = client(hang, { cache: false }).listSecrets(QUERY, {
+      signal: controller.signal,
+    });
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ code: "aborted" });
+    expect(seen?.aborted).toBe(true);
+  });
+
+  it("a caller signal stops the wait for a cached folder", async () => {
+    const hang = (() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+    const controller = new AbortController();
+    const pending = client(hang).listSecrets(QUERY, { signal: controller.signal });
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ code: "aborted" });
+  });
+});

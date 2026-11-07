@@ -16,3 +16,17 @@ it("bundles the shared decoder without zod or the rest of @anchor/shared", async
   expect(inputs.filter((p) => p.includes("shared/src/schemas"))).toEqual([]);
   expect(result.outputFiles[0]?.text.length).toBeLessThan(20_000);
 });
+
+it("keeps dist/index.js under 12 KB", async () => {
+  const result = await build({
+    entryPoints: [new URL("../../src/index.ts", import.meta.url).pathname],
+    bundle: true,
+    platform: "node",
+    target: "node20",
+    format: "esm",
+    legalComments: "none",
+    write: false,
+    logLevel: "silent",
+  });
+  expect(result.outputFiles[0]?.contents.byteLength).toBeLessThan(12 * 1024);
+});

@@ -1,6 +1,7 @@
+import { type CachePolicy, memoryStore } from "./cache.js";
 import { AnchorError } from "./errors.js";
 import { DEFAULT_RETRY, type RetryPolicy } from "./retry.js";
-import type { AnchorEvent, ClientOptions } from "./types.js";
+import type { AnchorEvent, CacheOptions, ClientOptions } from "./types.js";
 
 export const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -71,4 +72,16 @@ export function emitSafely(
   } catch {
     // The hook is the application's; its failure is not the request's.
   }
+}
+
+export const DEFAULT_TTL_MS = 60_000;
+
+/** The cache settings with defaults filled in, or `false` when caching is off. */
+export function cachePolicy(cache: CacheOptions | false | undefined): CachePolicy | false {
+  if (cache === false) return false;
+  return {
+    ttlMs: cache?.ttlMs ?? DEFAULT_TTL_MS,
+    maxStaleMs: cache?.maxStaleMs ?? Number.POSITIVE_INFINITY,
+    store: cache?.store ?? memoryStore(),
+  };
 }

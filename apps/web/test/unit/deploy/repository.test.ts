@@ -120,4 +120,19 @@ describe("open-source repository", () => {
     expect(box).toMatch(/^\s*required: true/m);
     expect(box.indexOf("required: true")).toBeLessThan(200);
   });
+
+  it("README links resolve", () => {
+    const readme = read("README.md");
+    const targets = [...readme.matchAll(/\]\(([^)\s]+)\)/g)]
+      .map((m) => m[1] as string)
+      .filter((t) => !/^(https?:|mailto:|#)/.test(t))
+      .map((t) => t.split("#")[0] as string);
+    expect(targets.length).toBeGreaterThan(0);
+    const missing = targets.filter((t) => !existsSync(path(t)));
+    expect(missing).toEqual([]);
+  });
+
+  it("README links the docs site", () => {
+    expect(read("README.md")).toContain("https://sotarak.github.io/anchor/");
+  });
 });

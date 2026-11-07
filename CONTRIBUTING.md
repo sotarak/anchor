@@ -57,7 +57,7 @@ Every pull request runs these in CI; run them locally first:
 ```sh
 pnpm lint                        # Biome (format + lint)
 pnpm typecheck
-pnpm test                        # every package
+pnpm test                        # every package (server layers: pnpm --filter ./apps/server test:unit | test:integration | test:api)
 pnpm test:scripts                # repository scripts (node --test)
 pnpm --filter @anchor/web lint:tokens
 pnpm --filter @anchor/docs build # fails on broken links
@@ -70,6 +70,12 @@ pnpm --filter ./apps/cli test:e2e                  # CLI against a local Worker
 pnpm --filter @anchor/web exec playwright install chromium
 pnpm --filter @anchor/web e2e                      # dashboard against wrangler dev
 ```
+
+The dashboard e2e run builds the dashboard, starts the Worker on :8788 with a throwaway D1 state
+and random keys under `apps/web/test/e2e/.state/` (never your `.dev.vars`), runs the first-run
+setup smoke and the folders, references, history and rollback flow, and fails on any CSP
+violation. Production serves the built dashboard from the Worker itself, with the strict CSP in
+`apps/web/public/_headers`.
 
 Tests live in a layered `test/` tree beside `src/`; see the
 [test layout guide](https://sotarak.github.io/anchor/contributing/testing/).

@@ -1,31 +1,85 @@
 # Anchor
 
-Anchor is a self-hosted secrets and configuration manager that runs entirely on Cloudflare's
-developer platform. One Worker serves the API, D1 stores everything, and every secret value is
-encrypted with a per-project key that is itself wrapped by a root key held as a Worker secret. The
-same Worker serves the web dashboard (`apps/web`), and the `anchor` CLI (`apps/cli`) covers
-developer machines and CI.
+**Self-hosted secrets and configuration for your apps and CI, running entirely on your own
+Cloudflare account.**
+
+[![CI](https://github.com/sotarak/anchor/actions/workflows/ci.yml/badge.svg)](https://github.com/sotarak/anchor/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-sotarak.github.io%2Fanchor-dd224e.svg)](https://sotarak.github.io/anchor/)
+
+Anchor is a secrets manager in the spirit of Infisical, built on Cloudflare's developer platform:
+one Worker serves the API and the dashboard, D1 stores everything, and Queues re-encrypt values in
+the background when a key rotates. The `anchor` CLI injects secrets into local processes and CI
+jobs.
+
+## Why Anchor
+
+- **Nothing to operate.** No servers, no database cluster, no unseal ceremony. An instance is one
+  `wrangler deploy` on your account, and it scales with Cloudflare.
+- **Your data stays with you.** Secrets live in your D1 database, encrypted under a root key that
+  only your Worker holds.
+- **Built for pipelines.** Scoped, expiring, revocable service tokens and a CLI that fails closed:
+  `anchor run` never starts your command with a partial environment.
+- **Free and fully featured when self-hosted**, under the Apache License 2.0.
 
 ## Features
 
 - **Projects, environments and folders.** Secrets live at a path (`/`, `/api`, `/api/v2`) in an
-  environment. Folders can be created empty; deleting a non-empty folder needs `--force`.
+  environment (`dev`, `staging`, `prod`, ...).
+- **Encryption.** AES-256-GCM per value under a per-project key, wrapped by a root key held as a
+  Worker secret. Project keys rotate online through Cloudflare Queues; the root key rotates by
+  re-wrapping.
 - **Version history and rollback.** Every write keeps the previous version. Past values can be
   revealed (audited), and a rollback saves an old version as a new one.
-- **References.** A value can embed `${KEY}` (same folder) or `${env:/path/KEY}`; reads expand them
-  on request (`--no-expand` turns it off, `$${` is a literal `${`). Cycles, missing keys and
-  references the reader may not see fail the read instead of leaking or guessing. Expansion is
-  capped: depth 5, 500 referenced secrets and 16 MiB of referenced bytes per request, 1 MiB per value.
+- **References.** A value can embed `${KEY}` (same folder) or `${env:/path/KEY}`. Every hop is
+  authorized; cycles and missing keys fail the read instead of guessing.
 - **Folder imports.** A folder can import other folders; local keys win, then imports in order.
-- **Encryption.** AES-256-GCM per value under a per-project key (KEK), wrapped by a root key held
-  as a Worker secret. Project keys rotate in the background through Cloudflare Queues; the root key
-  rotates by re-wrapping. See the runbooks in [docs/deploy.md](docs/deploy.md).
-- **Access control and audit.** Instance and project roles, environment-scoped members, scoped
-  service tokens for CI, and an audit log of reads and changes (never values).
-- **CLI.** `anchor run -- <cmd>`, `export`, `secrets get|set|list|delete|history|rollback`,
-  `folders list|create|delete` — `anchor --help` lists every command.
+- **Access control.** Instance roles (owner, admin, member), project roles (admin, developer,
+  viewer) limited to chosen environments, and service tokens scoped to environments and folders.
+- **Audit log.** Logins, reads and changes, never values. Append-only, kept for 365 days.
+- **Dashboard and CLI.** A web dashboard served by the same Worker, and a CLI for developers and CI.
+
+## Architecture
+
+```
+ browser ─┐          ┌──────────── your Cloudflare account ─────────────┐
+ anchor ──┼─ HTTPS ─▶│ Worker: /api/v1 (Hono) + dashboard (static SPA)   │
+ CI ──────┘          │   ├─ D1: users, projects, encrypted secrets, audit│
+                     │   ├─ Queues: background re-encryption             │
+                     │   └─ Cron: audit retention, resume rotations      │
+                     └───────────────────────────────────────────────────┘
+
+ root key (Worker secret) ─wraps→ project key (D1) ─encrypts→ secret values (D1)
+```
+
+More in [Architecture](https://sotarak.github.io/anchor/start/architecture/) and the
+[security model](https://sotarak.github.io/anchor/security/model/).
+
+## Quickstart
+
+Deploy your own instance (Workers Paid plan, Node.js 22+, pnpm):
 
 ```sh
+git clone https://github.com/sotarak/anchor.git && cd anchor && pnpm install
+cd apps/server && pnpm exec wrangler d1 create anchor   # put the database_id in wrangler.jsonc
+pnpm exec wrangler d1 migrations apply anchor --remote
+pnpm exec wrangler queues create anchor-reencrypt && pnpm exec wrangler queues create anchor-reencrypt-dlq
+# generate and back up the root key, set ANCHOR_ROOT_KEY and ANCHOR_SETUP_TOKEN (see the guide)
+cd ../.. && pnpm deploy:worker
+```
+
+Then open `https://<your-worker>/setup` to create the first owner. **Read the
+[deploy guide](https://sotarak.github.io/anchor/guides/deploy/) before storing real secrets**: it
+covers backing up the root key, which cannot be recovered if lost.
+
+## The CLI
+
+Download a binary from the [latest release](https://github.com/sotarak/anchor/releases/latest),
+then:
+
+```sh
+anchor login --api-url https://anchor.example.com
+anchor init                                        # link this directory to a project
 anchor folders create /db
 printf '%s' "$PASSWORD" | anchor secrets set PASSWORD --path /db
 printf '%s' 'postgres://app:${PASSWORD}@db.internal/app' | anchor secrets set DB_URL --path /db
@@ -34,46 +88,37 @@ anchor secrets history DB_URL --path /db
 anchor secrets rollback DB_URL --to 1 --path /db
 ```
 
-## Development quickstart
+Secret values are never accepted as arguments, never printed to a terminal without `--reveal`,
+and `anchor run` writes nothing to disk.
 
-```sh
-pnpm install
-pnpm test        # all packages (server layers: pnpm --filter ./apps/server test:unit | test:integration | test:api)
-pnpm lint
-pnpm typecheck
+## Documentation
 
-cd apps/server
-cp .dev.vars.example .dev.vars   # fill in values from: openssl rand -base64 32
-pnpm exec wrangler d1 migrations apply anchor --local
-pnpm dev                         # http://localhost:8787
-```
+**[sotarak.github.io/anchor](https://sotarak.github.io/anchor/)**
 
-## Dashboard development
+- [Introduction](https://sotarak.github.io/anchor/start/introduction/) and
+  [quickstart](https://sotarak.github.io/anchor/start/quickstart/)
+- [Deploy to Cloudflare](https://sotarak.github.io/anchor/guides/deploy/)
+- [CLI](https://sotarak.github.io/anchor/guides/cli/) and
+  [CI](https://sotarak.github.io/anchor/guides/ci/)
+- [Operations runbooks](https://sotarak.github.io/anchor/operations/project-key-rotation/): key
+  rotation, audit retention, rate limiting, recovery, upgrades
+- [HTTP API](https://sotarak.github.io/anchor/reference/http-api/) and
+  [limits](https://sotarak.github.io/anchor/reference/limits/)
 
-```sh
-# Terminal 1: the API (see above), on http://localhost:8787
-cd apps/server && pnpm dev
+Anchor is pre-1.0; see the [changelog](CHANGELOG.md).
 
-# Terminal 2: the dashboard with hot reload; /api is proxied to :8787
-cd apps/web && pnpm dev          # http://localhost:5173
-```
+## Contributing
 
-A fresh instance opens on `/setup`; use the `ANCHOR_SETUP_TOKEN` from `apps/server/.dev.vars`.
-Production serves the built dashboard from the Worker itself (`pnpm build`, then `wrangler dev`
-or deploy), with the strict CSP in `apps/web/public/_headers`.
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and
+checks, and sign off your commits (`git commit -s`, [DCO](https://developercertificate.org/)).
+Questions go to [Discussions](https://github.com/sotarak/anchor/discussions). This project follows
+the [Contributor Covenant](CODE_OF_CONDUCT.md).
 
-```sh
-cd apps/web
-pnpm test                        # component and route tests (vitest + jsdom + msw)
-pnpm lint:tokens                 # design-token lint
-pnpm exec playwright install chromium
-pnpm e2e                         # Playwright against a real `wrangler dev` on :8788
-```
+## Security
 
-The e2e run builds the dashboard, starts the Worker with a throwaway D1 state and random keys under
-`apps/web/test/e2e/.state/` (never your `.dev.vars`), runs the smoke (first-run setup), then the
-M5 flow (folders, references, history, rollback), and fails on any CSP violation. The CLI has its
-own end-to-end suite against a local Worker: `pnpm --filter ./apps/cli test:e2e`.
+Please report vulnerabilities privately, as described in [SECURITY.md](SECURITY.md). Do not open a
+public issue.
 
-Deploying to Cloudflare: see [`docs/deploy.md`](docs/deploy.md). Test layout and conventions:
-[`docs/testing.md`](docs/testing.md).
+## License
+
+[Apache License 2.0](LICENSE). Copyright 2026 Sota. Third-party notices are in [NOTICE](NOTICE).

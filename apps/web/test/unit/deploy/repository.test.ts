@@ -372,6 +372,46 @@ describe("open-source repository", () => {
     expect(mcp).toContain("secrets:reveal");
   });
 
+  it("the release publishes the SDK before the NestJS module, each skipped once on npm", () => {
+    const wf = read(".github/workflows/release-cli.yml");
+    const npmJob = wf.slice(wf.indexOf("\n  npm:\n"), wf.indexOf("\n  homebrew:\n"));
+    const at = (s: string) => {
+      const i = npmJob.indexOf(s);
+      expect(i, s).toBeGreaterThan(-1);
+      return i;
+    };
+    const cliPublish = at('npm publish "$RUNNER_TEMP"/pkg/*.tgz');
+    const sdkSkip = at('npm view "@anchor-secrets/sdk@$VERSION" version');
+    const nestSkip = at('npm view "@anchor-secrets/nestjs@$VERSION" version');
+    const sdkPack = at("pnpm --filter ./packages/sdk pack");
+    const nestPack = at("pnpm --filter ./packages/nestjs pack");
+    const smoke = at("require('@anchor-secrets/nestjs')");
+    expect(npmJob).toContain("import('@anchor-secrets/sdk')");
+    const sdkPublish = at('npm publish "$RUNNER_TEMP"/sdk/*.tgz --access public --tag "$NPM_TAG"');
+    const nestPublish = at(
+      'npm publish "$RUNNER_TEMP"/nestjs/*.tgz --access public --tag "$NPM_TAG"',
+    );
+    expect(cliPublish).toBeLessThan(sdkPack);
+    expect(sdkPack).toBeLessThan(nestPack);
+    expect(nestPack).toBeLessThan(smoke);
+    expect(smoke).toBeLessThan(sdkPublish);
+    expect(sdkPublish).toBeLessThan(nestPublish);
+    expect(Math.max(sdkSkip, nestSkip)).toBeLessThan(sdkPublish);
+    expect(npmJob).toContain("if: steps.sdk_published.outputs.skip != 'true'");
+    expect(npmJob).toContain("if: steps.nestjs_published.outputs.skip != 'true'");
+  });
+
+  it("the SDK guide covers the NestJS module, loadAnchorEnv and the token", () => {
+    const sdk = read("apps/docs/src/content/docs/guides/sdk.md");
+    expect(sdk).toContain("AnchorModule.forRoot");
+    expect(sdk).toContain(
+      'AnchorModule.forRoot({ project: "zepo", environment: "prod", path: "/shared" })',
+    );
+    expect(sdk).toContain("loadAnchorEnv");
+    expect(sdk).toContain("ANCHOR_TOKEN");
+    expect(sdk).toContain("npm install @anchor-secrets/nestjs");
+  });
+
   it("the CI guide pins the 0.4.0 CLI", () => {
     const ci = read("apps/docs/src/content/docs/guides/ci.md");
     expect(ci).not.toContain("0.3.0");

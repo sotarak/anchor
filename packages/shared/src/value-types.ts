@@ -79,17 +79,4 @@ export function checkTypedValue(type: SecretValueType, value: string): TypedValu
   }
 }
 
-/** Decodes a value that already passed `checkTypedValue` into its typed form. */
-export function decodeTypedValue(type: SecretValueType, value: string): unknown {
-  switch (type) {
-    case "json":
-    case "list":
-      return JSON.parse(value);
-    case "number":
-      return Number(value);
-    case "boolean":
-      return value === "true";
-    default:
-      return value;
-  }
-}
+export { decodeTypedValue } from "./value-decode";

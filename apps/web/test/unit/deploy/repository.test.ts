@@ -205,6 +205,7 @@ describe("open-source repository", () => {
       "apps/cli/package.json",
       "apps/docs/package.json",
       "packages/shared/package.json",
+      "packages/sdk/package.json",
     ];
     const version = json("package.json").version as string;
     expect(version).toMatch(/^\d+\.\d+\.\d+$/);
@@ -354,6 +355,7 @@ describe("open-source repository", () => {
       "apps/server/package.json",
       "apps/web/package.json",
       "packages/shared/package.json",
+      "packages/sdk/package.json",
     ]) {
       expect(JSON.parse(read(f)).version, f).toBe("0.4.0");
     }

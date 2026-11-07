@@ -357,6 +357,8 @@ describe("open-source repository", () => {
     ]) {
       expect(JSON.parse(read(f)).version, f).toBe("0.4.0");
     }
+    // The MCP server reports this as its version.
+    expect(read("apps/server/src/version.ts")).toContain('SERVER_VERSION = "0.4.0"');
   });
 
   it("the CI guide pins the 0.4.0 CLI", () => {

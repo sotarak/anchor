@@ -7,4 +7,5 @@ export * from "./factories/secret-versions";
 export * from "./factories/service-tokens";
 export * from "./factories/users";
 export * from "./http";
+export * from "./mcp";
 export * from "./oauth";

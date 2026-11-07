@@ -11,6 +11,7 @@ import { inviteRoutes } from "./invites/routes";
 import { keyRoutes } from "./keys/routes";
 import { errorHandler, notFoundHandler } from "./lib/errors";
 import { requestContext } from "./lib/request";
+import { mcpRoutes } from "./mcp/route";
 import { memberRoutes } from "./members/routes";
 import { consentRoutes } from "./oauth/consent-routes";
 import { publicOAuthRoutes } from "./oauth/public-routes";
@@ -50,6 +51,7 @@ export function createApp(): Hono<AppEnv> {
 
   // OAuth for MCP clients: anonymous, cookie-free, outside /api (spec 2026-11-07-v0.4.0-mcp-oauth).
   app.route("/", publicOAuthRoutes);
+  app.route("/", mcpRoutes);
 
   app.onError(errorHandler);
   app.notFound(notFoundHandler);

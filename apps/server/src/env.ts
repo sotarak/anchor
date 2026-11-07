@@ -1,4 +1,4 @@
-import type { InstanceRole } from "@anchor/shared";
+import type { InstanceRole, OAuthScope } from "@anchor/shared";
 import type { ReencryptMessage } from "./keys/rotation";
 
 export type Bindings = {
@@ -43,6 +43,8 @@ export type AppEnv = {
   Variables: {
     principal?: Principal;
     authVia?: "cookie" | "bearer";
+    /** Set on /mcp: the OAuth grant the request runs under (spec 2026-11-07-v0.4.0-mcp-oauth). */
+    oauth?: { grantId: string; clientId: string; scopes: OAuthScope[] };
     requestId: string;
     clientIp: string | null;
     userAgent: string | null;

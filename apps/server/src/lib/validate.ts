@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import type { z } from "zod";
 import { ApiError } from "./errors";
 
-function check<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
+export function check<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
   const result = schema.safeParse(input);
   if (result.success) return result.data;
   const issues = result.error.issues;

@@ -166,7 +166,13 @@ publicOAuthRoutes.post("/oauth/register", async (c) => {
 async function formParams(c: Context): Promise<URLSearchParams | null> {
   const type = c.req.header("content-type") ?? "";
   if (!type.toLowerCase().startsWith("application/x-www-form-urlencoded")) return null;
-  return new URLSearchParams(await c.req.text());
+  const params = new URLSearchParams();
+  try {
+    for (const [k, v] of await c.req.formData()) if (typeof v === "string") params.append(k, v);
+  } catch {
+    return null;
+  }
+  return params;
 }
 
 async function tokenResponse(c: Context, grantId: string, scopes: string, now: number) {

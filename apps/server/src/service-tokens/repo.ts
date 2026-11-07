@@ -12,7 +12,7 @@ export type ServiceTokenRow = {
   scopes: string;
   created_by: string | null;
   created_at: number;
-  expires_at: number;
+  expires_at: number | null;
   last_used_at: number | null;
   revoked_at: number | null;
 };
@@ -33,7 +33,7 @@ export async function createServiceToken(
     name: string;
     permission: "read" | "read-write";
     scopes: TokenScope[];
-    expiresAt: number;
+    expiresAt: number | null;
     createdBy: string;
   },
   now: number,
@@ -75,7 +75,8 @@ export async function createServiceToken(
   return { row, token };
 }
 
-/** Resolves a bearer service token; null when unknown, revoked or expired. No caching. */
+/** Resolves a bearer service token; null when unknown, revoked or expired. No caching. A null
+ * expires_at never expires. */
 export async function findPrincipalByServiceToken(
   db: D1Database,
   token: string,
@@ -84,7 +85,7 @@ export async function findPrincipalByServiceToken(
   if (!token.startsWith(TOKEN_PREFIX)) return null;
   const row = await db
     .prepare(
-      "SELECT * FROM service_tokens WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?",
+      "SELECT * FROM service_tokens WHERE token_hash = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)",
     )
     .bind(await sha256Hex(token), now)
     .first<ServiceTokenRow>();

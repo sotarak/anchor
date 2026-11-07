@@ -77,7 +77,9 @@ describe("service tokens", () => {
       lastUsedAt: null,
       revokedAt: null,
     });
-    expect(created.serviceToken.expiresAt - created.serviceToken.createdAt).toBe(7 * 86_400_000);
+    expect((created.serviceToken.expiresAt ?? 0) - created.serviceToken.createdAt).toBe(
+      7 * 86_400_000,
+    );
 
     const list = await api(tokensUrl(), bearer(owner));
     const text = await list.text();
@@ -318,6 +320,7 @@ describe("service tokens", () => {
       name: "x",
       permission: "read",
       scopes: [{ environment: "dev", path: "/" }],
+      expiresAt: expect.any(Number),
     });
   });
 

@@ -11,5 +11,6 @@ export const createServiceTokenBodySchema = z.object({
     .array(z.object({ environment: slugSchema, path: secretPathSchema }))
     .min(1)
     .max(20),
-  expiresInDays: z.number().int().min(1).max(365),
+  /** null = the token never expires. Still required, so an omitted field is a 400. */
+  expiresInDays: z.number().int().min(1).max(365).nullable(),
 });

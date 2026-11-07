@@ -43,16 +43,16 @@ export async function tokensCreate(
     expiresInDays,
   });
   const t = res.serviceToken;
-  ctx.out.info(
-    `Created service token ${t.name} (${t.permission}), expires ${new Date(t.expiresAt).toISOString()}`,
-  );
+  const expiry =
+    t.expiresAt === null ? "never expires" : `expires ${new Date(t.expiresAt).toISOString()}`;
+  ctx.out.info(`Created service token ${t.name} (${t.permission}), ${expiry}`);
   ctx.out.info("Store this token now; it will not be shown again.");
   ctx.out.data(res, () => res.token);
 }
 
 function status(t: ServiceTokenDto, now: number): "active" | "expired" | "revoked" {
   if (t.revokedAt !== null) return "revoked";
-  return t.expiresAt <= now ? "expired" : "active";
+  return t.expiresAt !== null && t.expiresAt <= now ? "expired" : "active";
 }
 
 export async function tokensList(ctx: CommandContext): Promise<void> {
@@ -69,7 +69,7 @@ export async function tokensList(ctx: CommandContext): Promise<void> {
         t.tokenPrefix,
         t.permission,
         t.scopes.map((s) => `${s.environment}:${s.path}`).join(","),
-        formatDate(t.expiresAt),
+        t.expiresAt === null ? "never" : formatDate(t.expiresAt),
         t.lastUsedAt === null ? "never" : formatDate(t.lastUsedAt),
         status(t, now),
       ]),

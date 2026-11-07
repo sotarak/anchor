@@ -163,7 +163,8 @@ export type ServiceTokenDto = {
   permission: "read" | "read-write";
   scopes: { environment: string; path: string }[];
   createdAt: number;
-  expiresAt: number;
+  /** null = never expires. */
+  expiresAt: number | null;
   lastUsedAt: number | null;
   revokedAt: number | null;
 };

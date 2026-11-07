@@ -202,9 +202,13 @@ function ServiceTokensPage() {
                       <StatusBadge status={status.status}>{status.label}</StatusBadge>
                     </TableCell>
                     <TableCell className="text-paragraph-sm">
-                      <Tooltip content={formatRelative(t.expiresAt)}>
-                        <span>{formatDate(t.expiresAt)}</span>
-                      </Tooltip>
+                      {t.expiresAt === null ? (
+                        "Never"
+                      ) : (
+                        <Tooltip content={formatRelative(t.expiresAt)}>
+                          <span>{formatDate(t.expiresAt)}</span>
+                        </Tooltip>
+                      )}
                     </TableCell>
                     <TableCell className="text-paragraph-sm">
                       {t.lastUsedAt === null ? (

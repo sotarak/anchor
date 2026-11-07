@@ -31,7 +31,8 @@ export type ServiceTokenPrincipal = {
   name: string;
   permission: "read" | "read-write";
   scopes: { environmentId: string; path: string }[];
-  expiresAt: number;
+  /** null = never expires. */
+  expiresAt: number | null;
 };
 
 /** Who is calling (spec §13.2). Every route resolves one before touching data. */

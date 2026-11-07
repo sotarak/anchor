@@ -11,6 +11,7 @@ export function tokenStatus(
   now = Date.now(),
 ): { status: Status; label: TokenStatusLabel } {
   if (t.revokedAt !== null) return { status: "neutral", label: "Revoked" };
+  if (t.expiresAt === null) return { status: "success", label: "Active" };
   if (t.expiresAt <= now) return { status: "neutral", label: "Expired" };
   if (t.expiresAt - now < WEEK) return { status: "warning", label: "Expiring" };
   return { status: "success", label: "Active" };

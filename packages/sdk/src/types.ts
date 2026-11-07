@@ -1,4 +1,5 @@
 /** Public types of the SDK. They never come from `@anchor/shared`, which is bundled. */
+import type { AnchorError } from "./errors.js";
 
 /** The value type a secret declares. */
 export type AnchorValueType = "string" | "json" | "pem" | "number" | "boolean" | "list";
@@ -27,7 +28,25 @@ export type ClientOptions = {
   fetch?: typeof fetch;
   /** Per attempt; default 10 000 ms. */
   timeoutMs?: number;
+  /** Retries of network errors, timeouts and HTTP 429/502/503/504; `false` turns them off. */
+  retry?: RetryOptions | false;
+  /** Receives retries and failed refreshes. Exceptions it throws are ignored. */
+  onEvent?: (event: AnchorEvent) => void;
 };
+
+export type RetryOptions = {
+  /** Attempts in total, including the first; default 3. */
+  attempts?: number;
+  /** Upper bound of the first wait; it doubles per attempt. Default 250 ms. */
+  baseDelayMs?: number;
+  /** Upper bound of any wait, including `Retry-After`; default 5 000 ms. */
+  maxDelayMs?: number;
+};
+
+/** What the client reports through `onEvent`. Never carries a token or a value. */
+export type AnchorEvent =
+  | { type: "retry"; attempt: number; delayMs: number; error: AnchorError }
+  | { type: "refresh_failed"; error: AnchorError; staleForMs: number };
 
 export type ListQuery = {
   /** Project slug. */

@@ -230,26 +230,23 @@ describe("retries", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it("fails after exactly 3 attempts on 503, waiting 250 ms then 1 s", async () => {
+  it("fails after exactly 3 attempts on 503, with jittered waits", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
     const f = fakeFetch(json({ error: { code: "unavailable", message: "Busy" } }, 503));
     const start = Date.now();
     const pending = client(f.fetch)
       .listSecrets(QUERY)
       .catch((e: unknown) => e);
-    await vi.advanceTimersByTimeAsync(249);
+    await vi.advanceTimersByTimeAsync(124);
     expect(f.calls).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(1);
     expect(f.calls).toHaveLength(2);
-    await vi.advanceTimersByTimeAsync(999);
-    expect(f.calls).toHaveLength(2);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(f.calls).toHaveLength(3);
     await vi.advanceTimersByTimeAsync(5_000);
     const err = (await pending) as AnchorError;
     expect(err).toBeInstanceOf(AnchorError);
     expect(err.status).toBe(503);
-    expect(f.calls.map((c) => c.at - start)).toEqual([0, 250, 1250]);
-    expect(f.calls).toHaveLength(3);
+    expect(f.calls.map((c) => c.at - start)).toEqual([0, 125, 375]);
+    vi.restoreAllMocks();
   });
 
   it("retries a network error and succeeds", async () => {

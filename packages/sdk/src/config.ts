@@ -1,5 +1,6 @@
 import { AnchorError } from "./errors.js";
-import type { ClientOptions } from "./types.js";
+import { DEFAULT_RETRY, type RetryPolicy } from "./retry.js";
+import type { AnchorEvent, ClientOptions } from "./types.js";
 
 export const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -9,6 +10,8 @@ export type Config = {
   token: string;
   fetch: typeof fetch;
   timeoutMs: number;
+  retry: RetryPolicy | false;
+  onEvent?: (event: AnchorEvent) => void;
 };
 
 function fromEnv(name: string): string | undefined {
@@ -53,5 +56,19 @@ export function resolveConfig(opts: ClientOptions): Config {
     token,
     fetch: f,
     timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    retry: opts.retry === false ? false : { ...DEFAULT_RETRY, ...opts.retry },
+    onEvent: opts.onEvent,
   };
+}
+
+/** Calls the event hook; a hook that throws never breaks a request. */
+export function emitSafely(
+  onEvent: ((event: AnchorEvent) => void) | undefined,
+  event: AnchorEvent,
+): void {
+  try {
+    onEvent?.(event);
+  } catch {
+    // The hook is the application's; its failure is not the request's.
+  }
 }

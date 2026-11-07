@@ -1,7 +1,8 @@
-import { resolveConfig } from "./config.js";
+import { emitSafely, resolveConfig } from "./config.js";
 import { decodeAll, toSecret, type WireSecret } from "./decode.js";
 import { AnchorError } from "./errors.js";
-import { getJson } from "./transport.js";
+import { withRetry } from "./retry.js";
+import { fetchJson } from "./transport.js";
 import type { AnchorClient, AnchorSecret, ClientOptions, ListQuery } from "./types.js";
 
 export function createAnchorClient(options: ClientOptions = {}): AnchorClient {
@@ -14,7 +15,9 @@ export function createAnchorClient(options: ClientOptions = {}): AnchorClient {
       includeImports: String(q.includeImports ?? true),
     });
     const url = `${cfg.base}/api/v1/projects/${encodeURIComponent(q.project)}/environments/${encodeURIComponent(q.environment)}/secrets?${params}`;
-    const body = (await getJson(cfg, url)) as { secrets?: unknown } | null;
+    const body = (await withRetry(() => fetchJson(cfg, url), cfg.retry, {
+      emit: (event) => emitSafely(cfg.onEvent, event),
+    })) as { secrets?: unknown } | null;
     if (!body || !Array.isArray(body.secrets)) {
       throw new AnchorError(200, "bad_response", "Anchor returned an unexpected response");
     }

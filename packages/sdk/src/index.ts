@@ -6,9 +6,11 @@ export { createAnchorClient } from "./client.js";
 export { AnchorError } from "./errors.js";
 export type {
   AnchorClient,
+  AnchorEvent,
   AnchorSecret,
   AnchorValue,
   AnchorValueType,
   ClientOptions,
   ListQuery,
+  RetryOptions,
 } from "./types.js";

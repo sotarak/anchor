@@ -14,6 +14,7 @@ import { hashPassword, verifyAgainstDummy, verifyPassword } from "../crypto/pass
 import type { AppEnv } from "../env";
 import { ApiError } from "../lib/errors";
 import { parseJson } from "../lib/validate";
+import { revokeUserGrants } from "../oauth/store";
 import { loadServiceTokenDto } from "../service-tokens/repo";
 import { consumePasswordReset } from "../users/password-resets";
 import {
@@ -167,6 +168,7 @@ authRoutes.post("/auth/password", async (c) => {
   }
   await setPassword(c.env.DB, user.id, await hashPassword(body.newPassword), now);
   await revokeUserSessions(c.env.DB, user.id, principal.sessionId);
+  await revokeUserGrants(c.env.DB, user.id, now);
   await recordAudit(c, { action: "auth.password_changed", target: user.id });
   return c.body(null, 204);
 });
@@ -174,9 +176,11 @@ authRoutes.post("/auth/password", async (c) => {
 authRoutes.post("/auth/password-reset", async (c) => {
   const body = await parseJson(c, resetPasswordBodySchema);
   const passwordHash = await hashPassword(body.password);
-  const userId = await consumePasswordReset(c.env.DB, body.token, passwordHash, Date.now());
+  const now = Date.now();
+  const userId = await consumePasswordReset(c.env.DB, body.token, passwordHash, now);
   if (!userId) throw new ApiError(404, "not_found", "Link is invalid or has expired");
   await revokeUserSessions(c.env.DB, userId);
+  await revokeUserGrants(c.env.DB, userId, now);
   const user = await findUserById(c.env.DB, userId);
   await recordAudit(c, {
     action: "auth.password_reset",

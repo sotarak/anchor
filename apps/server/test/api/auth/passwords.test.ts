@@ -1,13 +1,17 @@
 import { env } from "cloudflare:workers";
 import type { ApiErrorBody, InstanceRole } from "@anchor/shared";
 import { beforeEach, describe, expect, it } from "vitest";
+import { createGrant, issueTokenPair } from "#src/oauth/store";
 import {
   api,
   auditRows,
   createServiceToken,
   createUserWithSession,
+  formPost,
   json,
   jsonInit,
+  mcpCall,
+  oauthClient,
   resetDb,
   TEST_PASSWORD,
 } from "#test/support";
@@ -31,6 +35,32 @@ const useReset = (token: string, password = NEW_PASSWORD) =>
   api("/api/v1/auth/password-reset", jsonInit("POST", { token, password }));
 const user = (role: InstanceRole, email: string) =>
   createUserWithSession({ role, kind: "cli", email });
+
+/** An agent's grant for the user: its client id, access token and refresh token. */
+async function agentFor(userId: string) {
+  const client = await oauthClient();
+  const now = Date.now();
+  const grantId = await createGrant(env.DB, {
+    userId,
+    clientId: client.id,
+    scopes: ["secrets:read", "secrets:write", "secrets:reveal"],
+    now,
+  });
+  const pair = await issueTokenPair(env.DB, grantId, now);
+  return { clientId: client.id, ...pair };
+}
+
+/** The agent's access token no longer works on /mcp and its refresh token is refused. */
+async function expectAgentCutOff(agent: Awaited<ReturnType<typeof agentFor>>) {
+  expect((await mcpCall(agent.accessToken, "tools/list")).status).toBe(401);
+  const refresh = await formPost("/oauth/token", {
+    grant_type: "refresh_token",
+    refresh_token: agent.refreshToken,
+    client_id: agent.clientId,
+  });
+  expect(refresh.status).toBe(400);
+  expect(await json<{ error: string }>(refresh)).toMatchObject({ error: "invalid_grant" });
+}
 
 async function resetLink(by: string, userId: string): Promise<string> {
   const res = await createReset(by, userId);
@@ -58,6 +88,21 @@ describe("change password", () => {
     const [audit] = await auditRows("auth.password_changed");
     expect(audit).toMatchObject({ actor_id: m.userId, target: m.userId });
     expect(JSON.stringify(audit)).not.toContain(NEW_PASSWORD);
+  });
+
+  it("change password revokes every AI agent the user approved", async () => {
+    const m = await user("member", "m@example.test");
+    const agent = await agentFor(m.userId);
+    expect((await mcpCall(agent.accessToken, "tools/list")).status).toBe(200);
+    expect((await changePassword(m.token, TEST_PASSWORD)).status).toBe(204);
+    await expectAgentCutOff(agent);
+  });
+
+  it("a failed password change leaves agents alone", async () => {
+    const m = await user("member", "m@example.test");
+    const agent = await agentFor(m.userId);
+    expect((await changePassword(m.token, "not the password")).status).toBe(401);
+    expect((await mcpCall(agent.accessToken, "tools/list")).status).toBe(200);
   });
 
   it("change password with the wrong current password -> 401 and counts toward lockout", async () => {
@@ -143,6 +188,16 @@ describe("password reset links", () => {
       actor_id: m.userId,
       actor_label: "m@example.test",
     });
+  });
+
+  it("a password reset revokes every AI agent the user approved, and only theirs", async () => {
+    const m = await user("member", "m@example.test");
+    const agent = await agentFor(m.userId);
+    const ownersAgent = await agentFor(owner.userId);
+    const token = await resetLink(owner.token, m.userId);
+    expect((await useReset(token)).status).toBe(204);
+    await expectAgentCutOff(agent);
+    expect((await mcpCall(ownersAgent.accessToken, "tools/list")).status).toBe(200);
   });
 
   it("reset link reused -> 404", async () => {

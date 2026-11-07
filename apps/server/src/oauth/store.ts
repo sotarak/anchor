@@ -236,6 +236,19 @@ export async function revokeGrant(db: D1Database, grantId: string, now: number):
   return result.meta.changes === 1;
 }
 
+/** Revokes every live grant the user approved (password change or reset cuts off their agents). */
+export async function revokeUserGrants(
+  db: D1Database,
+  userId: string,
+  now: number,
+): Promise<number> {
+  const result = await db
+    .prepare("UPDATE oauth_grants SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")
+    .bind(now, userId)
+    .run();
+  return result.meta.changes;
+}
+
 /** The grant a code-or-token string belongs to (any kind, any state), for revocation. */
 export async function findGrantIdByToken(db: D1Database, token: string): Promise<string | null> {
   const row = await db

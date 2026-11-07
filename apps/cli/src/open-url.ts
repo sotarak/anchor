@@ -1,8 +1,9 @@
 import type { Spawner } from "./context";
 
 /**
- * Opens an http(s) URL in the default browser. The URL is passed as one argument, never through
- * a shell. Any failure is false: the caller has already printed the URL.
+ * Opens an http(s) URL in the default browser. The URL is passed as one argument; on Windows,
+ * where `start` goes through cmd.exe, a URL with cmd metacharacters is refused instead. Any
+ * failure is false: the caller has already printed the URL.
  */
 export async function openUrl(
   url: string,
@@ -16,6 +17,8 @@ export async function openUrl(
     return false;
   }
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+  // `cmd /c start` re-parses its command line, so these would run as cmd syntax on Windows.
+  if (platform === "win32" && /[&|^<>%"]/.test(url)) return false;
   const [cmd, args]: [string, string[]] =
     platform === "darwin"
       ? ["open", [url]]

@@ -41,4 +41,17 @@ describe("openUrl", () => {
     };
     expect(await openUrl(URL, "linux", throwing)).toBe(false);
   });
+
+  it("on Windows refuses URLs carrying cmd.exe metacharacters", async () => {
+    for (const url of [
+      "https://x.example/cli/login&calc.exe",
+      "https://x.example/a|b",
+      "https://x.example/a^b",
+      "https://x.example/%PATH%",
+    ]) {
+      const s = spawner();
+      expect(await openUrl(url, "win32", s.spawn)).toBe(false);
+      expect(s.calls).toEqual([]);
+    }
+  });
 });

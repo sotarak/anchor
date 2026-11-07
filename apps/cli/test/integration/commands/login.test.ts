@@ -568,6 +568,71 @@ describe("anchor login (browser)", () => {
     expect(r2.mem.items.size).toBe(0);
   });
 
+  it("opens a URL built from the API URL and the code, never the server's URL", async () => {
+    const { io } = await env();
+    const d = deps();
+    const hostile = {
+      ...started,
+      verificationUriComplete: "https://evil.example/cli/login&calc.exe",
+    };
+    const r = run(
+      io,
+      ["login", "--api-url", API],
+      browserApi(["approved"], async () => hostile),
+      d.extra,
+    );
+    expect(await r.code).toBe(0);
+    expect(io.err()).toContain(`Open ${URL_COMPLETE} and confirm the code WDJB-MJHT`);
+    expect(io.err()).not.toContain("evil.example");
+  });
+
+  it("a malformed code from the server stops before opening anything", async () => {
+    const { io } = await env();
+    const d = deps();
+    const r = run(
+      io,
+      ["login", "--api-url", API],
+      browserApi(["approved"], async () => ({ ...started, userCode: "WDJB&calc" })),
+      d.extra,
+    );
+    expect(await r.code).toBe(1);
+    expect(io.err()).toContain("error: The server returned an invalid login code");
+    expect(d.opened).toEqual([]);
+    expect(r.fake.called("cliLoginToken")).toEqual([]);
+  });
+
+  it("a local clock ahead of the server does not expire the request", async () => {
+    const { io } = await env();
+    const r = run(
+      io,
+      ["login", "--api-url", API],
+      browserApi(["pending", "approved"], async () => ({
+        ...started,
+        expiresAt: Date.now() - 60_000,
+      })),
+      deps().extra,
+    );
+    expect(await r.code).toBe(0);
+    expect(r.mem.items.get(API)).toMatchObject({ token: TOKEN });
+  });
+
+  it("too many pending logins points to --with-password", async () => {
+    const { io } = await env();
+    const r = run(
+      io,
+      ["login", "--api-url", API],
+      browserApi([], async () => {
+        throw apiError(429, "rate_limited", "Too many pending CLI logins, try again later");
+      }),
+      deps().extra,
+    );
+    expect(await r.code).toBe(1);
+    expect(io.err()).toContain("error: Too many pending CLI logins, try again later");
+    expect(io.err()).toContain(
+      "hint: Try again in a few minutes, or use anchor login --with-password",
+    );
+  });
+
   it("an old server without browser login points to --with-password", async () => {
     const { io } = await env();
     const r = run(

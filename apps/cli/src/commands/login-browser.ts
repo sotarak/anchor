@@ -1,4 +1,5 @@
 import { hostname, userInfo } from "node:os";
+import { normalizeUserCode } from "@anchor/shared";
 import { ApiRequestError } from "../api/http";
 import { rawApiFor } from "../auth";
 import type { CommandContext } from "../context";
@@ -9,6 +10,7 @@ const NO_BROWSER_LOGIN =
   "This server does not support browser login; use anchor login --with-password";
 const DENIED = "Login was denied in the browser";
 const EXPIRED = "Login request expired; run anchor login again";
+const TOO_MANY_HINT = "Try again in a few minutes, or use anchor login --with-password";
 const SLOW_DOWN_S = 5;
 
 /** `<user>@<host>`, shown on the approval page so the person can recognize the request. */
@@ -43,17 +45,24 @@ export async function loginWithBrowser(
     // A 0.3.x server has no such route.
     if (e instanceof ApiRequestError && e.status === 404)
       throw new CliError(EXIT.ERROR, NO_BROWSER_LOGIN);
+    if (e instanceof ApiRequestError && e.status === 429)
+      throw new CliError(EXIT.ERROR, e.message, TOO_MANY_HINT, e.code);
     throw toCliError(e, { apiUrl });
   }
 
-  const url = started.verificationUriComplete;
-  ctx.out.notice(`Open ${url} and confirm the code ${started.userCode}`);
+  // The URL is built here from the API URL the user chose and a code that must be 8 letters of
+  // the code alphabet: nothing the server sends reaches the browser opener (or cmd.exe) as is.
+  const userCode = normalizeUserCode(started.userCode);
+  if (!userCode) throw new CliError(EXIT.ERROR, "The server returned an invalid login code");
+  const url = `${new URL(apiUrl).origin}/cli/login?code=${userCode}`;
+  ctx.out.notice(`Open ${url} and confirm the code ${userCode}`);
   if (!opts.noBrowser && io.stdinIsTTY && io.stderrIsTTY) await ctx.deps.openUrl?.(url);
   ctx.out.notice("Waiting for approval…");
 
   let interval = started.interval;
+  // Expiry is the server's call (a 404): comparing its expiresAt with the local clock would fail
+  // at once on a machine whose clock runs fast.
   for (;;) {
-    if (Date.now() >= started.expiresAt) throw new CliError(EXIT.AUTH, EXPIRED);
     await sleep(interval * 1000);
     try {
       const result = await api.cliLoginToken(started.deviceCode);

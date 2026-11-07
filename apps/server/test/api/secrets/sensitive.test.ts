@@ -61,7 +61,11 @@ describe("non-sensitive values", () => {
   });
 
   it("non-sensitive values from an import", async () => {
-    await put("TIMEOUT", { value: "30", type: "number", sensitive: false, path: "/shared" }, "prod");
+    await put(
+      "TIMEOUT",
+      { value: "30", type: "number", sensitive: false, path: "/shared" },
+      "prod",
+    );
     const imp = await api(
       "/api/v1/projects/app/environments/dev/imports",
       jsonInit(

@@ -1,3 +1,4 @@
+import { SECRET_VALUE_TYPES, type SecretValueType } from "@anchor/shared";
 import { Command, Option } from "commander";
 import { envsList } from "./commands/envs";
 import { EXPORT_FORMATS, type ExportFormat, exportCommand } from "./commands/export";
@@ -103,7 +104,7 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     .description("Manage secrets in the current project, environment and path");
   secrets
     .command("list")
-    .description("List secret names and metadata (values only with --reveal)")
+    .description("List secrets with their type and metadata (sensitive values only with --reveal)")
     .option("--reveal", "include values")
     .addHelpText(
       "after",
@@ -114,7 +115,7 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     );
   secrets
     .command("get")
-    .description("Print one secret (the value is masked in a terminal unless --reveal)")
+    .description("Print one secret (a sensitive value is masked in a terminal unless --reveal)")
     .argument("<key>", "secret key")
     .option("--reveal", "show the value in a terminal")
     .option("--expand", "expand ${KEY} references in the value (default)")
@@ -167,17 +168,35 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     .argument("<key>", "secret key")
     .option("--from-file <path>", "read the value from a file (exact bytes)")
     .option("--comment <text>", "comment stored with the secret")
+    .addOption(
+      new Option(
+        "--type <type>",
+        "value type, checked before sending (default: keep the current)",
+      ).choices(SECRET_VALUE_TYPES),
+    )
+    .option("--sensitive", "mask the value unless revealed (default for new secrets)")
+    .option("--no-sensitive", "plain config: shown without --reveal")
     .addHelpText(
       "after",
       examples(
         "anchor secrets set DB_URL            # prompts for the value",
         "printf '%s' \"$DB_URL\" | anchor secrets set DB_URL",
-        "anchor secrets set TLS_KEY --from-file key.pem",
+        "anchor secrets set TLS_KEY --from-file key.pem --type pem",
+        "printf 8080 | anchor secrets set APP_PORT --type number --no-sensitive",
       ),
     )
     .action(
-      act((ctx, key: string, opts: { fromFile?: string; comment?: string }) =>
-        secretsSet(ctx, key, opts),
+      act(
+        (
+          ctx,
+          key: string,
+          opts: {
+            fromFile?: string;
+            comment?: string;
+            type?: SecretValueType;
+            sensitive?: boolean;
+          },
+        ) => secretsSet(ctx, key, opts),
       ),
     );
   secrets

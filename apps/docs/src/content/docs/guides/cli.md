@@ -110,11 +110,11 @@ described in [Versions and rollback](/anchor/guides/versions/).
 | `anchor init` | Link the current directory to a project (writes `.anchor.json`) |
 | `anchor projects list` | List the projects you can access |
 | `anchor envs list` | List the environments of the current project |
-| `anchor secrets list [--reveal]` | List secret names and metadata (values only with `--reveal`) |
-| `anchor secrets get <key> [--reveal] [--no-expand] [--at-version <n>]` | Print one secret; masked in a terminal unless `--reveal` |
+| `anchor secrets list [--reveal]` | List secrets with their type and metadata (sensitive values only with `--reveal`) |
+| `anchor secrets get <key> [--reveal] [--no-expand] [--at-version <n>]` | Print one secret; a sensitive value is masked in a terminal unless `--reveal` |
 | `anchor secrets history <key>` | List the versions of a secret (no values) |
 | `anchor secrets rollback <key> --to <n>` | Restore a past version as a new version |
-| `anchor secrets set <key> [--from-file <path>] [--comment <text>]` | Create or update a secret |
+| `anchor secrets set <key> [--from-file <path>] [--comment <text>] [--type <type>] [--sensitive \| --no-sensitive]` | Create or update a secret |
 | `anchor secrets delete <key>` | Delete a secret |
 | `anchor folders list` | List the subfolders of `--path` (default `/`) |
 | `anchor folders create <path>` | Create a folder and its parents (no-op if it exists) |
@@ -125,6 +125,26 @@ described in [Versions and rollback](/anchor/guides/versions/).
 | `anchor tokens list` | List the project's service tokens |
 | `anchor tokens revoke <id>` | Revoke a service token |
 
+### Value types and plain config
+
+Every secret has a type: `string` (the default), `json`, `pem`, `number`, `boolean` or `list` (a
+JSON array of strings), and is either sensitive (the default) or plain config:
+
+```sh
+printf 8080 | anchor secrets set APP_PORT --type number --no-sensitive
+anchor secrets set JWT_KEYS --from-file keys.json --type json
+anchor secrets set TLS_CERT --from-file cert.pem --type pem
+```
+
+- `set` checks the value against its type before sending it, and fails with
+  `Value of <KEY> is not valid for type <type>: <reason>` (exit 2) without printing the value.
+  Without `--type` or `--sensitive`/`--no-sensitive`, the secret keeps its current type and flag
+  (a new secret is a sensitive `string`).
+- `secrets list` has a TYPE column. Non-sensitive values are shown without `--reveal`; sensitive
+  ones show `********` unless you pass `--reveal`. `secrets get` prints a non-sensitive value
+  without `--reveal` too.
+- References (`${...}`) expand only in `string` values; typed values are always used as stored.
+
 ### Handling of secret values
 
 - Values are never accepted as command-line arguments. `anchor secrets set KEY=value` and any
@@ -134,7 +154,7 @@ described in [Versions and rollback](/anchor/guides/versions/).
   way. An empty stdin exits 2 so `</dev/null` cannot blank a secret; set an empty value with
   `--from-file` and an empty file.
 - `secrets get` prints the raw value (no added newline) when stdout is a pipe or a file. In a
-  terminal it shows the value masked unless you pass `--reveal`; a masked view does not read the
+  terminal it shows a sensitive value masked unless you pass `--reveal`; a masked view does not read the
   value from the server, so it is not recorded as a secret read.
 - `anchor run` fetches secrets before starting the command. If the fetch fails (network error,
   expired session, missing permission) the command is **not** started. `SIGTERM` and `SIGHUP` are
@@ -273,7 +293,7 @@ existing fields are not renamed or removed without a major version.
 | `init` | `{ projectFile, project, defaultEnv }` |
 | `projects list` | `{ projects: ProjectDto[] }` |
 | `envs list` | `{ environments: EnvironmentDto[] }` |
-| `secrets list` | `{ secrets: SecretDto[] }` (`value` only with `--reveal`) |
+| `secrets list` | `{ secrets: SecretDto[] }` (`value` with `--reveal`, and for non-sensitive secrets) |
 | `secrets get` | `{ secret: SecretDto }` (`value` only with `--reveal` or when stdout is not a terminal) |
 | `secrets set` | `{ secret: SecretDto, created: boolean }` (never the value) |
 | `secrets delete` | `{ deleted: { key, environment, path } }` |

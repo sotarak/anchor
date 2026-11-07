@@ -4,6 +4,7 @@ import type {
   LoginResponse,
   ProjectDto,
   SecretDto,
+  SecretValueType,
   SecretVersionDto,
   ServiceTokenDto,
   UserDto,
@@ -61,7 +62,13 @@ export interface ApiClient {
     project: string,
     env: string,
     key: string,
-    body: { value: string; comment?: string; path: string },
+    body: {
+      value: string;
+      comment?: string;
+      path: string;
+      type?: SecretValueType;
+      sensitive?: boolean;
+    },
   ): Promise<{ secret: SecretDto; created: boolean }>;
   deleteSecret(project: string, env: string, key: string, q: { path: string }): Promise<void>;
   listFolders(project: string, env: string, q: { path: string }): Promise<FolderDto[]>;

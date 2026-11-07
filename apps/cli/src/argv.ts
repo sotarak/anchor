@@ -7,6 +7,7 @@ const VALUE_OPTIONS = new Set([
   "--comment",
   "--from-file",
   "--format",
+  "--type",
   "--output",
   "--email",
   "--name",

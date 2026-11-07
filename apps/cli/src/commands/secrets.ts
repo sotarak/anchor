@@ -1,4 +1,10 @@
-import { type SecretDto, type SecretVersionDto, secretKeySchema } from "@anchor/shared";
+import {
+  checkTypedValue,
+  type SecretDto,
+  type SecretValueType,
+  type SecretVersionDto,
+  secretKeySchema,
+} from "@anchor/shared";
 import { positionals } from "../argv";
 import { authedApi } from "../auth";
 import { confirmDestructive } from "../confirm";
@@ -60,16 +66,26 @@ export async function secretsList(ctx: CommandContext, opts: { reveal: boolean }
     ctx.out.info(`No secrets in ${where(s)}`);
     return;
   }
-  const headers = ["KEY", "VERSION", "UPDATED", "COMMENT", ...(opts.reveal ? ["VALUE"] : [])];
+  // Non-sensitive values come back without --reveal, so they get a VALUE column too.
+  const showValues = opts.reveal || secrets.some((x) => !x.sensitive);
+  const headers = [
+    "KEY",
+    "TYPE",
+    "VERSION",
+    "UPDATED",
+    "COMMENT",
+    ...(showValues ? ["VALUE"] : []),
+  ];
   ctx.out.data({ secrets }, () =>
     ctx.out.table(
       headers,
       secrets.map((x) => [
         x.key,
+        x.type,
         String(x.version),
         formatDate(x.updatedAt),
         x.comment,
-        ...(opts.reveal ? [x.value ?? ""] : []),
+        ...(showValues ? [opts.reveal || !x.sensitive ? (x.value ?? "") : MASK] : []),
       ]),
     ),
   );
@@ -90,7 +106,7 @@ export async function secretsGet(
     opts.atVersion === undefined ? undefined : parseVersionNumber("--at-version", opts.atVersion);
   if (version !== undefined) return secretsGetVersion(ctx, key, version, opts);
   const s = scope(ctx);
-  const showValue = opts.reveal || !ctx.deps.io.stdoutIsTTY;
+  let showValue = opts.reveal || !ctx.deps.io.stdoutIsTTY;
   const { api } = await authedApi(ctx);
   let secret: SecretDto;
   if (showValue) {
@@ -115,6 +131,8 @@ export async function secretsGet(
     const found = (await lookup(false)) ?? (await lookup(true));
     if (!found) throw new CliError(EXIT.NOT_FOUND, `Secret ${key} not found in ${where(s)}`);
     secret = found;
+    // A non-sensitive value is plain config: the list already returned it.
+    if (!found.sensitive) showValue = true;
   }
   if (ctx.flags.json) {
     const { value: _value, ...metaOnly } = secret;
@@ -231,7 +249,7 @@ export async function secretsRollback(
 export async function secretsSet(
   ctx: CommandContext,
   key: string,
-  opts: { fromFile?: string; comment?: string },
+  opts: { fromFile?: string; comment?: string; type?: SecretValueType; sensitive?: boolean },
 ): Promise<void> {
   validKey(key);
   const s = scope(ctx);
@@ -243,7 +261,22 @@ export async function secretsSet(
     (x) => x.key === key,
   );
   const comment = opts.comment ?? previous?.comment;
-  const body = { value, path: s.path, ...(comment ? { comment } : {}) };
+  // The server inherits an omitted type, so check against the same one before sending.
+  const type = opts.type ?? previous?.type ?? "string";
+  const check = checkTypedValue(type, value);
+  if (!check.ok) {
+    throw new CliError(
+      EXIT.USAGE,
+      `Value of ${key} is not valid for type ${type}: ${check.reason}`,
+    );
+  }
+  const body = {
+    value,
+    path: s.path,
+    ...(comment ? { comment } : {}),
+    ...(opts.type ? { type: opts.type } : {}),
+    ...(opts.sensitive !== undefined ? { sensitive: opts.sensitive } : {}),
+  };
   const { secret, created } = await api.putSecret(s.project, s.env, key, body);
   ctx.out.data({ secret, created }, () => {
     if (created) return `Created ${key} (v${secret.version}) in ${where(s)}`;

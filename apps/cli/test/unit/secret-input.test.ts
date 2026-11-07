@@ -53,6 +53,7 @@ describe("assertNoSecretInArgv", () => {
       ["secrets", "get", "KEY"],
       ["run", "--", "node", "app.js", "--value", "x", "A=B"],
       ["export", "--format", "dotenv"],
+      ["secrets", "set", "K", "--type", "json"],
     ]) {
       expect(() => assertNoSecretInArgv(argv)).not.toThrow();
     }

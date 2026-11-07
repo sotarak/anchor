@@ -426,8 +426,10 @@ Global Options:
   -y, --yes                 skip confirmations
 
 Commands:
-  list [options]            List secret names and metadata (values only with --reveal)
-  get [options] <key>       Print one secret (the value is masked in a terminal unless --reveal)
+  list [options]            List secrets with their type and metadata (sensitive values only with
+                            --reveal)
+  get [options] <key>       Print one secret (a sensitive value is masked in a terminal unless
+                            --reveal)
   history <key>             List the versions of a secret (no values)
   rollback [options] <key>  Restore a past version as a new version (asks for confirmation; --yes in
                             scripts)
@@ -471,7 +473,7 @@ Examples:
 exports[`help text > help for secrets get 1`] = `
 "Usage: anchor secrets get [options] <key>
 
-Print one secret (the value is masked in a terminal unless --reveal)
+Print one secret (a sensitive value is masked in a terminal unless --reveal)
 
 Arguments:
   key               secret key
@@ -536,7 +538,7 @@ Examples:
 exports[`help text > help for secrets list 1`] = `
 "Usage: anchor secrets list [options]
 
-List secret names and metadata (values only with --reveal)
+List secrets with their type and metadata (sensitive values only with --reveal)
 
 Options:
   --reveal          include values
@@ -603,6 +605,10 @@ Arguments:
 Options:
   --from-file <path>  read the value from a file (exact bytes)
   --comment <text>    comment stored with the secret
+  --type <type>       value type, checked before sending (default: keep the current) (choices:
+                      "string", "json", "pem", "number", "boolean", "list")
+  --sensitive         mask the value unless revealed (default for new secrets)
+  --no-sensitive      plain config: shown without --reveal
   -h, --help          display help for command
 
 Global Options:
@@ -620,7 +626,8 @@ Global Options:
 Examples:
   $ anchor secrets set DB_URL            # prompts for the value
   $ printf '%s' "$DB_URL" | anchor secrets set DB_URL
-  $ anchor secrets set TLS_KEY --from-file key.pem
+  $ anchor secrets set TLS_KEY --from-file key.pem --type pem
+  $ printf 8080 | anchor secrets set APP_PORT --type number --no-sensitive
 
 "
 `;

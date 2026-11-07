@@ -16,7 +16,14 @@ export type ValueToken =
 export const REFERENCE_LIMITS = {
   maxDepth: 5,
   maxSecrets: 500,
+  /** Per expanded value. */
   maxExpandedBytes: 1_048_576,
+  /**
+   * Bytes that references add across one request (every value of a list, at every depth): the
+   * memo makes repeated references free to load, so without this a folder of values that each
+   * reference one large secret many times builds gigabytes. Plain text does not count.
+   */
+  maxReferencedBytesPerRequest: 16_777_216,
 } as const;
 
 // Alternation order matters: at one position "$${" (escape) wins over "${".

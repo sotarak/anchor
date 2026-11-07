@@ -164,6 +164,29 @@ describe("createResolver", () => {
     expect(err.message).toBe("Expanded value exceeds 1048576 bytes");
   });
 
+  it("references may add at most 16 MiB to one request, however the memo shares them", async () => {
+    const store: Store = { "dev:/BIG": "x".repeat(65_536) };
+    const { resolver, load } = setup(store);
+    const sixteenRefs = "${BIG}".repeat(16); // 1 MiB each, the per-value maximum
+    for (let i = 0; i < 16; i++) {
+      expect((await resolver.expand(at("dev", "/", `V${i}`), sixteenRefs)).value).toHaveLength(
+        1_048_576,
+      );
+    }
+    const err = await failure(resolver.expand(at("dev", "/", "V16"), sixteenRefs));
+    expect(err.status).toBe(400);
+    expect(err.message).toBe("References add more than 16777216 bytes to one request");
+    expect(load).toHaveBeenCalledTimes(1); // the memo kept loads at one: only the byte budget stops it
+  });
+
+  it("plain text does not count toward the per-request reference budget", async () => {
+    const { resolver } = setup({});
+    const big = "x".repeat(1_048_576);
+    for (let i = 0; i < 20; i++) {
+      expect((await resolver.expand(at("dev", "/", `P${i}`), big)).value).toBe(big);
+    }
+  });
+
   it("501 distinct references -> 400", async () => {
     const store: Store = {};
     const keys = Array.from({ length: 501 }, (_, i) => `K${i}`);

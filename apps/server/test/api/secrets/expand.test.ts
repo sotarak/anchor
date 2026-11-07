@@ -207,6 +207,18 @@ describe("reference expansion", () => {
     expect((await get("dev", "NOPE", "path=/api&includeImports=true", token)).status).toBe(403);
   });
 
+  it("a list whose values each reference one large secret many times -> 400 past 16 MiB, not OOM", async () => {
+    await put("dev", "/", "BIG", "x".repeat(65_536));
+    for (let i = 0; i < 17; i++) await put("dev", "/fan", `V${i}`, "${dev:/BIG}".repeat(16));
+    const res = await list("dev", "path=/fan&reveal=true&expand=true");
+    expect(res.status).toBe(400);
+    expect((await errorOf(res)).message).toBe(
+      "References add more than 16777216 bytes to one request",
+    );
+    // Each value alone is within limits.
+    expect((await get("dev", "V0", "path=/fan&expand=true")).status).toBe(200);
+  }, 60_000);
+
   it('value "echo ${HOME}" with expand -> 400 naming secret, reference and $${ hint; without -> 200', async () => {
     await put("dev", "/scripts", "CMD", "echo ${HOME}");
     const res = await get("dev", "CMD", "path=/scripts&expand=true");

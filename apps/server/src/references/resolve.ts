@@ -35,22 +35,33 @@ const bad = (message: string) => new ApiError(400, "bad_request", message);
 
 /**
  * Expands references depth-first (spec §9). One resolver serves one request: it memoizes each
- * expanded secret (a diamond loads its tip once) and caps the distinct secrets loaded. Every hop
- * is authorized before it is loaded, so a forbidden target is a 403 whether or not it exists.
+ * expanded secret (a diamond loads its tip once) and caps the distinct secrets loaded and the
+ * bytes references add across the whole request. Every hop is authorized before it is loaded,
+ * so a forbidden target is a 403 whether or not it exists.
  */
 export function createResolver(deps: ResolverDeps): Resolver {
-  const { maxDepth, maxSecrets, maxExpandedBytes } = REFERENCE_LIMITS;
+  const { maxDepth, maxSecrets, maxExpandedBytes, maxReferencedBytesPerRequest } = REFERENCE_LIMITS;
   const memo = new Map<string, Expanded>();
   let loads = 0;
+  let referencedBytes = 0;
 
   async function expandValue(addr: SecretAddress, raw: string, stack: string[]): Promise<Expanded> {
     const refs = new Map<string, SecretAddress>();
     let value = "";
     let bytes = 0;
     let height = 0;
-    const append = (piece: string) => {
-      bytes += utf8ByteLength(piece);
+    const append = (piece: string, fromReference = false) => {
+      const size = utf8ByteLength(piece);
+      bytes += size;
       if (bytes > maxExpandedBytes) throw bad(`Expanded value exceeds ${maxExpandedBytes} bytes`);
+      if (fromReference) {
+        referencedBytes += size;
+        if (referencedBytes > maxReferencedBytesPerRequest) {
+          throw bad(
+            `References add more than ${maxReferencedBytesPerRequest} bytes to one request`,
+          );
+        }
+      }
       value += piece;
     };
 
@@ -105,7 +116,7 @@ export function createResolver(deps: ResolverDeps): Resolver {
       height = Math.max(height, child.height + 1);
       refs.set(id, target);
       for (const [k, a] of child.refs) refs.set(k, a);
-      append(child.value);
+      append(child.value, true);
     }
     return { value, height, refs };
   }

@@ -14,7 +14,8 @@ developer machines and CI.
   revealed (audited), and a rollback saves an old version as a new one.
 - **References.** A value can embed `${KEY}` (same folder) or `${env:/path/KEY}`; reads expand them
   on request (`--no-expand` turns it off, `$${` is a literal `${`). Cycles, missing keys and
-  references the reader may not see fail the read instead of leaking or guessing.
+  references the reader may not see fail the read instead of leaking or guessing. Expansion is
+  capped: depth 5, 500 referenced secrets and 16 MiB of referenced bytes per request, 1 MiB per value.
 - **Folder imports.** A folder can import other folders; local keys win, then imports in order.
 - **Encryption.** AES-256-GCM per value under a per-project key (KEK), wrapped by a root key held
   as a Worker secret. Project keys rotate in the background through Cloudflare Queues; the root key

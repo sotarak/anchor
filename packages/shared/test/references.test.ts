@@ -92,6 +92,11 @@ describe("tokenizeValue", () => {
 
 describe("REFERENCE_LIMITS", () => {
   it("pins the spec limits", () => {
-    expect(REFERENCE_LIMITS).toEqual({ maxDepth: 5, maxSecrets: 500, maxExpandedBytes: 1_048_576 });
+    expect(REFERENCE_LIMITS).toEqual({
+      maxDepth: 5,
+      maxSecrets: 500,
+      maxExpandedBytes: 1_048_576,
+      maxReferencedBytesPerRequest: 16_777_216,
+    });
   });
 });

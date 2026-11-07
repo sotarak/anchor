@@ -12,6 +12,7 @@ import {
   inferImportFormat,
   parseImport,
 } from "../import/parse";
+import { ignoredTypedFields } from "./secrets";
 
 export type SecretsImportOptions = {
   fromFile?: string;
@@ -105,14 +106,24 @@ export async function secretsImport(
         sensitive: p.sensitive,
         ...(p.comment ? { comment: p.comment } : {}),
       };
+      let written: Awaited<ReturnType<typeof api.putSecret>>;
       try {
-        const { secret, created } = await api.putSecret(s.project, s.env, p.key, body);
-        if (!created && existing.get(p.key)?.version === secret.version) p.action = "unchanged";
+        written = await api.putSecret(s.project, s.env, p.key, body);
       } catch (e) {
         throw new CliError(
           EXIT.ERROR,
           `Imported ${done} of ${writes.length}; ${p.key} failed: ${failure(e)}. Re-run to continue`,
         );
+      }
+      if (ignoredTypedFields(written.secret, p)) {
+        throw new CliError(
+          EXIT.ERROR,
+          `Imported ${done} of ${writes.length}; the server is older than 0.4.0 and stored ${p.key} as a sensitive string`,
+          "Upgrade the server to 0.4.0, then re-run with --overwrite",
+        );
+      }
+      if (!written.created && existing.get(p.key)?.version === written.secret.version) {
+        p.action = "unchanged";
       }
       done++;
     }

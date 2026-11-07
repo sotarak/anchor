@@ -67,7 +67,8 @@ export async function secretsList(ctx: CommandContext, opts: { reveal: boolean }
     return;
   }
   // Non-sensitive values come back without --reveal, so they get a VALUE column too.
-  const showValues = opts.reveal || secrets.some((x) => !x.sensitive);
+  // `sensitive === false`, not `!sensitive`: a 0.3.x server sends no flag, and that means masked.
+  const showValues = opts.reveal || secrets.some((x) => x.sensitive === false);
   const headers = [
     "KEY",
     "TYPE",
@@ -81,11 +82,11 @@ export async function secretsList(ctx: CommandContext, opts: { reveal: boolean }
       headers,
       secrets.map((x) => [
         x.key,
-        x.type,
+        x.type ?? "string",
         String(x.version),
         formatDate(x.updatedAt),
         x.comment,
-        ...(showValues ? [opts.reveal || !x.sensitive ? (x.value ?? "") : MASK] : []),
+        ...(showValues ? [opts.reveal || x.sensitive === false ? (x.value ?? "") : MASK] : []),
       ]),
     ),
   );
@@ -132,7 +133,7 @@ export async function secretsGet(
     if (!found) throw new CliError(EXIT.NOT_FOUND, `Secret ${key} not found in ${where(s)}`);
     secret = found;
     // A non-sensitive value is plain config: the list already returned it.
-    if (!found.sensitive) showValue = true;
+    if (found.sensitive === false) showValue = true;
   }
   if (ctx.flags.json) {
     const { value: _value, ...metaOnly } = secret;
@@ -278,11 +279,31 @@ export async function secretsSet(
     ...(opts.sensitive !== undefined ? { sensitive: opts.sensitive } : {}),
   };
   const { secret, created } = await api.putSecret(s.project, s.env, key, body);
+  if (
+    ignoredTypedFields(secret, { type: opts.type ?? "string", sensitive: opts.sensitive ?? true })
+  ) {
+    throw new CliError(
+      EXIT.ERROR,
+      `The server is older than 0.4.0 and stored ${key} as a sensitive string`,
+      "Upgrade the server to 0.4.0 to use types and plain config",
+    );
+  }
   ctx.out.data({ secret, created }, () => {
     if (created) return `Created ${key} (v${secret.version}) in ${where(s)}`;
     if (previous?.version === secret.version) return `Unchanged ${key} (v${secret.version})`;
     return `Updated ${key} (v${secret.version}) in ${where(s)}`;
   });
+}
+
+/**
+ * True when a write asked for a type or flag other than a sensitive string and the response has
+ * no `type`: a 0.3.x server dropped both fields and stored a sensitive string.
+ */
+export function ignoredTypedFields(
+  secret: SecretDto,
+  wanted: { type: SecretValueType; sensitive: boolean },
+): boolean {
+  return secret.type === undefined && (wanted.type !== "string" || !wanted.sensitive);
 }
 
 export async function secretsDelete(ctx: CommandContext, key: string): Promise<void> {

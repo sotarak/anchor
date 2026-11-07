@@ -6,7 +6,7 @@ import {
   secretValueSchema,
 } from "@anchor/shared";
 import { parse as parseDotenv } from "dotenv";
-import { parse as parseYaml, YAMLParseError } from "yaml";
+import { isAlias, isScalar, parseDocument, parse as parseYaml, YAMLParseError } from "yaml";
 import { CliError, EXIT } from "../errors";
 
 export type ImportFormat = "dotenv" | "json" | "yaml";
@@ -50,13 +50,53 @@ function readDocument(text: string, format: "json" | "yaml"): unknown {
   }
 }
 
+/** Finds the text a number was written as, given its path in the document. */
+type NumberSource = (segments: string[]) => string | undefined;
+
+/**
+ * Number scalars as written (`1.0`, `1e3`, `12345678901234567890`), so an import never rewrites
+ * a value: parsed numbers would turn these into `1`, `1000` and `12345678901234567000`.
+ */
+function numberSources(text: string): NumberSource {
+  let doc: ReturnType<typeof parseDocument> | undefined;
+  try {
+    doc = parseDocument(text, { keepSourceTokens: true });
+  } catch {
+    doc = undefined;
+  }
+  return (segments) => {
+    if (!doc) return undefined;
+    let node: unknown = doc.getIn(segments, true);
+    if (isAlias(node)) node = node.resolve(doc);
+    if (!isScalar(node) || typeof node.value !== "number") return undefined;
+    const token = node.srcToken;
+    return token && "source" in token && typeof token.source === "string"
+      ? token.source
+      : undefined;
+  };
+}
+
+/** A number: its written text when that is a plain decimal, else that text as a string. */
+function numberLeaf(
+  n: number,
+  source: string | undefined,
+): { type: SecretValueType; value: string } {
+  if (source !== undefined) {
+    return { type: checkTypedValue("number", source).ok ? "number" : "string", value: source };
+  }
+  return { type: "number", value: String(n) };
+}
+
 /** A leaf as an entry's type and stored text; null for a null (reported as empty). */
-function leaf(node: unknown): { type: SecretValueType; value: string } | null {
+function leaf(
+  node: unknown,
+  source: () => string | undefined,
+): { type: SecretValueType; value: string } | null {
   if (node === null || node === undefined) return null;
   if (typeof node === "string") {
     return { type: checkTypedValue("pem", node).ok ? "pem" : "string", value: node };
   }
-  if (typeof node === "number") return { type: "number", value: String(node) };
+  if (typeof node === "number") return numberLeaf(node, source());
   if (typeof node === "boolean") return { type: "boolean", value: String(node) };
   if (Array.isArray(node)) {
     const strings = node.every((x) => typeof x === "string");
@@ -65,7 +105,10 @@ function leaf(node: unknown): { type: SecretValueType; value: string } | null {
   return { type: "json", value: JSON.stringify(node) };
 }
 
-function flatten(doc: Record<string, unknown>): {
+function flatten(
+  doc: Record<string, unknown>,
+  source: NumberSource,
+): {
   raw: { segments: string[]; type: SecretValueType; value: string }[];
   empty: string[];
 } {
@@ -79,7 +122,7 @@ function flatten(doc: Record<string, unknown>): {
         else walk(child, segments);
         continue;
       }
-      const v = leaf(child);
+      const v = leaf(child, () => source(segments));
       if (v) raw.push({ segments, ...v });
       else empty.push(segments.join("."));
     }
@@ -106,7 +149,7 @@ export function parseImport(text: string, format: ImportFormat): ParsedImport {
   } else {
     const doc = readDocument(text, format);
     if (!isObject(doc)) throw new CliError(EXIT.USAGE, NOT_OBJECT);
-    const flat = flatten(doc);
+    const flat = flatten(doc, numberSources(text));
     empty = flat.empty;
     candidates = flat.raw.map((r) => ({
       key: toImportKey(r.segments),

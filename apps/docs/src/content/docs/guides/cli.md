@@ -175,8 +175,9 @@ anchor secrets set TLS_CERT --from-file cert.pem --type pem
 - **JSON and YAML** must hold an object. Nested keys are joined with `_` and uppercased, with `-`,
   `.` and spaces turned into `_`: `configs.openrouter.api_key` becomes
   `CONFIGS_OPENROUTER_API_KEY` and `transporters.grpc-clients` becomes
-  `TRANSPORTERS_GRPC_CLIENTS`. Types are inferred: numbers are `number`, `true`/`false` are
-  `boolean`, an array of strings is `list`, any other array is `json`, a PEM block is `pem`, and
+  `TRANSPORTERS_GRPC_CLIENTS`. Types are inferred: numbers are `number` and keep the text written
+  in the file (`1.0` stays `1.0`; a YAML number such as `0x1F` or `.inf` is imported as a `string`),
+  `true`/`false` are `boolean`, an array of strings is `list`, any other array is `json`, a PEM block is `pem`, and
   other strings are `string`. A blank value (`api_key:`) or an empty object is reported as
   **empty** and nothing is created for it.
 - **Before anything is sent**, the whole file is checked; a key that is not a valid Anchor key

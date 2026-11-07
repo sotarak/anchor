@@ -67,6 +67,29 @@ describe("parseImport", () => {
     });
   });
 
+  it("numbers keep the text written in the file", () => {
+    const byKey = (text: string, format: "json" | "yaml") =>
+      Object.fromEntries(parseImport(text, format).entries.map((e) => [e.key, [e.type, e.value]]));
+    expect(
+      byKey(
+        "version: 1.0\nhex: 0x1F\nexp: 1e3\nbig: 12345678901234567890\ninf: .inf\nport: 9000\n",
+        "yaml",
+      ),
+    ).toEqual({
+      VERSION: ["number", "1.0"],
+      HEX: ["string", "0x1F"],
+      EXP: ["number", "1e3"],
+      BIG: ["number", "12345678901234567890"],
+      INF: ["string", ".inf"],
+      PORT: ["number", "9000"],
+    });
+    expect(byKey('{"v": 1.0, "big": 12345678901234567890, "n": {"x": -0.50}}', "json")).toEqual({
+      V: ["number", "1.0"],
+      BIG: ["number", "12345678901234567890"],
+      N_X: ["number", "-0.50"],
+    });
+  });
+
   it("blank values are reported as empty", () => {
     const r = parseImport("configs:\n  api_key:\n  extra: {}\n", "yaml");
     expect(r.entries).toEqual([]);

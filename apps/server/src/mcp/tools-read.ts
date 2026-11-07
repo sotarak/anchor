@@ -4,7 +4,7 @@ import { z } from "zod";
 import { authorize } from "../authz/policy";
 import { listChildFolders } from "../folders/repo";
 import { listProjectsWithAccess, listVisibleEnvironments } from "../projects/routes";
-import { resolveTargetBySlugs, secretContext } from "../secrets/routes";
+import { readSecret, resolveTargetBySlugs, secretContext } from "../secrets/routes";
 import { listVersions } from "../secrets/versions";
 import { composeSecret, composeSecrets } from "../secrets/view";
 import { requireScope, runTool, type ToolContext } from "./tool-kit";
@@ -131,6 +131,15 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
         requireScope(ctx, "secrets:read");
         if (reveal) requireScope(ctx, "secrets:reveal");
         const target = await resolveTargetBySlugs(c, project, environment);
+        if (reveal) {
+          // The REST reveal path: expanded, and audited as secret.read before it is returned.
+          return readSecret(c, target, {
+            path,
+            key,
+            expand: true,
+            includeImports: include_imports,
+          });
+        }
         const sc = await secretContext(c, target, "secret:read", path);
         const { secret } = await composeSecret(
           { ...sc, principal: target.principal },

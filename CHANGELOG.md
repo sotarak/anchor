@@ -38,6 +38,8 @@ dashboard and CLI.
   `not-allowed`.
 - Table footers count one item in the singular ("1 token", not "1 tokens").
 - The audit log names its targets (secret key, token name, email) instead of showing internal IDs.
+- The CLI no longer warns "No OS keychain available" when `ANCHOR_CREDENTIAL_STORE=file` is set on
+  purpose. A real fallback from the keychain still warns.
 
 ### Upgrade notes
 

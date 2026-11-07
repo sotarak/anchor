@@ -303,3 +303,12 @@ export async function purgeOAuth(db: D1Database, now: number): Promise<number> {
   ]);
   return results.reduce((n, r) => n + (r.meta.changes ?? 0), 0);
 }
+
+/** The grant's scopes as stored (space-separated), or null for an unknown grant. */
+export async function getGrantScopes(db: D1Database, grantId: string): Promise<string | null> {
+  const row = await db
+    .prepare("SELECT scopes FROM oauth_grants WHERE id = ?")
+    .bind(grantId)
+    .first<{ scopes: string }>();
+  return row?.scopes ?? null;
+}

@@ -91,4 +91,27 @@ describe("cli login purge", () => {
       logs.mockRestore();
     }
   });
+
+  it("the daily job purges expired OAuth codes and tokens and logs oauth_purged", async () => {
+    const now = Date.now();
+    await env.DB.prepare(
+      "INSERT INTO oauth_clients (id, name, redirect_uris, created_at) VALUES ('old', 'x', '[]', ?)",
+    )
+      .bind(now - 2 * DAY)
+      .run();
+    const logs = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await handleScheduled(
+        createScheduledController({ cron: "0 3 * * *" }),
+        env,
+        createExecutionContext(),
+      );
+      const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM oauth_clients").first();
+      expect(left?.n).toBe(0);
+      const lines = logs.mock.calls.map((c) => String(c[0]));
+      expect(lines.some((l) => l.includes('"oauth_purged"') && l.includes('"count":1'))).toBe(true);
+    } finally {
+      logs.mockRestore();
+    }
+  });
 });

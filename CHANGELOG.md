@@ -7,6 +7,47 @@ dashboard and CLI.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-07
+
+### Added
+
+- **Deploy to Cloudflare button.** One click copies the repository to your GitHub or GitLab
+  account, creates the D1 database and the queues, asks for the two secrets, applies the
+  migrations and deploys. Every push to the copy redeploys through Workers Builds.
+- README screenshots of the dashboard and a recording of the CLI, regenerated from a seeded local
+  instance with `pnpm --filter @anchor/web media`.
+- Docs: deploying with the button, upgrading a button deploy (merge the release tag from upstream),
+  upgrading and uninstalling the CLI for every install method, and troubleshooting for install and
+  deploy failures.
+
+### Changed
+
+- The Worker config moved to the repository root: `wrangler.jsonc` and `.dev.vars.example` now live
+  there, and every `wrangler` command runs from the root. New root scripts:
+  `pnpm db:migrate:local`, and `pnpm deploy:worker` now applies the D1 migrations before deploying.
+- Dashboard polish:
+  - the header shows the project and environment as a breadcrumb;
+  - the secrets table has its own Comment column and one-line rows;
+  - overlays, menus, sheets and table rows fade and slide in gently, and stay still when the
+    system asks for reduced motion;
+  - the version history sheet is wider, so its dates and authors no longer wrap or clip.
+
+### Fixed
+
+- Every clickable control in the dashboard shows a pointer cursor; disabled ones show
+  `not-allowed`.
+- Table footers count one item in the singular ("1 token", not "1 tokens").
+- The audit log names its targets (secret key, token name, email) instead of showing internal IDs.
+
+### Upgrade notes
+
+- **Manual deploys:** move your `database_id` from `apps/server/wrangler.jsonc` into the root
+  `wrangler.jsonc` (the `DB` entry), and move `apps/server/.dev.vars` to `.dev.vars` at the
+  repository root. Run `wrangler` commands from the root from now on. The database name and
+  binding are unchanged, so no data moves. See
+  [Upgrade an instance](https://sotarak.github.io/anchor/operations/upgrading/).
+- **CLI:** no breaking changes; update to 0.3.0 with the tool you installed it with.
+
 ## [0.2.0] - 2026-11-07
 
 ### Added
@@ -72,6 +113,7 @@ Cloudflare Workers, D1 and Queues.
   - A documentation site at https://sotarak.github.io/anchor/ (guides, operations runbooks,
     security model, API reference).
 
-[Unreleased]: https://github.com/sotarak/anchor/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/sotarak/anchor/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sotarak/anchor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sotarak/anchor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sotarak/anchor/releases/tag/v0.1.0

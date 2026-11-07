@@ -280,6 +280,15 @@ describe("open-source repository", () => {
     }
   });
 
+  it("the 0.3.0 changelog tells manual installs to move database_id", () => {
+    const c = read("CHANGELOG.md");
+    const section = c.slice(c.indexOf("## [0.3.0]"), c.indexOf("## [0.2.0]"));
+    expect(section).toMatch(/### Upgrade notes/);
+    expect(section).toContain("database_id");
+    expect(section).toContain("wrangler.jsonc");
+    expect(section).toContain(".dev.vars");
+  });
+
   it("README links the docs site", () => {
     expect(read("README.md")).toContain("https://sotarak.github.io/anchor/");
   });

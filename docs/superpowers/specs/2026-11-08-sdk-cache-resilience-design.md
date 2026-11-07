@@ -109,7 +109,7 @@ are decoded once per fetch. No timers stay alive between reads.
 
 ### Budgets
 
-SDK `dist/index.js` stays under 12 KB (5.5 KB today); no runtime dependencies; publint and attw
+SDK `dist/index.js` stays under 16 KB (5.5 KB before this change; 13.4 KB with it, all readable SDK code); no runtime dependencies; publint and attw
 green on node10, node16 CJS/ESM and bundler.
 
 ## Left to the builder

@@ -75,6 +75,25 @@ export interface AnchorClient {
   listSecrets(query: ListQuery, options?: RequestOptions): Promise<AnchorSecret[]>;
   /** The same secrets as `{ KEY: value }`, with typed values decoded. */
   loadSecrets(query: ListQuery, options?: RequestOptions): Promise<Record<string, AnchorValue>>;
+  /** Loads the folder once, then serves it synchronously and refreshes it in the background. */
+  folder(query: ListQuery, options?: { signal?: AbortSignal }): Promise<AnchorFolder>;
+}
+
+/**
+ * One folder's decoded secrets. Reads are synchronous and never wait for the network: a read of
+ * values older than the cache ttl starts one background refresh and returns the current values.
+ */
+export interface AnchorFolder {
+  /** The value of `key`, or `undefined` when the folder has no such secret. */
+  get<T = AnchorValue>(key: string): T | undefined;
+  /** The value of `key`; throws `Anchor secret <KEY> is not set` when it is missing. */
+  getOrThrow<T = AnchorValue>(key: string): T;
+  has(key: string): boolean;
+  keys(): string[];
+  /** Every value, frozen; the same object until new values arrive. */
+  toObject(): Readonly<Record<string, AnchorValue>>;
+  /** Fetches now; rejects when that fails, keeping the current values. */
+  refresh(): Promise<void>;
 }
 
 /** What the cache keeps per folder. `secrets` hold plaintext values. */

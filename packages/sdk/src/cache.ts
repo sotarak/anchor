@@ -12,6 +12,9 @@ import type {
 export type { CacheEntry, CacheOptions, CacheStore } from "./types.js";
 export type CachePolicy = Required<CacheOptions>;
 
+/** A fetch's result: the entry to serve, and the error when it is a stale fallback. */
+type Outcome = { entry: CacheEntry; error?: AnchorError };
+
 export function memoryStore(): CacheStore {
   const entries = new Map<string, CacheEntry>();
   return {
@@ -56,20 +59,24 @@ function untilAborted<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> 
  * instance, never in the store.
  */
 export class SecretCache {
-  private readonly inflight = new Map<string, Promise<CacheEntry>>();
+  private readonly inflight = new Map<string, Promise<Outcome>>();
   /** When the last fetch of a key failed; the stale entry is served without asking for one ttl. */
   private readonly failedAt = new Map<string, number>();
 
   constructor(
     private readonly policy: CachePolicy,
     private readonly emit: (event: AnchorEvent) => void,
-    private readonly now: () => number = Date.now,
+    private readonly now: () => number = () => Date.now(),
   ) {}
 
+  /**
+   * The folder's entry. With `strict`, a failed fetch rejects instead of falling back, so a
+   * caller that asked for new values learns it did not get them.
+   */
   async load(
     key: string,
     fetch: () => Promise<AnchorSecret[]>,
-    opts: { fresh?: boolean; signal?: AbortSignal } = {},
+    opts: { fresh?: boolean; signal?: AbortSignal; strict?: boolean } = {},
   ): Promise<CacheEntry> {
     if (opts.signal?.aborted) throw abortedError();
     const entry = await this.policy.store.get(key);
@@ -80,7 +87,9 @@ export class SecretCache {
       this.inflight.set(key, pending);
     }
     // The shared fetch keeps going for the other callers when this one gives up.
-    return untilAborted(pending, opts.signal);
+    const outcome = await untilAborted(pending, opts.signal);
+    if (opts.strict && outcome.error) throw outcome.error;
+    return outcome.entry;
   }
 
   private servable(key: string, entry: CacheEntry): boolean {
@@ -98,19 +107,19 @@ export class SecretCache {
     key: string,
     fetch: () => Promise<AnchorSecret[]>,
     stale: CacheEntry | undefined,
-  ): Promise<CacheEntry> {
+  ): Promise<Outcome> {
     try {
       const entry: CacheEntry = { secrets: await fetch(), fetchedAt: this.now() };
       await this.policy.store.set(key, entry);
       this.failedAt.delete(key);
-      return entry;
+      return { entry };
     } catch (error) {
       const now = this.now();
       if (!(error instanceof AnchorError) || !stale || !this.usable(stale, now)) throw error;
       this.failedAt.set(key, now);
       const staleForMs = Math.max(0, now - stale.fetchedAt - this.policy.ttlMs);
       this.emit({ type: "refresh_failed", error, staleForMs });
-      return stale;
+      return { entry: stale, error };
     }
   }
 }

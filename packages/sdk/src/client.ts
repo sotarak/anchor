@@ -2,6 +2,7 @@ import { cacheKey, SecretCache } from "./cache.js";
 import { type Config, cachePolicy, DEFAULT_TTL_MS, emitSafely, resolveConfig } from "./config.js";
 import { decodeAll, toSecret, type WireSecret } from "./decode.js";
 import { AnchorError } from "./errors.js";
+import { openFolder } from "./folder.js";
 import { withRetry } from "./retry.js";
 import { fetchJson } from "./transport.js";
 import type {
@@ -53,7 +54,8 @@ const copy = (s: AnchorSecret): AnchorSecret =>
 
 /** The client's internals that `folder()` builds on. */
 export type ClientCore = {
-  loadEntry(q: ListQuery, o?: RequestOptions): Promise<CacheEntry>;
+  /** `strict`: a failed fetch rejects instead of returning the cached fallback. */
+  loadEntry(q: ListQuery, o?: RequestOptions & { strict?: boolean }): Promise<CacheEntry>;
   ttlMs: number;
   emit: (event: AnchorEvent) => void;
 };
@@ -92,5 +94,6 @@ export function createAnchorClient(options: ClientOptions = {}): AnchorClient {
     async loadSecrets(q, o) {
       return decodeAll((await core.loadEntry(q, o)).secrets);
     },
+    folder: (q, o) => openFolder(core, q, o),
   };
 }

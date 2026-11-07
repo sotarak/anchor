@@ -8,6 +8,7 @@ export { AnchorError } from "./errors.js";
 export type {
   AnchorClient,
   AnchorEvent,
+  AnchorFolder,
   AnchorSecret,
   AnchorValue,
   AnchorValueType,

@@ -1,5 +1,5 @@
 import type { KeyRotationDto, ProjectKeyDto } from "@anchor/shared";
-import { recordSystemAudit } from "../audit/record";
+import { systemAuditStatement } from "../audit/record";
 import { AEAD_ALG, open, seal } from "../crypto/aead";
 import { createWrappedKek, type RootKeyring, secretAad } from "../crypto/keyring";
 import { isUniqueViolation, toBytes } from "../lib/d1";
@@ -81,9 +81,30 @@ async function enqueue(queue: Queue<ReencryptMessage>, r: RotationRow): Promise<
   }
 }
 
-/** Marks every KEK older than `toVersion` retired and the rotation completed, once. */
+/**
+ * Marks every KEK older than `toVersion` retired and the rotation completed, once. The audit event
+ * is in the same batch, inserted only while the rotation is still running: the first delivery
+ * commits all three or none, and a duplicate delivery inserts and changes nothing.
+ */
 async function finishRotation(db: D1Database, r: RotationRow, now: number): Promise<void> {
-  const [, finished] = await db.batch([
+  await db.batch([
+    systemAuditStatement(
+      db,
+      {
+        action: "kek.rotation_finished",
+        projectId: r.project_id,
+        metadata: {
+          rotationId: r.id,
+          fromVersion: r.from_version,
+          toVersion: r.to_version,
+          total: r.total,
+        },
+      },
+      {
+        sql: "EXISTS (SELECT 1 FROM key_rotations WHERE id = ? AND status = 'running')",
+        params: [r.id],
+      },
+    ),
     db
       .prepare("UPDATE project_keys SET status = 'retired' WHERE project_id = ? AND version < ?")
       .bind(r.project_id, r.to_version),
@@ -94,19 +115,6 @@ async function finishRotation(db: D1Database, r: RotationRow, now: number): Prom
       )
       .bind(now, now, r.id),
   ]);
-  // Only the delivery that flipped the status records it (duplicates see 0 changes).
-  if (finished?.meta.changes === 1) {
-    await recordSystemAudit(db, {
-      action: "kek.rotation_finished",
-      projectId: r.project_id,
-      metadata: {
-        rotationId: r.id,
-        fromVersion: r.from_version,
-        toVersion: r.to_version,
-        total: r.total,
-      },
-    });
-  }
 }
 
 /**

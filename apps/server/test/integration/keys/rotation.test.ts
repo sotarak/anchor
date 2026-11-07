@@ -164,6 +164,27 @@ describe("KEK rotation", () => {
     expect(await processRotationBatch(db, keyring, msg, Date.now())).toBe("done");
   });
 
+  it("a failed finish audit leaves the rotation running, so the retry completes it and audits once", async () => {
+    await seed(3);
+    await rotate();
+    const msg = lastMessage();
+    await db
+      .prepare(
+        `CREATE TRIGGER fail_finish_audit BEFORE INSERT ON audit_events
+         WHEN NEW.action = 'kek.rotation_finished' BEGIN SELECT RAISE(ABORT, 'audit down'); END`,
+      )
+      .run();
+    await expect(processRotationBatch(db, keyring, msg, Date.now())).rejects.toThrow();
+    const { keys, rotations } = await keyStatus();
+    expect(rotations[0]?.status).toBe("running");
+    expect(keys.find((k) => k.version === 1)?.status).toBe("retiring");
+
+    await db.prepare("DROP TRIGGER fail_finish_audit").run();
+    expect(await processRotationBatch(db, keyring, msg, Date.now())).toBe("done");
+    expect((await keyStatus()).rotations[0]?.status).toBe("completed");
+    expect(await auditRows("kek.rotation_finished")).toHaveLength(1);
+  });
+
   it("write during rotation lands on v2 and is not re-processed", async () => {
     await seed(3);
     await rotate();

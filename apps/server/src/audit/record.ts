@@ -94,18 +94,23 @@ export function readSources(
   return out;
 }
 
-/**
- * Appends one audit row and waits for it. Callers record after the action succeeds and before
- * responding, so a failed audit write fails the request (no unaudited secret reads).
- */
-export async function recordAudit(c: Context<AppEnv>, input: AuditInput): Promise<void> {
+/** Validates and serializes audit metadata (no forbidden keys, within the size cap). */
+function serializeMetadata(input: AuditInput): string {
   const metadata = input.metadata ?? {};
   assertNoForbiddenKeys(metadata);
   const serialized = JSON.stringify(metadata);
   if (new TextEncoder().encode(serialized).byteLength > MAX_METADATA_BYTES) {
     throw new Error("audit metadata too large");
   }
-  await insertAudit(c.env.DB, input, serialized, {
+  return serialized;
+}
+
+/**
+ * Appends one audit row and waits for it. Callers record after the action succeeds and before
+ * responding, so a failed audit write fails the request (no unaudited secret reads).
+ */
+export async function recordAudit(c: Context<AppEnv>, input: AuditInput): Promise<void> {
+  await insertAudit(c.env.DB, input, serializeMetadata(input), {
     actor: input.actor ?? actorOf(c.get("principal")),
     ip: c.get("clientIp") ?? null,
     userAgent: c.get("userAgent") ?? null,
@@ -116,39 +121,46 @@ export async function recordAudit(c: Context<AppEnv>, input: AuditInput): Promis
 /** Actor for work no request drives (queue consumers, cron). */
 export const SYSTEM_ACTOR: AuditActor = { type: "anonymous", id: null, label: "system" };
 
-/** recordAudit for background work: no request, so no IP, user agent or request id. */
-export async function recordSystemAudit(db: D1Database, input: AuditInput): Promise<void> {
-  const metadata = input.metadata ?? {};
-  assertNoForbiddenKeys(metadata);
-  const serialized = JSON.stringify(metadata);
-  if (new TextEncoder().encode(serialized).byteLength > MAX_METADATA_BYTES) {
-    throw new Error("audit metadata too large");
-  }
-  await insertAudit(db, input, serialized, {
-    actor: input.actor ?? SYSTEM_ACTOR,
-    ip: null,
-    userAgent: null,
-    requestId: null,
-  });
+const SYSTEM_ORIGIN = { ip: null, userAgent: null, requestId: null };
+
+/**
+ * A system audit insert to run inside the caller's db.batch, so the event commits or rolls back
+ * with the change it records. It inserts only while `when` (an SQL condition) holds.
+ */
+export function systemAuditStatement(
+  db: D1Database,
+  input: AuditInput,
+  when: { sql: string; params: unknown[] },
+): D1PreparedStatement {
+  return auditStatement(
+    db,
+    input,
+    serializeMetadata(input),
+    { actor: input.actor ?? SYSTEM_ACTOR, ...SYSTEM_ORIGIN },
+    when,
+  );
 }
 
-async function insertAudit(
+type AuditOrigin = {
+  actor: AuditActor;
+  ip: string | null;
+  userAgent: string | null;
+  requestId: string | null;
+};
+
+function auditStatement(
   db: D1Database,
   input: AuditInput,
   serialized: string,
-  origin: {
-    actor: AuditActor;
-    ip: string | null;
-    userAgent: string | null;
-    requestId: string | null;
-  },
-): Promise<void> {
+  origin: AuditOrigin,
+  when?: { sql: string; params: unknown[] },
+): D1PreparedStatement {
   const { actor } = origin;
-  await db
+  return db
     .prepare(
       `INSERT INTO audit_events (id, at, actor_type, actor_id, actor_label, action, project_id,
        environment_id, target, ip, user_agent, request_id, metadata)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${when ? ` WHERE ${when.sql}` : ""}`,
     )
     .bind(
       newId(),
@@ -164,6 +176,15 @@ async function insertAudit(
       origin.userAgent,
       origin.requestId,
       serialized,
-    )
-    .run();
+      ...(when?.params ?? []),
+    );
+}
+
+async function insertAudit(
+  db: D1Database,
+  input: AuditInput,
+  serialized: string,
+  origin: AuditOrigin,
+): Promise<void> {
+  await auditStatement(db, input, serialized, origin).run();
 }

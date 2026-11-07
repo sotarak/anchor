@@ -1,7 +1,7 @@
 import type { SecretDto, SecretVersionDto } from "@anchor/shared";
 import { toBytes } from "../lib/d1";
 import { ApiError } from "../lib/errors";
-import type { VersionRow } from "./repo";
+import { type RawVersionMeta, type VersionRow, versionMeta } from "./repo";
 import { decryptVersion, putSecret, requireSecret, type SecretContext } from "./service";
 
 type Address = { path: string; key: string };
@@ -46,13 +46,14 @@ export async function getVersionValue(
   const row = await ctx.db
     .prepare(
       `SELECT v.version, v.comment, v.created_at, v.created_by, u.email, v.alg, v.key_version,
-         v.iv, v.ciphertext
+         v.iv, v.ciphertext, v.value_type, v.sensitive, v.aad_format
        FROM secret_versions v LEFT JOIN users u ON u.id = v.created_by
        WHERE v.secret_id = ? AND v.version = ?`,
     )
     .bind(secret.id, q.version)
     .first<
-      VersionMetaRow & { alg: string; key_version: number; iv: unknown; ciphertext: unknown }
+      VersionMetaRow &
+        RawVersionMeta & { alg: string; key_version: number; iv: unknown; ciphertext: unknown }
     >();
   if (!row) throw new ApiError(404, "not_found", "Version not found");
   const version: VersionRow = {
@@ -63,6 +64,7 @@ export async function getVersionValue(
     iv: toBytes(row.iv),
     ciphertext: toBytes(row.ciphertext),
     comment: row.comment,
+    ...versionMeta(row),
   };
   const value = await decryptVersion(ctx, new Map(), secret.id, version, q.version);
   return { ...toVersionDto(row), value };

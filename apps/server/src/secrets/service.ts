@@ -1,6 +1,6 @@
-import type { SecretDto } from "@anchor/shared";
+import type { SecretDto, SecretValueType } from "@anchor/shared";
 import { AEAD_ALG, open, seal } from "../crypto/aead";
-import { type RootKeyring, secretAad } from "../crypto/keyring";
+import { type RootKeyring, versionAad } from "../crypto/keyring";
 import { ensureFolders } from "../folders/repo";
 import { isRetiredKekWrite, isUniqueViolation } from "../lib/d1";
 import { utf8Decode, utf8Encode } from "../lib/encoding";
@@ -42,12 +42,21 @@ async function kekFor(ctx: SecretContext, cache: KekCache, version: number): Pro
   return kek;
 }
 
-function aadFor(ctx: SecretContext, secretId: string, version: number): string {
-  return secretAad({
+export type VersionMetaInput = { type: SecretValueType; sensitive: boolean };
+
+function aadFor(
+  ctx: SecretContext,
+  secretId: string,
+  v: Pick<VersionRow, "version" | "value_type" | "sensitive" | "aad_format">,
+): string {
+  return versionAad({
     projectId: ctx.project.id,
     environmentId: ctx.environment.id,
     secretId,
-    version,
+    version: v.version,
+    format: v.aad_format,
+    type: v.value_type,
+    sensitive: v.sensitive,
   });
 }
 
@@ -63,11 +72,7 @@ export async function decryptVersion(
   if (!v || v.version !== expectedVersion || v.alg !== AEAD_ALG) throw fail();
   const kek = await kekFor(ctx, cache, v.key_version);
   try {
-    const plain = await open(
-      kek,
-      { iv: v.iv, ciphertext: v.ciphertext },
-      aadFor(ctx, secretId, v.version),
-    );
+    const plain = await open(kek, { iv: v.iv, ciphertext: v.ciphertext }, aadFor(ctx, secretId, v));
     return utf8Decode(plain);
   } catch {
     throw fail();
@@ -81,13 +86,21 @@ async function encryptVersion(
   version: number,
   value: string,
   comment: string,
+  meta: VersionMetaInput,
 ): Promise<VersionRow> {
   const keyVersion = ctx.project.current_key_version;
   const kek = await kekFor(ctx, cache, keyVersion);
-  const sealed = await seal(kek, utf8Encode(value), aadFor(ctx, secretId, version));
-  return {
-    secret_id: secretId,
+  // New versions always use AAD format 2, which binds the type and the flag.
+  const fields = {
     version,
+    value_type: meta.type,
+    sensitive: meta.sensitive,
+    aad_format: 2 as const,
+  };
+  const sealed = await seal(kek, utf8Encode(value), aadFor(ctx, secretId, fields));
+  return {
+    ...fields,
+    secret_id: secretId,
     alg: AEAD_ALG,
     key_version: keyVersion,
     iv: sealed.iv,
@@ -147,7 +160,10 @@ export async function putSecret(
       current_version: 1,
       updated_at: ctx.now,
     };
-    const v = await encryptVersion(ctx, cache, row.id, 1, input.value, input.comment);
+    const v = await encryptVersion(ctx, cache, row.id, 1, input.value, input.comment, {
+      type: "string",
+      sensitive: true,
+    });
     await batchOrConflict(ctx.db, [
       insertSecretStatement(ctx.db, row, ctx.now),
       insertVersionStatement(ctx.db, v, ctx.actorId, ctx.now),
@@ -170,7 +186,10 @@ export async function putSecret(
   }
 
   const next = existing.current_version + 1;
-  const v = await encryptVersion(ctx, cache, existing.id, next, input.value, input.comment);
+  const v = await encryptVersion(ctx, cache, existing.id, next, input.value, input.comment, {
+    type: "string",
+    sensitive: true,
+  });
   // The version insert fails on the (secret_id, version) PK if another writer got there first,
   // which rolls back the whole batch: no orphan version, current_version unchanged.
   await batchOrConflict(ctx.db, [

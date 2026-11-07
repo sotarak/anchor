@@ -1,3 +1,4 @@
+import type { SecretValueType } from "@anchor/shared";
 import { toBytes } from "../lib/d1";
 
 export type SecretRow = {
@@ -18,7 +19,30 @@ export type VersionRow = {
   iv: Uint8Array;
   ciphertext: Uint8Array;
   comment: string;
+  value_type: SecretValueType;
+  sensitive: boolean;
+  aad_format: 1 | 2;
 };
+
+/** The metadata columns of a version row as stored. */
+export type RawVersionMeta = { value_type: string; sensitive: number; aad_format: number };
+
+/**
+ * Normalizes a version row's metadata. Format 1 rows (before 0.4.0) did not bind type and flag
+ * into their AAD, so their columns are not trusted: they always read as string + sensitive.
+ */
+export function versionMeta(
+  raw: RawVersionMeta,
+): Pick<VersionRow, "value_type" | "sensitive" | "aad_format"> {
+  if (raw.aad_format === 2) {
+    return {
+      value_type: raw.value_type as SecretValueType,
+      sensitive: raw.sensitive !== 0,
+      aad_format: 2,
+    };
+  }
+  return { value_type: "string", sensitive: true, aad_format: 1 };
+}
 
 export type SecretWithVersion = { secret: SecretRow; current: VersionRow | null };
 
@@ -29,13 +53,17 @@ type JoinedRow = SecretRow & {
   v_iv: unknown;
   v_ciphertext: unknown;
   v_comment: string | null;
+  v_value_type: string | null;
+  v_sensitive: number | null;
+  v_aad_format: number | null;
 };
 
 // One statement reads the secret and its current version together, so a concurrent update or
 // delete can never be observed half-applied (a missing version here means real corruption).
 const JOINED_SELECT = `SELECT s.id, s.project_id, s.environment_id, s.path, s.key, s.current_version,
     s.updated_at, v.version AS v_version, v.alg AS v_alg, v.key_version AS v_key_version,
-    v.iv AS v_iv, v.ciphertext AS v_ciphertext, v.comment AS v_comment
+    v.iv AS v_iv, v.ciphertext AS v_ciphertext, v.comment AS v_comment,
+    v.value_type AS v_value_type, v.sensitive AS v_sensitive, v.aad_format AS v_aad_format
   FROM secrets s
   LEFT JOIN secret_versions v ON v.secret_id = s.id AND v.version = s.current_version`;
 
@@ -62,6 +90,11 @@ function splitJoined(r: JoinedRow): SecretWithVersion {
       iv: toBytes(r.v_iv),
       ciphertext: toBytes(r.v_ciphertext),
       comment: r.v_comment ?? "",
+      ...versionMeta({
+        value_type: r.v_value_type ?? "string",
+        sensitive: r.v_sensitive ?? 1,
+        aad_format: r.v_aad_format ?? 1,
+      }),
     },
   };
 }
@@ -111,7 +144,7 @@ export function insertVersionStatement(
 ): D1PreparedStatement {
   return db
     .prepare(
-      "INSERT INTO secret_versions (secret_id, version, alg, key_version, iv, ciphertext, comment, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO secret_versions (secret_id, version, alg, key_version, iv, ciphertext, comment, value_type, sensitive, aad_format, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       v.secret_id,
@@ -121,6 +154,9 @@ export function insertVersionStatement(
       v.iv,
       v.ciphertext,
       v.comment,
+      v.value_type,
+      v.sensitive ? 1 : 0,
+      v.aad_format,
       createdBy,
       now,
     );

@@ -3,6 +3,7 @@
 export * from "./audit";
 export * from "./db";
 export * from "./factories/members";
+export * from "./factories/secret-versions";
 export * from "./factories/service-tokens";
 export * from "./factories/users";
 export * from "./http";

@@ -78,10 +78,11 @@ export function SecretsTable({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Key</TableHead>
-          <TableHead>Value</TableHead>
-          <TableHead>Version</TableHead>
-          <TableHead>Updated</TableHead>
+          <TableHead className="w-[32%]">Key</TableHead>
+          <TableHead className="w-64">Value</TableHead>
+          <TableHead>Comment</TableHead>
+          <TableHead className="w-20">Version</TableHead>
+          <TableHead className="w-36">Updated</TableHead>
           <TableHead className="w-0">
             <span className="sr-only">Actions</span>
           </TableHead>
@@ -89,7 +90,7 @@ export function SecretsTable({
       </TableHeader>
       <TableBody>
         {loading ? (
-          <TableSkeletonRows columns={["24ch", "14ch", "8ch", "14ch", "8ch"]} />
+          <TableSkeletonRows columns={["24ch", "14ch", "14ch", "8ch", "14ch", "8ch"]} />
         ) : (
           <>
             <FolderRows
@@ -103,21 +104,14 @@ export function SecretsTable({
                 <TableCell primary>
                   <div className="flex items-center gap-2">
                     <RiKey2Line aria-hidden className="size-4 shrink-0 text-text-soft" />
-                    <div className="flex min-w-0 flex-col">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="truncate">{s.key}</span>
-                        {s.importedFrom ? (
-                          <Tooltip content={`Edit in ${source(s.importedFrom)}`}>
-                            <Tag tabIndex={0}>{`from ${source(s.importedFrom)}`}</Tag>
-                          </Tooltip>
-                        ) : null}
-                      </span>
-                      {s.comment ? (
-                        <span className="truncate text-paragraph-xs text-text-soft">
-                          {s.comment}
-                        </span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate">{s.key}</span>
+                      {s.importedFrom ? (
+                        <Tooltip content={`Edit in ${source(s.importedFrom)}`}>
+                          <Tag tabIndex={0}>{`from ${source(s.importedFrom)}`}</Tag>
+                        </Tooltip>
                       ) : null}
-                    </div>
+                    </span>
                   </div>
                 </TableCell>
                 <TableCell className="max-w-64">
@@ -131,6 +125,16 @@ export function SecretsTable({
                     secretKey={s.key}
                     importedFrom={s.importedFrom}
                   />
+                </TableCell>
+                <TableCell className="text-paragraph-sm">
+                  {/* Its own column keeps every row one line; the full text is in the tooltip. */}
+                  {s.comment ? (
+                    <Tooltip content={s.comment}>
+                      <span className="block max-w-72 truncate text-text-soft">{s.comment}</span>
+                    </Tooltip>
+                  ) : (
+                    <span className="text-text-soft">–</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-paragraph-sm">{`v${s.version}`}</TableCell>
                 <TableCell className="text-paragraph-sm">

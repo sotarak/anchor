@@ -28,21 +28,20 @@ export function FolderRows({
       <TableCell primary>
         <div className="flex items-center gap-2">
           <RiFolder3Line aria-hidden className="size-4 shrink-0 text-text-soft" />
-          <div className="flex min-w-0 flex-col">
-            <button
-              type="button"
-              className="truncate text-left outline-none focus-visible:underline"
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpen(f);
-              }}
-            >
-              {f.name}
-            </button>
-            <span className="truncate text-code-xs text-text-soft">{f.path}</span>
-          </div>
+          {/* One line: the folder's path is already in the breadcrumb above the table. */}
+          <button
+            type="button"
+            className="min-w-0 truncate text-left outline-none focus-visible:underline"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(f);
+            }}
+          >
+            {f.name}
+          </button>
         </div>
       </TableCell>
+      <TableCell>{NONE}</TableCell>
       <TableCell>{NONE}</TableCell>
       <TableCell>{NONE}</TableCell>
       <TableCell>{NONE}</TableCell>

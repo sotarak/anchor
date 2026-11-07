@@ -120,6 +120,43 @@ describe("/audit", () => {
     expect(queries.at(-1)?.get("limit")).toBe("50");
   });
 
+  it("labels targets by name or email", async () => {
+    asOwner();
+    const tokenCreated: AuditEventDto = {
+      ...updated,
+      id: "a_t",
+      action: "service_token.created",
+      target: "11111111-2222-3333-4444-555555555555",
+      metadata: { name: "deploy-bot", permission: "read" },
+    };
+    const inviteCreated: AuditEventDto = {
+      ...updated,
+      id: "a_i",
+      action: "invite.created",
+      target: "66666666-7777-8888-9999-000000000000",
+      metadata: { email: "dev@example.com", role: "member" },
+    };
+    const bare: AuditEventDto = {
+      ...updated,
+      id: "a_b",
+      action: "user.updated",
+      target: "u_bare",
+      metadata: {},
+    };
+    auditServes("/api/v1/audit", () => ({
+      events: [tokenCreated, inviteCreated, bare],
+      nextCursor: null,
+    }));
+    const { user } = await renderApp("/audit");
+    const cells = async (action: string) => within(await rowOf(action)).getAllByRole("cell");
+    expect((await cells("service_token.created"))[3]).toHaveTextContent("deploy-bot");
+    expect((await cells("invite.created"))[3]).toHaveTextContent("dev@example.com");
+    expect((await cells("user.updated"))[3]).toHaveTextContent("u_bare");
+    await user.click(await rowOf("service_token.created"));
+    const sheet = await screen.findByRole("dialog", { name: "service_token.created" });
+    expect(sheet).toHaveTextContent("11111111-2222-3333-4444-555555555555");
+  });
+
   it("detail sheet shows metadata and never a value field", async () => {
     asOwner();
     auditServes("/api/v1/audit", () => ({ events: [updated], nextCursor: null }));

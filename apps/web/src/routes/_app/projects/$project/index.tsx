@@ -193,7 +193,7 @@ function MatrixCell({
     search: path === "/" ? {} : { path },
   } as const;
   const focus =
-    "inline-flex rounded-md outline-none focus-visible:ring-2 focus-visible:ring-primary-base";
+    "inline-flex items-center align-middle rounded-md outline-none focus-visible:ring-2 focus-visible:ring-primary-base";
   if (cell === null) {
     return (
       <Link {...link} className={focus} aria-label={`${row.key} in ${env.name}: missing`}>

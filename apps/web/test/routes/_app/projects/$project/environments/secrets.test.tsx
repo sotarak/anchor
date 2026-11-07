@@ -74,6 +74,31 @@ describe("/projects/$project/environments/$env", () => {
     for (const url of listUrls) expect(url.searchParams.has("reveal")).toBe(false);
   });
 
+  it("shows the comment in its own column", async () => {
+    setup();
+    await renderApp("/projects/app/environments/dev");
+    const row = await rowOf("API_KEY");
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).toEqual(["Key", "Value", "Comment", "Version", "Updated", "Actions"]);
+    const cells = within(row).getAllByRole("cell");
+    expect(cells[0]).not.toHaveTextContent("Stripe key");
+    expect(cells[2]).toHaveTextContent("Stripe key");
+    const empty = within(await rowOf("DATABASE_URL")).getAllByRole("cell");
+    expect(empty[2]).toHaveTextContent("–");
+  });
+
+  it("a long comment is truncated in its own column", async () => {
+    const long = "c".repeat(300);
+    setup({ secrets: [{ key: "LONG", path: "/", version: 1, comment: long, updatedAt: 0 }] });
+    const { user } = await renderApp("/projects/app/environments/dev");
+    const cell = within(await rowOf("LONG")).getAllByRole("cell")[2] as HTMLElement;
+    const text = within(cell).getByText(long);
+    expect(text.className).toMatch(/\btruncate\b/);
+    expect(text.className).toMatch(/\bmax-w-/);
+    await user.hover(text);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(long);
+  });
+
   it("reveal calls GET secrets/:key once and shows the value; toggling re-masks", async () => {
     const { get } = setup();
     const { user } = await renderApp("/projects/app/environments/dev");

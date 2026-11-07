@@ -75,6 +75,13 @@ describe("/projects/$project/settings/service-tokens", () => {
     ).toBeInTheDocument();
   });
 
+  it("the footer counts one token in the singular", async () => {
+    setup([active]);
+    await renderApp(PAGE);
+    await rowOf("ci-deploy");
+    expect(screen.getByText("1 token")).toBeInTheDocument();
+  });
+
   it("create sends scopes with env slugs and normalized paths", async () => {
     setup();
     const create = vi.fn(async ({ request }: { request: Request }) => {

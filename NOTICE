@@ -1,0 +1,17 @@
+Anchor
+Copyright 2026 Sota
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This repository also contains third-party material, distributed under its own license:
+
+- Agent skills vendored under .claude/skills/ from obra/superpowers
+  (https://github.com/obra/superpowers), Copyright (c) 2025 Jesse Vincent, MIT License.
+  See .claude/THIRD_PARTY_LICENSES/obra-superpowers-MIT.txt.
+- Agent skills vendored under .claude/skills/ from cloudflare/skills
+  (https://github.com/cloudflare/skills), (c) Cloudflare, Apache License 2.0.
+  See .claude/THIRD_PARTY_LICENSES/cloudflare-skills-Apache-2.0.txt.
+- Dashboard design token values and component recipes adapted from the Novu dashboard
+  (novuhq/novu, https://github.com/novuhq/novu), MIT License.
+
+.claude/VENDORED.md lists the exact upstream commits and local modifications.

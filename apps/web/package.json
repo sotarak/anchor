@@ -1,6 +1,7 @@
 {
   "name": "@anchor/web",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "imports": {
     "#test/support": "./test/support/index.ts"

@@ -5,6 +5,10 @@
 | brainstorming, diagnosing-superpowers, dispatching-parallel-agents, executing-plans, finishing-a-development-branch, receiving-code-review, requesting-code-review, subagent-driven-development, systematic-debugging, test-driven-development, using-git-worktrees, using-superpowers, verification-before-completion, writing-plans, writing-skills | [obra/superpowers](https://github.com/obra/superpowers) v7.0.2 | `22f0b463e7a5e579904dd6211a520321035526f7` | MIT © Jesse Vincent |
 | cloudflare, workers-best-practices, wrangler, cf-cli, durable-objects, workers-profiling | [cloudflare/skills](https://github.com/cloudflare/skills) | `1f2cd0a19588e2c6197c91dd7c71729df1fb6156` | Apache-2.0 © Cloudflare |
 
+License texts: [obra/superpowers (MIT)](THIRD_PARTY_LICENSES/obra-superpowers-MIT.txt),
+[cloudflare/skills (Apache-2.0)](THIRD_PARTY_LICENSES/cloudflare-skills-Apache-2.0.txt). The
+repository's `NOTICE` lists them as well.
+
 ## Local modifications
 
 - Superpowers: the `superpowers:` namespace prefix in cross-references was removed (for example

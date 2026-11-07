@@ -2,6 +2,16 @@
   "name": "@anchor-secrets/cli",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sotarak/anchor.git",
+    "directory": "apps/cli"
+  },
+  "homepage": "https://sotarak.github.io/anchor/",
+  "bugs": {
+    "url": "https://github.com/sotarak/anchor/issues"
+  },
   "type": "module",
   "bin": {
     "anchor": "dist/anchor.mjs"

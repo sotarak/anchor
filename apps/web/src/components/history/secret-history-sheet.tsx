@@ -108,9 +108,14 @@ export function SecretHistorySheet({
                       />
                     </TableCell>
                     <TableCell className="text-paragraph-sm">
-                      {v.createdBy?.label ?? NONE}
+                      {/* The sheet is narrow: long emails truncate, dates never wrap. */}
+                      {v.createdBy?.label ? (
+                        <span className="block max-w-36 truncate">{v.createdBy.label}</span>
+                      ) : (
+                        NONE
+                      )}
                     </TableCell>
-                    <TableCell className="text-paragraph-sm">
+                    <TableCell className="whitespace-nowrap text-paragraph-sm">
                       <Tooltip content={formatRelative(v.createdAt)}>
                         <span>{formatDate(v.createdAt)}</span>
                       </Tooltip>
@@ -139,7 +144,7 @@ export function SecretHistorySheet({
 
   return (
     <Sheet open onOpenChange={onOpenChange}>
-      <SheetContent>
+      <SheetContent size="wide">
         <SheetHeader>
           <SheetTitle>History</SheetTitle>
           <SheetDescription>{`Every saved version of ${secret.key} at ${path}, newest first.`}</SheetDescription>

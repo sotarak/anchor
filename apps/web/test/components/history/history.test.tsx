@@ -72,6 +72,27 @@ describe("secret history sheet", () => {
     expect(within(oldest as HTMLElement).getByText("Apr 2, 2026")).toBeInTheDocument();
   });
 
+  it("dates stay on one line and long author emails truncate in the narrow sheet", async () => {
+    setup();
+    const { sheet } = await openHistory();
+    await sheet.findByText("v2");
+    const [newest] = versionRows(sheet);
+    const cells = within(newest as HTMLElement).getAllByRole("cell");
+    expect(cells[3]?.className).toMatch(/\bwhitespace-nowrap\b/);
+    const author = within(newest as HTMLElement).getByText("owner@example.com");
+    expect(author.className).toMatch(/\btruncate\b/);
+    expect(author.className).toMatch(/\bmax-w-/);
+  });
+
+  it("opens in the wide sheet so all five columns fit without sideways scroll", async () => {
+    setup();
+    await openHistory();
+    const dialog = screen.getByRole("dialog", { name: "History" });
+    expect(dialog).toHaveAttribute("data-size", "wide");
+    expect(dialog.className).toMatch(/\bsm:max-w-2xl\b/);
+    expect(dialog.className).not.toMatch(/\bsm:max-w-xl\b/);
+  });
+
   it("value not requested until reveal clicked", async () => {
     const { valueCalls } = setup();
     const { sheet, user, queryClient } = await openHistory();

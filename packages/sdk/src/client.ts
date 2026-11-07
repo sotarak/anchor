@@ -83,10 +83,10 @@ export function createClientCore(options: ClientOptions): ClientCore {
       if (!cache) {
         return { secrets: await fetchFolder(cfg, query, emit, o.signal), fetchedAt: Date.now() };
       }
-      // A shared fetch never takes one caller's signal; the cache races it per caller.
+      // The cache gives a shared fetch its own signal, aborted when its last caller gives up.
       return cache.load(
         cacheKey(cfg.origin, cfg.token, query),
-        () => fetchFolder(cfg, query, emit),
+        (signal) => fetchFolder(cfg, query, emit, signal),
         o,
       );
     },

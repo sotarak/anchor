@@ -15,6 +15,9 @@ export type CachePolicy = Required<CacheOptions>;
 /** A fetch's result: the entry to serve, and the error when it is a stale fallback. */
 type Outcome = { entry: CacheEntry; error?: AnchorError };
 
+/** A fetch shared by every caller of one key; aborted when the last of them gives up. */
+type Flight = { promise: Promise<Outcome>; controller: AbortController; waiters: number };
+
 export function memoryStore(): CacheStore {
   const entries = new Map<string, CacheEntry>();
   return {
@@ -59,7 +62,7 @@ function untilAborted<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> 
  * instance, never in the store.
  */
 export class SecretCache {
-  private readonly inflight = new Map<string, Promise<Outcome>>();
+  private readonly inflight = new Map<string, Flight>();
   /** When the last fetch of a key failed; the stale entry is served without asking for one ttl. */
   private readonly failedAt = new Map<string, number>();
 
@@ -75,21 +78,46 @@ export class SecretCache {
    */
   async load(
     key: string,
-    fetch: () => Promise<AnchorSecret[]>,
+    fetch: (signal: AbortSignal) => Promise<AnchorSecret[]>,
     opts: { fresh?: boolean; signal?: AbortSignal; strict?: boolean } = {},
   ): Promise<CacheEntry> {
     if (opts.signal?.aborted) throw abortedError();
     const entry = await this.read(key);
     if (entry && !opts.fresh && this.servable(key, entry)) return entry;
-    let pending = this.inflight.get(key);
-    if (!pending) {
-      pending = this.fetch(key, fetch, entry).finally(() => this.inflight.delete(key));
-      this.inflight.set(key, pending);
+    const flight = this.inflight.get(key) ?? this.start(key, fetch, entry);
+    flight.waiters++;
+    let outcome: Outcome;
+    try {
+      outcome = await untilAborted(flight.promise, opts.signal);
+    } catch (error) {
+      // A caller that gives up stops the request only when nobody else is waiting for it.
+      if (opts.signal?.aborted && --flight.waiters === 0) {
+        flight.controller.abort();
+        if (this.inflight.get(key) === flight) this.inflight.delete(key);
+      }
+      throw error;
     }
-    // The shared fetch keeps going for the other callers when this one gives up.
-    const outcome = await untilAborted(pending, opts.signal);
     if (opts.strict && outcome.error) throw outcome.error;
     return outcome.entry;
+  }
+
+  private start(
+    key: string,
+    fetch: (signal: AbortSignal) => Promise<AnchorSecret[]>,
+    stale: CacheEntry | undefined,
+  ): Flight {
+    const controller = new AbortController();
+    const promise: Promise<Outcome> = this.fetch(
+      key,
+      () => fetch(controller.signal),
+      stale,
+      controller.signal,
+    ).finally(() => {
+      if (this.inflight.get(key)?.promise === promise) this.inflight.delete(key);
+    });
+    const flight: Flight = { promise, controller, waiters: 0 };
+    this.inflight.set(key, flight);
+    return flight;
   }
 
   /** A store that fails is a miss: Anchor stays reachable when Redis (or a file) is not. */
@@ -125,6 +153,7 @@ export class SecretCache {
     key: string,
     fetch: () => Promise<AnchorSecret[]>,
     stale: CacheEntry | undefined,
+    signal: AbortSignal,
   ): Promise<Outcome> {
     try {
       const entry: CacheEntry = { secrets: await fetch(), fetchedAt: this.now() };
@@ -132,6 +161,8 @@ export class SecretCache {
       this.failedAt.delete(key);
       return { entry };
     } catch (error) {
+      // Abandoned by every caller: not a failure of Anchor, so no fallback and no cooldown.
+      if (signal.aborted) throw error;
       const now = this.now();
       if (!(error instanceof AnchorError) || !stale || !this.usable(stale, now)) throw error;
       this.failedAt.set(key, now);

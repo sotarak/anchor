@@ -455,3 +455,62 @@ describe("option validation", () => {
     ).not.toThrow();
   });
 });
+
+describe("cancellation with caching on", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+  const busy = () => json({ error: { code: "unavailable", message: "Busy" } }, 503);
+
+  it("stops the request when its only caller aborts during a retry wait", async () => {
+    const f = fakeFetch(busy());
+    const controller = new AbortController();
+    const pending = client(f.fetch)
+      .listSecrets(QUERY, { signal: controller.signal })
+      .catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(10);
+    controller.abort();
+    expect(await pending).toMatchObject({ code: "aborted" });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(f.calls).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("keeps the request going while another caller waits", async () => {
+    const f = fakeFetch(busy(), json({ secrets: [secret("A", "string", "a")] }));
+    const c = client(f.fetch);
+    const controller = new AbortController();
+    const first = c.listSecrets(QUERY, { signal: controller.signal }).catch((e: unknown) => e);
+    const second = c.loadSecrets(QUERY);
+    await vi.advanceTimersByTimeAsync(10);
+    controller.abort();
+    expect(await first).toMatchObject({ code: "aborted" });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(await second).toEqual({ A: "a" });
+    expect(f.calls).toHaveLength(2);
+  });
+
+  it("an aborted request does not count as a failed refresh", async () => {
+    const events: string[] = [];
+    let n = 0;
+    const f = ((_i: string, init?: RequestInit) => {
+      n++;
+      if (n === 1) return Promise.resolve(json({ secrets: [secret("A", "string", "a")] }));
+      return new Promise<Response>((_r, reject) =>
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("x", "AbortError"))),
+      );
+    }) as unknown as typeof fetch;
+    const c = client(f, { onEvent: (e: { type: string }) => events.push(e.type) });
+    await c.listSecrets(QUERY);
+    const controller = new AbortController();
+    const pending = c
+      .listSecrets(QUERY, { fresh: true, signal: controller.signal })
+      .catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(10);
+    controller.abort();
+    expect(await pending).toMatchObject({ code: "aborted" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(events).not.toContain("refresh_failed");
+    expect(n).toBe(2);
+    expect((await c.loadSecrets(QUERY)).A).toBe("a");
+  });
+});

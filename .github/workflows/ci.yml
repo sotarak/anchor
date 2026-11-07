@@ -20,6 +20,7 @@ jobs:
       - run: pnpm build
       - run: pnpm --filter @anchor/web lint:tokens
       - run: pnpm test
+      - run: pnpm test:scripts
 
   web-e2e:
     needs: check

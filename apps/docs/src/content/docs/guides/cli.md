@@ -65,6 +65,22 @@ Windows install path when Node.js is not available.
 
 In CI, use the [setup action](/anchor/guides/ci/).
 
+## Upgrade and uninstall
+
+Upgrade with the tool you installed with. `anchor --version` shows what you have.
+
+| Installed with | Upgrade | Uninstall |
+|----------------|---------|-----------|
+| npm | `npm install -g @anchor-secrets/cli@latest` | `npm uninstall -g @anchor-secrets/cli` |
+| Homebrew | `brew update && brew upgrade anchor` | `brew uninstall anchor` |
+| Install script | run the script again (`ANCHOR_VERSION` pins a version) | `rm ~/.local/bin/anchor ~/.local/bin/anchor-secrets` |
+| Release binary | download the new binary over the old one | delete the binary |
+| Setup action | bump `sotarak/anchor/setup-action@v<version>` | remove the step |
+
+Before you uninstall, run `anchor logout`: it revokes the session on the server and removes the
+stored credential from the keychain (or the fallback file). Uninstalling alone leaves both behind.
+The install script uses `ANCHOR_INSTALL_DIR` in place of `~/.local/bin` if you set it.
+
 ## Getting started
 
 ```sh

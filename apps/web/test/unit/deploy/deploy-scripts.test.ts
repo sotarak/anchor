@@ -83,7 +83,7 @@ describe("deploy scripts", () => {
     // That section runs "from the repository root"; other sections run inside a package.
     const section =
       read("apps/docs/src/content/docs/guides/deploy.md")
-        .split(/^## 5\. Deploy$/m)[1]
+        .split(/^## Deploy manually$/m)[1]
         ?.split(/^## /m)[0] ?? "";
     const commands = [...section.matchAll(/^pnpm ([\w:-]+)\s*$/gm)].map((m) => m[1]);
     expect(commands.length).toBeGreaterThan(0);

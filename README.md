@@ -28,12 +28,12 @@ curl -fsSL https://sotarak.github.io/anchor/install.sh | sh   # standalone binar
 
 ![The anchor CLI: log in, list a project's secrets, and run a command with them injected](docs/media/cli.gif)
 
-| | |
-|---|---|
-| ![Overview: which keys exist in each environment](docs/media/overview.png) | ![History: every version of a secret, with rollback](docs/media/history.png) |
-| **Overview.** See at a glance which keys are missing from an environment. | **History.** Every write keeps a version; reveal or roll back any of them. |
-| ![Service tokens: scoped, expiring tokens for CI](docs/media/service-tokens.png) | ![Audit log: logins, reads and changes, never values](docs/media/audit.png) |
-| **Service tokens.** Read or write, scoped to environments and folders, with an expiry. | **Audit log.** Who did what, to which secret, from where. Never the value. |
+|                                                                                        |                                                                              |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| ![Overview: which keys exist in each environment](docs/media/overview.png)             | ![History: every version of a secret, with rollback](docs/media/history.png) |
+| **Overview.** See at a glance which keys are missing from an environment.              | **History.** Every write keeps a version; reveal or roll back any of them.   |
+| ![Service tokens: scoped, expiring tokens for CI](docs/media/service-tokens.png)       | ![Audit log: logins, reads and changes, never values](docs/media/audit.png)  |
+| **Service tokens.** Read or write, scoped to environments and folders, with an expiry. | **Audit log.** Who did what, to which secret, from where. Never the value.   |
 
 ## Why Anchor
 

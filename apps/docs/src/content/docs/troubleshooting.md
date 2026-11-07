@@ -5,8 +5,8 @@ description: Common errors when deploying or using Anchor, and how to fix them.
 
 ## Every secret read returns `500 internal`
 
-The root key configuration is wrong. Look for one of two log lines (`pnpm exec wrangler tail` in
-`apps/server`):
+The root key configuration is wrong. Look for one of two log lines (`pnpm exec wrangler tail` at the
+repository root, or the Worker's **Logs** tab in the Cloudflare dashboard):
 
 - **`config_error`**: a root key variable is missing or malformed, `ANCHOR_ROOT_KEY_PREVIOUS` is
   set without `ANCHOR_ROOT_KEY_PREVIOUS_ID`, or the previous id equals `ANCHOR_ROOT_KEY_ID`.
@@ -47,6 +47,48 @@ The dashboard ships a strict Content Security Policy (`apps/web/public/_headers`
 extensions that inject scripts, or a proxy that rewrites the HTML, can be blocked by it. Try a
 private window. If you changed the dashboard, deploy with `pnpm deploy:worker` so the headers and
 the build ship together; `wrangler deploy` alone ships whatever is in `apps/web/dist`.
+
+## The install script stops with "checksum mismatch"
+
+The script compares the downloaded binary with the release's `SHA256SUMS` and installs nothing when
+they differ. A proxy or captive portal that rewrites downloads is the usual cause; an interrupted
+download is the other. Run it again on a direct connection. If it still fails, do not bypass the
+check: open an issue with the version and platform.
+
+## `anchor: command not found` after installing
+
+The install script puts `anchor` in `~/.local/bin` (or `ANCHOR_INSTALL_DIR`) and prints a hint when
+that directory is not on your `PATH`. Add it to your shell profile and open a new terminal:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+After `npm install -g`, the command lives in npm's global bin directory (`npm prefix -g`, plus
+`/bin` on macOS and Linux), which must be on `PATH` too.
+
+## `npm install -g @anchor-secrets/cli` fails or the CLI will not start
+
+The npm package needs Node.js 22.19 or later (`node --version`). On an older Node.js, upgrade it,
+or use Homebrew or the install script, which ship a standalone binary with no Node.js requirement.
+
+## The Deploy button's build fails (Workers Builds)
+
+Open the failed build from the Worker's **Deployments** tab in the Cloudflare dashboard and read
+the build log; Workers Builds runs `pnpm install`, the build command, then the deploy command.
+
+- **The account is on the Free plan.** Anchor needs Workers Paid (see below), and the queues it
+  uses are a paid feature. Upgrade the plan and retry the build.
+- **A queue or the database is missing.** Create it by hand (see
+  [Deploy manually](/anchor/guides/deploy/#deploy-manually)), then retry the build.
+- **The migrations step fails.** Check that the `DB` entry in your copy's `wrangler.jsonc` has a
+  `database_id`; the button writes it there on the first deploy.
+
+## Logins time out on the Free plan
+
+Password hashing (PBKDF2, 100,000 iterations) needs more CPU per request than the Workers Free plan
+allows, so sign-in and setup fail with a CPU-limit error (`1102`) or time out. Move the account to
+Workers Paid; nothing else needs to change.
 
 ## `anchor` runs a different program
 

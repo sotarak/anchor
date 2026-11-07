@@ -21,8 +21,9 @@ disabled, and the server rejects the request anyway.
 - **Project overview** summarizes the project and its environments.
 - **Environment** (`/projects/<project>/environments/<env>`) is where secrets live:
   - The sidebar's environment switcher changes the environment for the whole project.
-  - The table lists the secrets of the current folder: key, masked value, comment, last update.
-    Reveal and copy appear on hover. Create and edit open a side sheet.
+  - The table lists the secrets of the current folder in columns: Key, Value (masked), Comment,
+    Version and Updated. A long comment is cut to one line; hover it to read it in full. Reveal and
+    copy appear on hover. Create and edit open a side sheet.
   - Folders: browse with the path breadcrumb, **Create folder**, **Delete folder**.
   - Imports: **Add import** shows another folder's secrets here; imported rows carry an
     **Imported from** label. See [References and imports](/anchor/guides/references-imports/).

@@ -243,6 +243,43 @@ describe("open-source repository", () => {
     expect(readme).not.toContain("cd apps/server");
   });
 
+  it("the deploy guide offers the button and a manual path from the repo root", () => {
+    const g = read("apps/docs/src/content/docs/guides/deploy.md");
+    expect(g).toContain(
+      "https://deploy.workers.cloudflare.com/?url=https://github.com/sotarak/anchor",
+    );
+    expect(g).toMatch(/^## Deploy with the button$/m);
+    expect(g).toMatch(/^## Deploy manually$/m);
+    expect(g).not.toContain("cd apps/server");
+    expect(g).toContain("/setup");
+  });
+
+  it("the upgrade guide covers button clones, manual checkouts and every CLI install", () => {
+    const u = read("apps/docs/src/content/docs/operations/upgrading.md");
+    expect(u).not.toContain("git checkout v0.1.0");
+    for (const s of [
+      "upstream",
+      "npm install -g @anchor-secrets/cli@",
+      "brew upgrade anchor",
+      "install.sh",
+      "setup-action@v",
+      "database_id",
+    ]) {
+      expect(u).toContain(s);
+    }
+  });
+
+  it("the CLI guide explains upgrade and uninstall", () => {
+    expect(read("apps/docs/src/content/docs/guides/cli.md")).toMatch(/^## Upgrade and uninstall$/m);
+  });
+
+  it("troubleshooting covers install and deploy failures", () => {
+    const t = read("apps/docs/src/content/docs/troubleshooting.md");
+    for (const s of ["checksum mismatch", "PATH", "22.19", "Workers Builds", "Free plan"]) {
+      expect(t).toContain(s);
+    }
+  });
+
   it("README links the docs site", () => {
     expect(read("README.md")).toContain("https://sotarak.github.io/anchor/");
   });

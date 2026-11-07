@@ -37,6 +37,18 @@ Workers Builds picks up the push, applies the new migrations, and deploys. If th
 `wrangler.jsonc`, keep your own IDs (`database_id`, queue names, Worker name) and take everything
 else from the release.
 
+If git stops with `fatal: refusing to merge unrelated histories`, your copy started from a fresh
+commit instead of this repository's history. Do the first merge like this, once:
+
+```sh
+git merge --allow-unrelated-histories -X theirs v<version>
+git diff HEAD~1 -- wrangler.jsonc   # put your own IDs and names back, then commit
+```
+
+`-X theirs` takes the release's side of every conflict, so restore your `database_id`, queue names
+and Worker name in `wrangler.jsonc` before you push. Files the release deleted stay in your copy;
+remove them by hand (compare with `git diff --stat v<version>`). Later upgrades merge normally.
+
 ## If you deployed manually
 
 From the repository root:

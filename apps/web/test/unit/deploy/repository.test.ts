@@ -280,6 +280,24 @@ describe("open-source repository", () => {
     }
   });
 
+  it("the button upgrade path covers a copy with unrelated history", () => {
+    const u = read("apps/docs/src/content/docs/operations/upgrading.md");
+    expect(u).toContain("refusing to merge unrelated histories");
+    expect(u).toContain("--allow-unrelated-histories");
+  });
+
+  it("the docs home sends the Deploy action through the guide (paid plan, root key backup)", () => {
+    const home = read("apps/docs/src/content/docs/index.mdx");
+    expect(home).not.toContain("deploy.workers.cloudflare.com");
+    expect(home).toContain("/anchor/guides/deploy/#deploy-with-the-button");
+  });
+
+  it("troubleshooting names the errors a failed button build prints", () => {
+    const t = read("apps/docs/src/content/docs/troubleshooting.md");
+    expect(t).toContain("Couldn't find a D1 DB");
+    expect(t).toContain("anchor-reencrypt-dlq");
+  });
+
   it("the 0.3.0 changelog tells manual installs to move database_id", () => {
     const c = read("CHANGELOG.md");
     const section = c.slice(c.indexOf("## [0.3.0]"), c.indexOf("## [0.2.0]"));

@@ -79,10 +79,14 @@ the build log; Workers Builds runs `pnpm install`, the build command, then the d
 
 - **The account is on the Free plan.** Anchor needs Workers Paid (see below), and the queues it
   uses are a paid feature. Upgrade the plan and retry the build.
-- **A queue or the database is missing.** Create it by hand (see
-  [Deploy manually](/anchor/guides/deploy/#deploy-manually)), then retry the build.
-- **The migrations step fails.** Check that the `DB` entry in your copy's `wrangler.jsonc` has a
-  `database_id`; the button writes it there on the first deploy.
+- **`Couldn't find a D1 DB with the name or binding 'anchor'`** (or a similar `Couldn't find a D1 DB`
+  line) from the migrations step: the database was not created before the deploy command ran.
+  Create it with `pnpm exec wrangler d1 create anchor`, add the printed `database_id` to the `DB`
+  entry in your copy's `wrangler.jsonc`, push, and the build retries.
+- **An error naming `anchor-reencrypt-dlq` or `anchor-reencrypt`**: a queue was not created. Create
+  both with `pnpm exec wrangler queues create anchor-reencrypt` and
+  `pnpm exec wrangler queues create anchor-reencrypt-dlq`, then retry the build. Creating a queue
+  that already exists fails harmlessly.
 
 ## Logins time out on the Free plan
 

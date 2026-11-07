@@ -2,6 +2,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { SECRET_LIKE, TOKEN_KINDS } from "../../support/secret-like";
 
 const path = (rel: string) => fileURLToPath(new URL(`../../../../../${rel}`, import.meta.url));
 const read = (rel: string) => readFileSync(path(rel), "utf8");
@@ -39,8 +40,6 @@ const publicText = () => [
 
 // The last domain label is letters, so `setup-action@v0.2.0` and `cli@0.2.0` are not addresses.
 const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\b/g;
-/** A bearer token of any kind (`anc_s_`, `anc_st_`, `anc_inv_`, `anc_rst_`) at real length. */
-const SECRET_LIKE = /anc_(s|st|inv|rst)_[A-Za-z0-9_-]{20,}/;
 
 const PACKAGES = [
   "package.json",
@@ -122,7 +121,7 @@ describe("open-source repository", () => {
   it("the secret-string guard catches every bearer token kind", () => {
     // Built at runtime so this file holds no token-shaped literal; 43 chars = base64url(32 bytes).
     const body = "A".repeat(43);
-    for (const kind of ["s", "st", "inv", "rst"]) {
+    for (const kind of TOKEN_KINDS) {
       expect(`see anc_${kind}_${body} here`).toMatch(SECRET_LIKE);
     }
     expect("anc_st_<token>").not.toMatch(SECRET_LIKE);

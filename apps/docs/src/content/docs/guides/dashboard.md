@@ -42,8 +42,9 @@ disabled, and the server rejects the request anyway.
 - **Environments**: create, rename and delete environments.
 - **Members**: add instance users to the project, set their role (admin, developer, viewer) and
   the environments they may access.
-- **Service tokens**: create (the token is shown once), list with last use, revoke. See
-  [Use Anchor in CI](/anchor/guides/ci/).
+- **Service tokens**: create (the token is shown once), list with last use, revoke. **Expires
+  in** offers 7, 30, 90 (default) or 365 days, or **No expiry** for a token that stays valid until
+  revoked; the list shows `Never` for it. See [Use Anchor in CI](/anchor/guides/ci/).
 - **Encryption**: the project key versions and rotation status; start a rotation. See
   [Rotate a project key](/anchor/operations/project-key-rotation/).
 

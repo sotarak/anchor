@@ -36,7 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { FieldError, Label } from "@/components/ui/label";
+import { FieldError, FieldHint, Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -323,7 +323,7 @@ function CreateTokenSheet({
   const [name, setName] = useState("");
   const [permission, setPermission] = useState<"read" | "read-write">("read");
   const [scopes, setScopes] = useState<Scope[]>([{ environment: "", path: "/" }]);
-  const [expiresInDays, setExpiresInDays] = useState(90);
+  const [expiresInDays, setExpiresInDays] = useState<number | null>(90);
   const [errors, setErrors] = useState<{ name?: string; scopes: (string | undefined)[] }>({
     scopes: [],
   });
@@ -462,7 +462,10 @@ function CreateTokenSheet({
       </fieldset>
       <div className="flex flex-col gap-1">
         <Label htmlFor="token-expiry">Expires in</Label>
-        <Select value={String(expiresInDays)} onValueChange={(v) => setExpiresInDays(Number(v))}>
+        <Select
+          value={expiresInDays === null ? "never" : String(expiresInDays)}
+          onValueChange={(v) => setExpiresInDays(v === "never" ? null : Number(v))}
+        >
           <SelectTrigger id="token-expiry">
             <SelectValue />
           </SelectTrigger>
@@ -472,8 +475,12 @@ function CreateTokenSheet({
                 {`${d} days`}
               </SelectItem>
             ))}
+            <SelectItem value="never">No expiry</SelectItem>
           </SelectContent>
         </Select>
+        {expiresInDays === null && (
+          <FieldHint>The token stays valid until you revoke it.</FieldHint>
+        )}
       </div>
     </FormSheet>
   );

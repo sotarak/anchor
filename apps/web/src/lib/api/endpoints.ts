@@ -257,7 +257,7 @@ export const api = {
         name: string;
         permission: "read" | "read-write";
         scopes: { environment: string; path: string }[];
-        expiresInDays: number;
+        expiresInDays: number | null;
       },
     ) =>
       apiFetch<{ serviceToken: ServiceTokenDto; token: string }>(

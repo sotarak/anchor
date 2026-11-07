@@ -77,7 +77,7 @@ All paths are relative to `/api/v1`. `:project` and `:env` are slugs.
 | `GET`, `POST /projects/:project/environments` | List and create environments |
 | `PATCH`, `DELETE /projects/:project/environments/:env` | Rename and delete an environment |
 | `GET`, `POST /projects/:project/members`; `PATCH`, `DELETE …/members/:userId` | Project members, roles and allowed environments |
-| `GET`, `POST /projects/:project/service-tokens`; `DELETE …/service-tokens/:id` | Service tokens (the token is shown once, at creation) |
+| `GET`, `POST /projects/:project/service-tokens`; `DELETE …/service-tokens/:id` | Service tokens (the token is shown once, at creation). Create body `{ name, permission, scopes, expiresInDays }`, where `expiresInDays` is 1-365 or `null` for no expiry (required); `expiresAt` in responses is a timestamp or `null` |
 | `GET /projects/:project/keys`, `POST /projects/:project/keys/rotate` | Key versions and rotation progress; start a rotation (202) |
 | `GET /projects/:project/audit` | Project audit log (project admins) |
 

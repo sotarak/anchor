@@ -51,6 +51,9 @@ rotation work, and it lets CI read secrets with a plain bearer token.
 - The dashboard session is an `HttpOnly`, `Secure` `__Host-` cookie. State-changing requests
   authenticated by cookie must carry the instance's own `Origin`, or they are rejected (CSRF).
 - Service tokens are accepted only as `Authorization: Bearer`, never from a cookie.
+- A service token created with no expiry (0.4.0) is a standing credential: it works until someone
+  revokes it, so a leak is not retired by time. Scope it narrowly, prefer `read`, and revoke it when
+  it is no longer used. Revocation takes effect on the next request.
 - `anchor login` (0.4.0) uses a browser flow modeled on the OAuth device authorization grant. The
   CLI keeps a 256-bit device code (prefix `anc_dc_`, only its SHA-256 hash is stored) and polls;
   the person approves the short code shown in the terminal on the dashboard's `/cli/login` page.

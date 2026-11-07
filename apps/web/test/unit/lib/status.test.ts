@@ -16,6 +16,13 @@ describe("tokenStatus", () => {
       label: "Revoked",
     });
   });
+  it("a token without an expiry is active; revoked still wins", () => {
+    expect(tokenStatus({ revokedAt: null, expiresAt: null }, now)).toEqual({
+      status: "success",
+      label: "Active",
+    });
+    expect(tokenStatus({ revokedAt: now - DAY, expiresAt: null }, now).label).toBe("Revoked");
+  });
   it("expired, expiring (< 7 days) and active boundaries", () => {
     expect(tokenStatus({ ...serviceToken, expiresAt: now }, now).label).toBe("Expired");
     expect(tokenStatus({ ...serviceToken, expiresAt: now + 7 * DAY - HOUR }, now)).toEqual({

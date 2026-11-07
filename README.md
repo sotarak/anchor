@@ -64,6 +64,9 @@ curl -fsSL https://sotarak.github.io/anchor/install.sh | sh   # standalone binar
 - **AI agents over MCP.** Claude Code, Codex and other MCP clients connect with OAuth and your
   approval; sensitive values stay hidden unless you allow it. See the
   [MCP guide](https://sotarak.github.io/anchor/guides/mcp/).
+- **Agent skills.** `npx skills add sotarak/anchor --skill anchor-cli --skill anchor-migrate
+  --skill anchor-ci` teaches coding agents to use Anchor without handling secret values. See
+  [Agent skills](https://sotarak.github.io/anchor/guides/agent-skills/).
 
 ## Architecture
 

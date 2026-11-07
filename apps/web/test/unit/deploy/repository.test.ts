@@ -411,6 +411,15 @@ describe("open-source repository", () => {
     expect(sdk).toContain("npm install @anchor-secrets/nestjs");
   });
 
+  it("the agent-skills guide installs the three skills by name and the README links it", () => {
+    const guide = read("apps/docs/src/content/docs/guides/agent-skills.md");
+    expect(guide).toContain(
+      "npx skills add sotarak/anchor --skill anchor-cli --skill anchor-migrate --skill anchor-ci",
+    );
+    expect(guide).toContain("npx skills update");
+    expect(read("README.md")).toContain("https://sotarak.github.io/anchor/guides/agent-skills/");
+  });
+
   it("the CI guide pins the 0.4.0 CLI", () => {
     const ci = read("apps/docs/src/content/docs/guides/ci.md");
     expect(ci).not.toContain("0.3.0");

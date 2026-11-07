@@ -57,6 +57,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The Worker serves apps/web/dist as static assets; wrangler dev refuses to start without it.
+      - run: pnpm --filter @anchor/web build
       - run: pnpm --filter ./apps/cli test:e2e
 
   # `anchor run` on Windows: PATHEXT lookup and .cmd shims (npm, npx, pnpm) through cross-spawn.

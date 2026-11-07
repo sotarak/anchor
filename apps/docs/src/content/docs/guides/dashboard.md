@@ -60,3 +60,17 @@ disabled, and the server rejects the request anyway.
 
 - Change your password.
 - See your active sessions (dashboard and CLI) and revoke any of them.
+
+## Approving a CLI login
+
+`anchor login` opens `/cli/login?code=XXXX-XXXX` in your browser (sign in first if asked). The page
+shows the code in large type, the device name the CLI sent, the IP address and how long ago the
+request was made. **Only approve if you just ran anchor login and this code matches your
+terminal.** **Approve** gives that terminal a CLI session as you (30 days, revocable from your
+sessions list); **Deny** makes the CLI stop with "Login was denied in the browser". Either way the page then says
+"You can close this tab and return to your terminal."
+
+Opened without a code (or with a malformed one), the page asks for it; spaces, dashes and case do
+not matter (`wdjb mjht` works). A code that expired after 10 minutes or was already used shows
+"This login request expired or was already used." Only a dashboard session can approve; a CLI
+session or service token cannot.

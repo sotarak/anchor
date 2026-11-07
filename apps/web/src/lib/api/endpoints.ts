@@ -1,6 +1,7 @@
 import type {
   AuditAction,
   AuditEventDto,
+  CliLoginRequestDto,
   EnvironmentDto,
   FolderDto,
   FolderImportDto,
@@ -57,6 +58,13 @@ export const api = {
     revokeSession: (id: string) => apiFetch<void>(`/auth/sessions/${e(id)}`, { method: "DELETE" }),
     resetPassword: (body: { token: string; password: string }) =>
       apiFetch<void>("/auth/password-reset", { method: "POST", body }),
+  },
+  cliLogin: {
+    get: (code: string) => apiFetch<CliLoginRequestDto>(`/auth/cli/requests/${e(code)}`),
+    approve: (code: string) =>
+      apiFetch<void>(`/auth/cli/requests/${e(code)}/approve`, { method: "POST" }),
+    deny: (code: string) =>
+      apiFetch<void>(`/auth/cli/requests/${e(code)}/deny`, { method: "POST" }),
   },
   invites: {
     list: async () => (await apiFetch<{ invites: InviteDto[] }>("/invites")).invites,

@@ -2,9 +2,10 @@ import { chmod, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createFileStore } from "#src/credentials/file";
+import { selectCredentialStore } from "#src/credentials/select";
 import { CliError } from "#src/errors";
 import { Output } from "#src/output";
-import { createTestIo, tmpDir } from "#test/support";
+import { createTestIo, fakeSpawner, tmpDir } from "#test/support";
 
 const a = { apiUrl: "https://a.example", token: "anc_s_a", email: "a@b.c", expiresAt: 5 };
 const b = { apiUrl: "https://b.example", token: "anc_s_b", email: "b@b.c", expiresAt: 6 };
@@ -69,4 +70,45 @@ describe("file credential store", () => {
     );
     expect(await s.store.get(a.apiUrl)).toBeNull();
   });
+
+  it.skipIf(process.platform === "win32")(
+    "an explicit ANCHOR_CREDENTIAL_STORE=file stores quietly; a missing keychain still warns",
+    async () => {
+      const chosen = createTestIo({
+        platform: "darwin",
+        env: { ANCHOR_CREDENTIAL_STORE: "file", XDG_CONFIG_HOME: await tmpDir() },
+      });
+      const outChosen = new Output(chosen, {
+        json: false,
+        quiet: false,
+        noColor: true,
+        debug: false,
+      });
+      const explicit = await selectCredentialStore(chosen, {
+        spawner: fakeSpawner().spawner,
+        out: outChosen,
+      });
+      await explicit.set(a);
+      expect(await explicit.get(a.apiUrl)).toEqual(a);
+      expect(chosen.err()).toBe("");
+
+      // No keychain on this platform: the fallback is not the user's choice, so it still warns.
+      const fallback = createTestIo({
+        platform: "linux",
+        env: { XDG_CONFIG_HOME: await tmpDir() },
+      });
+      const outFallback = new Output(fallback, {
+        json: false,
+        quiet: false,
+        noColor: true,
+        debug: false,
+      });
+      const auto = await selectCredentialStore(fallback, {
+        spawner: fakeSpawner().spawner,
+        out: outFallback,
+      });
+      await auto.set(a);
+      expect(fallback.err()).toMatch(/^warning: No OS keychain available; credentials stored in /);
+    },
+  );
 });

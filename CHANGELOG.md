@@ -7,6 +7,8 @@ dashboard and CLI.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-07
+
 ### Added
 
 - **CLI distribution.**
@@ -70,5 +72,6 @@ Cloudflare Workers, D1 and Queues.
   - A documentation site at https://sotarak.github.io/anchor/ (guides, operations runbooks,
     security model, API reference).
 
-[Unreleased]: https://github.com/sotarak/anchor/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/sotarak/anchor/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/sotarak/anchor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sotarak/anchor/releases/tag/v0.1.0

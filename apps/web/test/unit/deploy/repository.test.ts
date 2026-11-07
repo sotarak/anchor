@@ -197,7 +197,7 @@ describe("open-source repository", () => {
     expect(missing).toEqual([]);
   });
 
-  it("every workspace package is version 0.1.0 and the changelog has its section", () => {
+  it("every workspace package shares one version and the changelog has its section", () => {
     const manifests = [
       "package.json",
       "apps/server/package.json",
@@ -206,12 +206,18 @@ describe("open-source repository", () => {
       "apps/docs/package.json",
       "packages/shared/package.json",
     ];
+    const version = json("package.json").version as string;
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
     const versions = Object.fromEntries(manifests.map((m) => [m, json(m).version]));
-    expect(versions).toEqual(Object.fromEntries(manifests.map((m) => [m, "0.1.0"])));
+    expect(versions).toEqual(Object.fromEntries(manifests.map((m) => [m, version])));
     const changelog = read("CHANGELOG.md");
-    expect(changelog).toMatch(/^## \[0\.1\.0\] - \d{4}-\d{2}-\d{2}$/m);
-    expect(changelog.indexOf("## [Unreleased]")).toBeLessThan(changelog.indexOf("## [0.1.0]"));
-    expect(changelog).toContain("[0.1.0]: https://github.com/sotarak/anchor/releases/tag/v0.1.0");
+    const v = version.replaceAll(".", "\\.");
+    expect(changelog).toMatch(new RegExp(`^## \\[${v}\\] - \\d{4}-\\d{2}-\\d{2}$`, "m"));
+    expect(changelog.indexOf("## [Unreleased]")).toBeLessThan(changelog.indexOf(`## [${version}]`));
+    expect(changelog).toMatch(new RegExp(`^\\[${v}\\]: https://github\\.com/sotarak/anchor/`, "m"));
+    expect(changelog).toContain(
+      `[Unreleased]: https://github.com/sotarak/anchor/compare/v${version}...HEAD`,
+    );
   });
 
   it("README links the docs site", () => {

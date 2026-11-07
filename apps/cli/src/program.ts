@@ -55,17 +55,32 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
 
   program
     .command("login")
-    .description("Log in with email and password and store a CLI session (30 days)")
-    .option("--email <email>", "account email (prompted when omitted in a terminal)")
-    .option("--password-stdin", "read the password from stdin (for scripts)")
+    .description("Log in (in the browser by default) and store a CLI session (30 days)")
+    .option("--no-browser", "print the login URL without opening a browser")
+    .option("--with-password", "log in with email and password instead of the browser")
+    .option("--email <email>", "account email, implies --with-password")
+    .option("--password-stdin", "read the password from stdin, implies --with-password")
     .addHelpText(
       "after",
       examples(
-        "anchor login --api-url https://anchor.example.com",
-        "printf '%s' \"$PASSWORD\" | anchor login --email me@example.com --password-stdin",
+        "anchor login",
+        "anchor login --api-url https://anchor.example.com --no-browser",
+        "printf '%s' \"$PW\" | anchor login --with-password --email me@example.com --password-stdin",
       ),
     )
-    .action(act((ctx, opts: { email?: string; passwordStdin?: boolean }) => login(ctx, opts)));
+    .action(
+      act(
+        (
+          ctx,
+          opts: {
+            email?: string;
+            passwordStdin?: boolean;
+            withPassword?: boolean;
+            browser?: boolean;
+          },
+        ) => login(ctx, opts),
+      ),
+    );
 
   program
     .command("logout")

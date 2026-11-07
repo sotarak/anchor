@@ -1,4 +1,5 @@
 import type {
+  CliLoginStartDto,
   EnvironmentDto,
   FolderDto,
   LoginResponse,
@@ -23,6 +24,12 @@ export type SecretReadFlags = { expand?: boolean; includeImports?: boolean };
 
 export interface ApiClient {
   login(email: string, password: string): Promise<LoginResponse>;
+  /** Starts a browser login (no session needed). */
+  cliLoginStart(body: { clientName?: string }): Promise<CliLoginStartDto>;
+  /** One poll: 202 is pending; 403, 404 and 429 throw ApiRequestError. */
+  cliLoginToken(
+    deviceCode: string,
+  ): Promise<{ status: "pending" } | { status: "approved"; login: LoginResponse }>;
   logout(): Promise<void>;
   me(): Promise<{ user?: UserDto; serviceToken?: ServiceTokenDto }>;
   listProjects(): Promise<ProjectDto[]>;
@@ -106,6 +113,14 @@ export function createApiClient(opts: HttpOptions): ApiClient {
   return {
     login: (email, password) =>
       data<LoginResponse>("POST", "/auth/login", { email, password, client: "cli" }),
+    cliLoginStart: (body) => data<CliLoginStartDto>("POST", "/auth/cli/start", body),
+    cliLoginToken: async (deviceCode) => {
+      const res = await call<LoginResponse | { status: "pending" }>("POST", "/auth/cli/token", {
+        deviceCode,
+      });
+      if (res.status === 202) return { status: "pending" };
+      return { status: "approved", login: res.data as LoginResponse };
+    },
     logout: async () => {
       await call("POST", "/auth/logout");
     },

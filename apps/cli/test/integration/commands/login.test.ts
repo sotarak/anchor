@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { hostname, userInfo } from "node:os";
 import { join } from "node:path";
-import type { LoginResponse, ServiceTokenDto, UserDto } from "@anchor/shared";
+import type { CliLoginStartDto, LoginResponse, ServiceTokenDto, UserDto } from "@anchor/shared";
 import { describe, expect, it } from "vitest";
 import type { ApiClient } from "#src/api/client";
 import {
@@ -134,7 +135,12 @@ describe("anchor login", () => {
   it("interactive login prompts for API URL, email and hidden password", async () => {
     const { io } = await env({ tty: true });
     const prompts = fakePrompts({ input: [`${API}/`, user.email], password: [PASSWORD] });
-    const r = run(io, ["login"], { login: loginOk }, { prompts: prompts.prompts });
+    const r = run(
+      io,
+      ["login", "--with-password"],
+      { login: loginOk },
+      { prompts: prompts.prompts },
+    );
     expect(await r.code).toBe(0);
     expect(prompts.calls.map((c) => [c.kind, c.message])).toEqual([
       ["input", "API URL"],
@@ -406,5 +412,212 @@ describe("anchor whoami", () => {
         selectStore: memoryStore().selectStore,
       }),
     ).toBe(3);
+  });
+});
+
+describe("anchor login (browser)", () => {
+  const URL_COMPLETE = `${API}/cli/login?code=WDJB-MJHT`;
+  const started: CliLoginStartDto = {
+    deviceCode: "anc_dc_DEVICECANARY",
+    userCode: "WDJB-MJHT",
+    verificationUri: `${API}/cli/login`,
+    verificationUriComplete: URL_COMPLETE,
+    expiresAt: Date.now() + 600_000,
+    interval: 5,
+  };
+  type Poll = "pending" | "approved" | Error;
+  function browserApi(polls: Poll[], start: () => Promise<CliLoginStartDto> = async () => started) {
+    const queue = [...polls];
+    return {
+      cliLoginStart: start,
+      cliLoginToken: async () => {
+        const next = queue.shift();
+        if (next instanceof Error) throw next;
+        if (next === "approved") return { status: "approved" as const, login: await loginOk() };
+        return { status: "pending" as const };
+      },
+    };
+  }
+  function deps() {
+    const sleeps: number[] = [];
+    const opened: string[] = [];
+    let openResult = true;
+    return {
+      sleeps,
+      opened,
+      failOpen: () => {
+        openResult = false;
+      },
+      extra: {
+        sleep: async (ms: number) => {
+          sleeps.push(ms);
+        },
+        openUrl: async (url: string) => {
+          opened.push(url);
+          return openResult;
+        },
+      },
+    };
+  }
+
+  it("login with no flags uses the browser flow", async () => {
+    const { io } = await env();
+    const d = deps();
+    const r = run(
+      io,
+      ["login", "--api-url", API],
+      browserApi(["pending", "pending", "approved"]),
+      d.extra,
+    );
+    expect(await r.code).toBe(0);
+    expect(io.err()).toContain(`Open ${URL_COMPLETE} and confirm the code WDJB-MJHT`);
+    expect(io.err()).toContain("Waiting for approval…");
+    expect(d.sleeps).toEqual([5000, 5000, 5000]);
+    expect(r.fake.called("cliLoginToken").map((c) => c.args)).toEqual([
+      ["anc_dc_DEVICECANARY"],
+      ["anc_dc_DEVICECANARY"],
+      ["anc_dc_DEVICECANARY"],
+    ]);
+    expect(r.mem.items.get(API)).toEqual({
+      apiUrl: API,
+      token: TOKEN,
+      email: user.email,
+      expiresAt,
+    });
+    expect(io.out()).toBe(`Logged in to ${API} as ${user.email}\n`);
+    expect(r.prompts.calls).toEqual([]);
+    for (const text of [io.out(), io.err()]) {
+      expect(text).not.toContain("TOKENCANARY");
+      expect(text).not.toContain("DEVICECANARY");
+    }
+  });
+
+  it("sends <user>@<host> as the client name", async () => {
+    const { io } = await env();
+    const r = run(io, ["login", "--api-url", API], browserApi(["approved"]), deps().extra);
+    expect(await r.code).toBe(0);
+    const expected = `${userInfo().username}@${hostname()}`.slice(0, 100);
+    expect(r.fake.called("cliLoginStart")[0]?.args).toEqual([{ clientName: expected }]);
+  });
+
+  it("opens the browser only in a TTY", async () => {
+    const tty = await env({ tty: true });
+    const a = deps();
+    const r1 = run(tty.io, ["login", "--api-url", API], browserApi(["approved"]), a.extra);
+    expect(await r1.code).toBe(0);
+    expect(a.opened).toEqual([URL_COMPLETE]);
+
+    const noBrowser = await env({ tty: true });
+    const b = deps();
+    const r2 = run(
+      noBrowser.io,
+      ["login", "--api-url", API, "--no-browser"],
+      browserApi(["approved"]),
+      b.extra,
+    );
+    expect(await r2.code).toBe(0);
+    expect(b.opened).toEqual([]);
+
+    const piped = await env();
+    const c = deps();
+    const r3 = run(piped.io, ["login", "--api-url", API], browserApi(["approved"]), c.extra);
+    expect(await r3.code).toBe(0);
+    expect(c.opened).toEqual([]);
+  });
+
+  it("a failed browser open still prints the URL and polls", async () => {
+    const { io } = await env({ tty: true });
+    const d = deps();
+    d.failOpen();
+    const r = run(io, ["login", "--api-url", API], browserApi(["pending", "approved"]), d.extra);
+    expect(await r.code).toBe(0);
+    expect(io.err()).toContain(`Open ${URL_COMPLETE} and confirm the code WDJB-MJHT`);
+    expect(d.opened).toEqual([URL_COMPLETE]);
+  });
+
+  it("429 slows polling down", async () => {
+    const { io } = await env();
+    const d = deps();
+    const polls: Poll[] = [apiError(429, "rate_limited"), "pending", "approved"];
+    const r = run(io, ["login", "--api-url", API], browserApi(polls), d.extra);
+    expect(await r.code).toBe(0);
+    expect(d.sleeps).toEqual([5000, 10000, 10000]);
+  });
+
+  it("denied and expired requests store nothing", async () => {
+    const denied = await env();
+    const r1 = run(
+      denied.io,
+      ["login", "--api-url", API],
+      browserApi([apiError(403, "forbidden", "This login was denied")]),
+      deps().extra,
+    );
+    expect(await r1.code).toBe(3);
+    expect(denied.io.err()).toContain("Login was denied in the browser");
+    expect(r1.mem.items.size).toBe(0);
+
+    const expired = await env();
+    const r2 = run(
+      expired.io,
+      ["login", "--api-url", API],
+      browserApi(["pending", apiError(404, "not_found")]),
+      deps().extra,
+    );
+    expect(await r2.code).toBe(3);
+    expect(expired.io.err()).toContain("Login request expired; run anchor login again");
+    expect(r2.mem.items.size).toBe(0);
+  });
+
+  it("an old server without browser login points to --with-password", async () => {
+    const { io } = await env();
+    const r = run(
+      io,
+      ["login", "--api-url", API],
+      browserApi([], async () => {
+        throw apiError(404, "not_found", "Not found");
+      }),
+      deps().extra,
+    );
+    expect(await r.code).toBe(1);
+    expect(io.err()).toContain(
+      "This server does not support browser login; use anchor login --with-password",
+    );
+  });
+
+  it("--with-password, --email or --password-stdin select the password flow", async () => {
+    for (const flags of [
+      ["--with-password", "--email", user.email, "--password-stdin"],
+      ["--email", user.email, "--password-stdin"],
+    ]) {
+      const { io } = await env({ stdin: PASSWORD });
+      const r = run(io, ["login", "--api-url", API, ...flags], { login: loginOk }, deps().extra);
+      expect(await r.code).toBe(0);
+      expect(r.fake.called("cliLoginStart")).toEqual([]);
+    }
+  });
+
+  it("an .anchor.json API URL asks 'Log in to <url>?' in browser mode", async () => {
+    const tty = await env({ tty: true });
+    await writeFile(
+      join(tty.dir, ".anchor.json"),
+      JSON.stringify({ version: 1, project: "app", apiUrl: "https://other.example" }),
+    );
+    const prompts = fakePrompts({ confirm: [false] });
+    const r = run(tty.io, ["login"], browserApi(["approved"]), {
+      ...deps().extra,
+      prompts: prompts.prompts,
+    });
+    expect(await r.code).toBe(1);
+    expect(prompts.calls.map((c) => c.message)).toEqual(["Log in to https://other.example?"]);
+    expect(r.fake.calls).toEqual([]);
+
+    const piped = await env();
+    await writeFile(
+      join(piped.dir, ".anchor.json"),
+      JSON.stringify({ version: 1, project: "app", apiUrl: "https://other.example" }),
+    );
+    const r2 = run(piped.io, ["login"], browserApi(["approved"]), deps().extra);
+    expect(await r2.code).toBe(2);
+    expect(r2.fake.calls).toEqual([]);
   });
 });

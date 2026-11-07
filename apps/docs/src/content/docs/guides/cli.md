@@ -84,7 +84,7 @@ The install script uses `ANCHOR_INSTALL_DIR` in place of `~/.local/bin` if you s
 ## Getting started
 
 ```sh
-anchor login --api-url https://anchor.example.com   # email + hidden password prompt
+anchor login --api-url https://anchor.example.com   # approve in the browser
 cd my-app
 anchor init                                          # pick a project and default environment
 anchor secrets set DATABASE_URL                      # hidden prompt for the value
@@ -93,6 +93,23 @@ anchor run -- npm start                              # npm start sees DATABASE_U
 
 `anchor login` stores a CLI session (valid 30 days) in your OS keychain and remembers the API URL in
 your user config. `anchor init` writes `.anchor.json`, which is meant to be committed.
+
+### Logging in
+
+`anchor login` logs in through the browser, like `gh auth login`:
+
+1. It prints `Open https://<server>/cli/login?code=WDJB-MJHT and confirm the code WDJB-MJHT` and,
+   in a terminal, opens that page (`--no-browser` only prints it).
+2. On the page, signed in to the dashboard, check that the code matches and click **Approve**.
+3. The CLI, which polls every 5 seconds, stores the session. The request expires after 10 minutes.
+
+It works over SSH and in containers: open the URL on any device. Only a dashboard session can
+approve a request. `Login was denied in the browser` and
+`Login request expired; run anchor login again` exit with code 3. Against a server older than
+0.4.0 it says `This server does not support browser login; use anchor login --with-password`.
+
+`anchor login --with-password` keeps the email and password flow; `--email` and
+`--password-stdin` imply it, so existing scripts keep working. CI should use `ANCHOR_TOKEN`.
 
 ## Commands
 
@@ -104,7 +121,7 @@ described in [Versions and rollback](/anchor/guides/versions/).
 
 | Command | Purpose |
 |---------|---------|
-| `anchor login [--email <email>] [--password-stdin]` | Log in and store a CLI session |
+| `anchor login [--no-browser] [--with-password] [--email <email>] [--password-stdin]` | Log in (in the browser by default) and store a CLI session |
 | `anchor logout` | Revoke the stored session on the server and delete it locally |
 | `anchor whoami` | Show the current user or service token |
 | `anchor init` | Link the current directory to a project (writes `.anchor.json`) |
@@ -235,9 +252,9 @@ starting with `anc_` (a token): remove it and rotate the token.
 
 The URL is reduced to its origin. `https://` is required, except for `localhost`, `127.0.0.1` and
 `[::1]`. `anchor login` always prints the server it is logging in to. When the URL comes only from
-`.anchor.json` and differs from your user config, it warns and asks before sending your password
-(without a terminal it exits 2 unless you pass `--api-url` or `--yes`), and it never saves that URL
-as your user config.
+`.anchor.json` and differs from your user config, it warns and asks before logging in
+(`Log in to <url>?`, or `Send your password to <url>?` with `--with-password`; without a terminal it
+exits 2 unless you pass `--api-url` or `--yes`), and it never saves that URL as your user config.
 
 ### Environment variables
 

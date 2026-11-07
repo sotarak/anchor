@@ -19,7 +19,7 @@ Options:
   -h, --help                  display help for command
 
 Commands:
-  login [options]             Log in with email and password and store a CLI session (30 days)
+  login [options]             Log in (in the browser by default) and store a CLI session (30 days)
   logout                      Revoke the stored session on the server and delete it locally
   whoami                      Show the current user or service token
   init                        Link this directory to a project and default environment
@@ -267,11 +267,13 @@ Examples:
 exports[`help text > help for login 1`] = `
 "Usage: anchor login [options]
 
-Log in with email and password and store a CLI session (30 days)
+Log in (in the browser by default) and store a CLI session (30 days)
 
 Options:
-  --email <email>   account email (prompted when omitted in a terminal)
-  --password-stdin  read the password from stdin (for scripts)
+  --no-browser      print the login URL without opening a browser
+  --with-password   log in with email and password instead of the browser
+  --email <email>   account email, implies --with-password
+  --password-stdin  read the password from stdin, implies --with-password
   -h, --help        display help for command
 
 Global Options:
@@ -287,8 +289,9 @@ Global Options:
   -y, --yes         skip confirmations
 
 Examples:
-  $ anchor login --api-url https://anchor.example.com
-  $ printf '%s' "$PASSWORD" | anchor login --email me@example.com --password-stdin
+  $ anchor login
+  $ anchor login --api-url https://anchor.example.com --no-browser
+  $ printf '%s' "$PW" | anchor login --with-password --email me@example.com --password-stdin
 
 "
 `;

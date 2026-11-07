@@ -5,6 +5,7 @@ import { assertNoVersionFlagOnGet } from "./commands/secrets";
 import type { CliDeps } from "./context";
 import { CliError, EXIT } from "./errors";
 import { createNodeIo } from "./io";
+import { openUrl } from "./open-url";
 import { Output } from "./output";
 import { createNodeRunChild } from "./process/run-child";
 import { createNodeSpawner } from "./process/spawner";
@@ -16,11 +17,14 @@ const UNEXPECTED = "Unexpected error (run with --debug for details)";
 
 async function defaultDeps(partial: Partial<CliDeps>): Promise<CliDeps> {
   const io = partial.io ?? createNodeIo();
+  const spawner = partial.spawner ?? createNodeSpawner();
   return {
     io,
     prompts: partial.prompts ?? createInquirerPrompts(),
     fetch: partial.fetch ?? (await configureProxyFromEnv(io.env)) ?? globalThis.fetch,
-    spawner: partial.spawner ?? createNodeSpawner(),
+    spawner,
+    openUrl: partial.openUrl ?? ((url) => openUrl(url, io.platform, spawner)),
+    sleep: partial.sleep ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms))),
     runChild:
       partial.runChild ??
       createNodeRunChild(process, {

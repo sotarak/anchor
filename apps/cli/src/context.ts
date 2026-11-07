@@ -34,6 +34,10 @@ export interface CliDeps {
   selectStore?: () => Promise<CredentialStore>;
   /** Overrides API client construction (tests); defaults to createApiClient over `fetch`. */
   createApi?: ApiFactory;
+  /** Opens a URL in the browser; false when it could not (tests inject a fake). */
+  openUrl?: (url: string) => Promise<boolean>;
+  /** Waits between polls (tests inject a fake). */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface GlobalFlags {

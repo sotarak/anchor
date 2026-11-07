@@ -66,12 +66,16 @@ curl -fsSL https://sotarak.github.io/anchor/install.sh | sh   # standalone binar
 Pick one. The [CLI guide](/anchor/guides/cli/#install) also covers release binaries.
 
 ```sh
-anchor login --api-url https://<your-worker>
+anchor login --api-url https://<your-worker>   # approve the code in the browser
 cd my-app
 anchor init                       # pick the project and default environment
 anchor secrets set DATABASE_URL   # hidden prompt
 anchor run -- npm start           # npm start sees DATABASE_URL
 ```
+
+`anchor login` opens the dashboard in your browser and shows a code; check that the code on the
+page matches your terminal, then **Approve**. Over SSH or in a container, open the printed URL on
+any device. `anchor login --with-password` keeps the email and password prompt.
 
 Next steps: [the CLI guide](/anchor/guides/cli/), [using Anchor in CI](/anchor/guides/ci/), and
 [rate-limiting the auth endpoints](/anchor/operations/rate-limiting/).

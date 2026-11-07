@@ -18,7 +18,9 @@
   },
   "scripts": {
     "build": "pnpm --filter @anchor/web build",
-    "deploy:worker": "pnpm build && pnpm --filter ./apps/server run deploy:worker",
+    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "deploy:worker": "pnpm build && pnpm run deploy",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome check .",
@@ -27,6 +29,17 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "wrangler": "^4.158.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "ANCHOR_ROOT_KEY": {
+        "description": "The root key that wraps every project key. Generate it with `openssl rand -base64 32` and **back it up offline before you paste it**: Cloudflare never shows it again, and losing it loses every secret. [Why](https://sotarak.github.io/anchor/guides/deploy/)"
+      },
+      "ANCHOR_SETUP_TOKEN": {
+        "description": "A one-time token for creating the first owner at `/setup`. Generate it with `openssl rand -base64 32` and keep it until setup is done."
+      }
+    }
   }
 }

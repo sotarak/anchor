@@ -3,13 +3,14 @@
 // Runs as Playwright's webServer command. Playwright starts webServer *before* globalSetup, so the
 // fresh D1 state and its migrations are prepared here, in order, before `wrangler dev` boots.
 // Secrets go through a throwaway --env-file inside the git-ignored state dir: never argv, and never
-// apps/server/.dev.vars (wrangler skips .dev.vars when --env-file is given).
+// the root .dev.vars (wrangler skips .dev.vars when --env-file is given).
 import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const state = fileURLToPath(new URL("./.state", import.meta.url));
-const server = fileURLToPath(new URL("../../../server", import.meta.url));
+// wrangler runs from the repository root, where wrangler.jsonc lives.
+const root = fileURLToPath(new URL("../../../..", import.meta.url));
 const envFile = `${state}/e2e.env`;
 const port = process.env.E2E_PORT ?? "8788";
 const { E2E_ROOT_KEY, E2E_SETUP_TOKEN } = process.env;
@@ -28,11 +29,11 @@ chmodSync(envFile, 0o600);
 const wrangler = (args, opts) => [
   "pnpm",
   ["exec", "wrangler", ...args],
-  { cwd: server, stdio: "inherit", ...opts },
+  { cwd: root, stdio: "inherit", ...opts },
 ];
 
 const migrate = spawnSync(
-  ...wrangler(["d1", "migrations", "apply", "anchor", "--local", "--persist-to", state]),
+  ...wrangler(["d1", "migrations", "apply", "DB", "--local", "--persist-to", state]),
 );
 if (migrate.status !== 0) process.exit(migrate.status ?? 1);
 

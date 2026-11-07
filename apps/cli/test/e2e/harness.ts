@@ -8,7 +8,7 @@ import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createTestHarness } from "wrangler";
 
-const serverConfig = fileURLToPath(new URL("../../../server/wrangler.jsonc", import.meta.url));
+const serverConfig = fileURLToPath(new URL("../../../../wrangler.jsonc", import.meta.url));
 
 export async function startAnchor(): Promise<{
   url: string;

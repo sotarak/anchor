@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // At the repository root so the Deploy to Cloudflare button finds it; the Worker's code lives in
+  // apps/server and the dashboard it serves in apps/web.
+  "name": "anchor",
+  "main": "apps/server/src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // Daily: audit retention purge and stale KEK rotation sweep (apps/server/src/audit/scheduled.ts).
+  "triggers": { "crons": ["0 3 * * *"] },
+  // The dashboard SPA (apps/web build). /api/* always reaches the Worker; any other unknown path
+  // serves index.html so client-side routes deep-link. Build it first: `pnpm build`.
+  "assets": {
+    "directory": "apps/web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "anchor",
+      // No database_id here. The Deploy to Cloudflare button creates the database and writes the
+      // id into your copy; for a manual deploy, add the id that `wrangler d1 create anchor` prints
+      // (see https://sotarak.github.io/anchor/guides/deploy/).
+      "migrations_dir": "apps/server/migrations"
+    }
+  ],
+  // KEK rotation re-encryption (apps/server/src/keys/queue.ts). One message = one batch of ≤ 100
+  // versions. A manual deploy creates both queues first (https://sotarak.github.io/anchor/guides/deploy/).
+  "queues": {
+    "producers": [{ "binding": "REENCRYPT_QUEUE", "queue": "anchor-reencrypt" }],
+    "consumers": [
+      {
+        "queue": "anchor-reencrypt",
+        "max_batch_size": 1,
+        "max_retries": 10,
+        "dead_letter_queue": "anchor-reencrypt-dlq"
+      }
+    ]
+  }
+}

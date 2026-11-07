@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -45,13 +45,39 @@ const PNPM_BUILTINS = [
   "why",
 ];
 
+/**
+ * The root `deploy` script is for Workers Builds (the Deploy to Cloudflare button pre-fills it);
+ * people run `pnpm deploy:worker`, never `pnpm deploy`, which is the pnpm built-in.
+ */
+const ALLOWED_ROOT_BUILTINS = ["deploy"];
+
+/** Docs and README, where a reader could copy a command. */
+function publicDocs(): string[] {
+  const walk = (rel: string): string[] =>
+    readdirSync(fileURLToPath(new URL(`../../../../../${rel}`, import.meta.url)), {
+      withFileTypes: true,
+    }).flatMap((e) => (e.isDirectory() ? walk(`${rel}/${e.name}`) : [`${rel}/${e.name}`]));
+  return [...walk("apps/docs/src/content"), "README.md"];
+}
+
 describe("deploy scripts", () => {
-  it.each(["package.json", "apps/server/package.json", "apps/web/package.json"])(
+  it.each(["apps/server/package.json", "apps/web/package.json"])(
     "%s has no script shadowed by a pnpm built-in",
     (pkg) => {
       expect(Object.keys(scripts(pkg)).filter((name) => PNPM_BUILTINS.includes(name))).toEqual([]);
     },
   );
+
+  it("the root shadows no pnpm built-in except the Workers Builds deploy script", () => {
+    const shadowed = Object.keys(scripts("package.json")).filter((n) => PNPM_BUILTINS.includes(n));
+    expect(shadowed).toEqual(ALLOWED_ROOT_BUILTINS);
+  });
+
+  it("no doc tells anyone to run bare `pnpm deploy` (the pnpm built-in)", () => {
+    for (const file of publicDocs()) {
+      expect(read(file), file).not.toMatch(/(^|\s)pnpm deploy(\s|$)/m);
+    }
+  });
 
   it("the `pnpm <script>` commands in the deploy guide's Deploy section are root scripts", () => {
     // That section runs "from the repository root"; other sections run inside a package.
@@ -67,10 +93,8 @@ describe("deploy scripts", () => {
     }
   });
 
-  it("the root deploy script builds the dashboard, then runs the server's wrangler deploy", () => {
-    const root = scripts("package.json")["deploy:worker"] ?? "";
-    expect(root).toMatch(/^pnpm build && pnpm --filter \.\/apps\/server run (\S+)$/);
-    const target = root.split(" ").at(-1) as string;
-    expect(scripts("apps/server/package.json")[target]).toBe("wrangler deploy");
+  it("deploy:worker builds the dashboard, then runs the root deploy script", () => {
+    expect(scripts("package.json")["deploy:worker"]).toBe("pnpm build && pnpm run deploy");
+    expect(scripts("apps/server/package.json")["deploy:worker"]).toBeUndefined();
   });
 });

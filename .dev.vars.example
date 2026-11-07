@@ -1,0 +1,16 @@
+# Worker secrets. The Deploy to Cloudflare button asks for the uncommented ones on its setup page.
+# For local development: copy to .dev.vars (git-ignored) and fill in fresh values. Never commit .dev.vars.
+
+# 32 random bytes, base64. Generate with: openssl rand -base64 32
+# Wraps every project key. Back it up offline first: losing it loses every secret.
+ANCHOR_ROOT_KEY=
+
+# One-time token that guards first-owner setup (/setup). Generate with: openssl rand -base64 32
+# Leave empty (or remove) to disable setup.
+ANCHOR_SETUP_TOKEN=
+
+# Optional. The id stored with every project key wrapped by ANCHOR_ROOT_KEY (default rk1).
+# ANCHOR_ROOT_KEY_ID=rk1
+# Only while rotating the root key (https://sotarak.github.io/anchor/operations/root-key-rotation/): the old key and its id.
+# ANCHOR_ROOT_KEY_PREVIOUS=
+# ANCHOR_ROOT_KEY_PREVIOUS_ID=

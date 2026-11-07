@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev -c ../../wrangler.jsonc",
     "pretest": "node -e \"require('node:fs').mkdirSync('../web/dist',{recursive:true})\"",
     "test": "vitest run",
     "pretest:unit": "node -e \"require('node:fs').mkdirSync('../web/dist',{recursive:true})\"",
@@ -15,8 +15,7 @@
     "pretest:api": "node -e \"require('node:fs').mkdirSync('../web/dist',{recursive:true})\"",
     "test:api": "vitest run test/api",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
-    "deploy:worker": "wrangler deploy"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json"
   },
   "dependencies": {
     "@anchor/shared": "workspace:*",

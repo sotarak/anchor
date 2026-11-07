@@ -13,7 +13,8 @@ closed when they cannot be audited, secret reads then fail too. Add a Cloudflare
 `POST /api/v1/invites/*`, for example 20 requests per minute per IP, and watch the D1 size. The
 same rule covers the anonymous CLI browser login endpoints (`POST /api/v1/auth/cli/start` and
 `/token`); allow for one poll every 5 seconds per waiting `anchor login`. Anchor also caps pending
-browser logins at 50 instance-wide and refuses polls faster than every 5 seconds.
+browser logins at 5 per IP address and 50 instance-wide, and refuses polls faster than every 5
+seconds.
 
 Anchor does lock an account after 5 failed logins in a row, for 15 minutes. That protects the
 password, not the database: requests for unknown emails, and requests during the lockout, are

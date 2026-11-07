@@ -156,6 +156,24 @@ describe("CLI login: start and token exchange", () => {
     });
   });
 
+  it("one address gets at most 5 pending requests; others still can start", async () => {
+    const from = (ip: string) =>
+      api("/api/v1/auth/cli/start", {
+        ...jsonInit("POST", {}),
+        headers: { "content-type": "application/json", "cf-connecting-ip": ip },
+      });
+    for (let i = 0; i < 5; i++) expect((await from("198.51.100.7")).status).toBe(200);
+    const sixth = await from("198.51.100.7");
+    expect(sixth.status).toBe(429);
+    expect(await errorOf(sixth)).toMatchObject({
+      code: "rate_limited",
+      message: "Too many pending CLI logins, try again later",
+    });
+    expect((await from("203.0.113.9")).status).toBe(200);
+    await db.prepare("UPDATE cli_logins SET expires_at = 1 WHERE ip = '198.51.100.7'").run();
+    expect((await from("198.51.100.7")).status).toBe(200);
+  });
+
   it("expired requests do not count toward the cap", async () => {
     await insertPending(50, Date.now() - 1);
     expect((await start()).status).toBe(200);

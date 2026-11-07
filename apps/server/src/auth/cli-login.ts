@@ -11,6 +11,7 @@ import { newToken, randomBytes, sha256Hex } from "../lib/random";
 export const CLI_LOGIN_TTL_MS = 600_000;
 export const CLI_LOGIN_INTERVAL_S = 5;
 export const MAX_PENDING_CLI_LOGINS = 50;
+export const MAX_PENDING_CLI_LOGINS_PER_IP = 5;
 const PURGE_AFTER_MS = 86_400_000;
 
 export type CliLoginRow = {
@@ -44,12 +45,20 @@ export async function startCliLogin(
   db: D1Database,
   i: { clientName: string | null; userAgent: string | null; ip: string | null; now: number },
 ): Promise<{ deviceCode: string; userCode: string; expiresAt: number }> {
-  // Caps what anonymous traffic can write. Approximate under concurrency, enough for a flood cap.
+  // Caps what anonymous traffic can write: per address, so one client cannot use up the
+  // instance-wide cap and lock everyone out of browser login, and overall. Approximate under
+  // concurrency, enough for a flood cap.
   const pending = await db
-    .prepare("SELECT COUNT(*) AS n FROM cli_logins WHERE status = 'pending' AND expires_at > ?")
-    .bind(i.now)
-    .first<{ n: number }>();
-  if ((pending?.n ?? 0) >= MAX_PENDING_CLI_LOGINS) {
+    .prepare(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(ip = ?2), 0) AS mine
+       FROM cli_logins WHERE status = 'pending' AND expires_at > ?1`,
+    )
+    .bind(i.now, i.ip)
+    .first<{ n: number; mine: number }>();
+  if (
+    (pending?.n ?? 0) >= MAX_PENDING_CLI_LOGINS ||
+    (i.ip !== null && (pending?.mine ?? 0) >= MAX_PENDING_CLI_LOGINS_PER_IP)
+  ) {
     throw new ApiError(429, "rate_limited", "Too many pending CLI logins, try again later");
   }
   const deviceCode = newToken("anc_dc");

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { normalizeSecretPath, secretKeySchema, secretValueSchema } from "../../src/schemas/secrets";
+import {
+  normalizeSecretPath,
+  putSecretBodySchema,
+  secretKeySchema,
+  secretValueSchema,
+} from "../../src/schemas/secrets";
 
 describe("normalizeSecretPath", () => {
   it.each([
@@ -41,5 +46,22 @@ describe("secretValueSchema", () => {
   it("rejects 65537 bytes", () => {
     expect(secretValueSchema.safeParse("a".repeat(65537)).success).toBe(false);
     expect(secretValueSchema.safeParse(`${"é".repeat(32768)}a`).success).toBe(false);
+  });
+});
+
+describe("putSecretBodySchema type and sensitive", () => {
+  it("leaves them out when omitted", () => {
+    const parsed = putSecretBodySchema.parse({ value: "v" });
+    expect("type" in parsed).toBe(false);
+    expect("sensitive" in parsed).toBe(false);
+  });
+  it("keeps them when given", () => {
+    expect(
+      putSecretBodySchema.parse({ value: "1", type: "number", sensitive: false }),
+    ).toMatchObject({ value: "1", type: "number", sensitive: false });
+  });
+  it("rejects an unknown type or a non-boolean flag", () => {
+    expect(putSecretBodySchema.safeParse({ value: "v", type: "yaml" }).success).toBe(false);
+    expect(putSecretBodySchema.safeParse({ value: "v", sensitive: "no" }).success).toBe(false);
   });
 });

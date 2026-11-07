@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { secretValueTypeSchema } from "../value-types";
 import { utf8ByteLength } from "./common";
 
 export const MAX_SECRET_VALUE_BYTES = 65536;
@@ -45,6 +46,10 @@ export const putSecretBodySchema = z.object({
   value: secretValueSchema,
   comment: z.string().max(500).default(""),
   path: secretPathSchema.default("/"),
+  /** Omitted: inherited from the current version, or `string` for a new secret. */
+  type: secretValueTypeSchema.optional(),
+  /** Omitted: inherited from the current version, or `true` for a new secret. */
+  sensitive: z.boolean().optional(),
 });
 
 const queryFlag = z

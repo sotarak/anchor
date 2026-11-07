@@ -72,6 +72,20 @@ async function runningRotation(db: D1Database, projectId: string): Promise<Rotat
     .first<RotationRow>();
 }
 
+async function rotationTo(
+  db: D1Database,
+  projectId: string,
+  toVersion: number,
+): Promise<RotationRow | null> {
+  return db
+    .prepare(
+      `SELECT ${ROTATION_COLUMNS} FROM key_rotations
+       WHERE project_id = ? AND to_version = ? ORDER BY started_at DESC LIMIT 1`,
+    )
+    .bind(projectId, toVersion)
+    .first<RotationRow>();
+}
+
 /** Sends the work message; a failure is logged and left for the cron sweep or the next POST. */
 async function enqueue(queue: Queue<ReencryptMessage>, r: RotationRow): Promise<void> {
   try {
@@ -170,9 +184,10 @@ export async function startOrResumeRotation(
         .bind(id, project.id, from, to, now, now, project.id, to),
     ]);
   } catch (err) {
-    // A concurrent POST created KEK `to` first: resume its rotation instead.
+    // A concurrent POST created KEK `to` first: report its rotation instead, whether it is still
+    // running or (with little to re-encrypt) already finished.
     if (isUniqueViolation(err)) {
-      const other = await runningRotation(db, project.id);
+      const other = await rotationTo(db, project.id, to);
       if (other) return { rotation: toRotationDto(other), resumed: true };
     }
     throw err;

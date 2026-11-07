@@ -263,6 +263,37 @@ describe("KEK rotation", () => {
     ]);
   });
 
+  it("a rotate that loses the race to one already completed returns that rotation, not a 500", async () => {
+    const project = await getProjectBySlug(db, "app");
+    let winner: KeyRotationDto | undefined;
+    // The loser has read KEK v1 as current; before its batch lands, a concurrent rotate of this
+    // empty project creates v2 and completes.
+    const racingDb = new Proxy(db, {
+      get(target, prop) {
+        if (prop === "batch") {
+          return async (statements: D1PreparedStatement[]) => {
+            winner ??= (
+              await startOrResumeRotation(db, keyring, asQueue(queue), project, Date.now())
+            ).rotation;
+            return target.batch(statements);
+          };
+        }
+        const value = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const loser = await startOrResumeRotation(
+      racingDb,
+      keyring,
+      asQueue(queue),
+      project,
+      Date.now(),
+    );
+    expect(winner).toMatchObject({ status: "completed", toVersion: 2 });
+    expect(loser).toEqual({ rotation: winner, resumed: true });
+    expect((await keyStatus()).keys.map((k) => k.version)).toEqual([2, 1]);
+  });
+
   it("tampered row -> rotation failed, other rows untouched, status shows error", async () => {
     await seed(3);
     await rotate();

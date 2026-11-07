@@ -10,6 +10,14 @@ import { processRotationBatch, type ReencryptMessage } from "./rotation";
  */
 export const REENCRYPT_MAX_ATTEMPTS = 10;
 
+/**
+ * Delay before redelivering a failed batch: 30 s, doubling, capped at an hour. The ten attempts
+ * then span about three hours, so a short D1 or platform outage does not fail the rotation.
+ */
+export function retryDelaySeconds(attempts: number): number {
+  return Math.min(30 * 2 ** (attempts - 1), 3600);
+}
+
 /** A running rotation untouched for this long is assumed to have lost its message. */
 export const STALE_ROTATION_MS = 15 * 60_000;
 
@@ -27,7 +35,7 @@ function isReencryptMessage(body: unknown): body is ReencryptMessage {
 /**
  * Consumer for anchor-reencrypt (max_batch_size 1). Each message re-encrypts one batch: "more"
  * sends the next message before acking, "done"/"failed" ack, and a thrown error retries until
- * REENCRYPT_MAX_ATTEMPTS, where the rotation is marked failed ("retries_exhausted") and acked.
+ * REENCRYPT_MAX_ATTEMPTS (with backoff), where the rotation is marked failed ("retries_exhausted") and acked.
  */
 export async function handleReencryptBatch(
   batch: MessageBatch<unknown>,
@@ -51,7 +59,7 @@ export async function handleReencryptBatch(
         name: err instanceof Error ? err.name : "unknown",
       });
       if (msg.attempts < REENCRYPT_MAX_ATTEMPTS) {
-        msg.retry();
+        msg.retry({ delaySeconds: retryDelaySeconds(msg.attempts) });
         continue;
       }
       // If this write fails too, the platform redelivers (the message is not acked).

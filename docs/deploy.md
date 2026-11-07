@@ -152,8 +152,8 @@ on the project's **Encryption** page (project admins), which polls while a rotat
 - The old key becomes `retired` only when no stored version uses it any more.
 - Calling rotate again while a rotation runs resumes it (re-sends its message) instead of starting
   a second one.
-- A batch that keeps throwing (for example a project key that no longer unwraps) is retried; on
-  its 10th attempt the rotation stops with status `failed` and error `retries_exhausted`, and
+- A batch that keeps throwing (for example a project key that no longer unwraps) is retried with
+  backoff (30 s, doubling, capped at an hour: about three hours in all); on its 10th attempt the rotation stops with status `failed` and error `retries_exhausted`, and
   `reencrypt_rotation_failed` is logged. Fix the cause, then start a new rotation. The daily Cron
   Trigger re-sends the message of any rotation still `running` but idle for 15 minutes, as does
   the next rotate call.

@@ -51,9 +51,13 @@ async function deliver(body: ReencryptMessage, attempts = 1) {
   const batch = createMessageBatch<ReencryptMessage>("anchor-reencrypt", [
     { id: "m1", timestamp: Date.now(), attempts, body },
   ]);
+  // getQueueResult drops the retry options, so record them here.
+  const message = batch.messages[0] as Message<ReencryptMessage>;
+  const retry = vi.spyOn(message, "retry");
   const ctx = createExecutionContext();
   await handleReencryptBatch(batch, envWith());
-  return getQueueResult(batch, ctx);
+  const result = await getQueueResult(batch, ctx);
+  return { ...result, retryOptions: retry.mock.calls.map(([options]) => options) };
 }
 
 /** A rotation started through the API with the fake queue; returns its first message. */
@@ -115,6 +119,19 @@ describe("re-encryption queue consumer", () => {
     const result = await deliver(msg);
     expect(result.explicitAcks).toEqual([]);
     expect(result.retryMessages.map((m) => m.msgId)).toEqual(["m1"]);
+  });
+
+  it("retries back off exponentially so a short outage does not burn every attempt", async () => {
+    await seed(2);
+    const msg = await startRotation();
+    await db
+      .prepare("UPDATE project_keys SET wrapped_key = randomblob(48) WHERE version = 1")
+      .run();
+    const delays: (number | undefined)[] = [];
+    for (let attempts = 1; attempts < REENCRYPT_MAX_ATTEMPTS; attempts++) {
+      delays.push((await deliver(msg, attempts)).retryOptions[0]?.delaySeconds);
+    }
+    expect(delays).toEqual([30, 60, 120, 240, 480, 960, 1920, 3600, 3600]);
   });
 
   it("the last attempt of a failing batch marks the rotation failed instead of running forever", async () => {

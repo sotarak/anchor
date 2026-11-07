@@ -99,9 +99,12 @@ function createReadSession(ctx: ComposeContext) {
 
   const referenced = new Map<string, SecretAddress>();
 
-  /** Expands `dto.value` in place relative to where the secret is stored. */
+  /**
+   * Expands `dto.value` in place relative to where the secret is stored. Only `string` values
+   * expand: a typed value stays literal, so it cannot change shape after it was validated.
+   */
   async function expandInto(dto: SecretDto, source: Source): Promise<void> {
-    if (dto.value === undefined) return;
+    if (dto.value === undefined || dto.type !== "string") return;
     const origin = { environment: source.environment.slug, path: source.path, key: dto.key };
     const out = await resolver.expand(origin, dto.value);
     for (const a of out.referenced) referenced.set(`${a.environment}:${a.path}:${a.key}`, a);
@@ -140,7 +143,8 @@ const importsOf = (sources: Source[]) =>
 
 /**
  * Lists a folder: local secrets, then imported ones whose key is not already taken (earlier
- * imports win). Values only with `reveal`; `expand` only applies to returned values.
+ * imports win). Values with `reveal`, and always for non-sensitive secrets (the stored text, never
+ * expanded, and not audited as a read: it is config); `expand` only applies with `reveal`.
  */
 export async function composeSecrets(
   ctx: ComposeContext,
@@ -158,7 +162,9 @@ export async function composeSecrets(
     for (const found of await listSecretsWithVersions(ctx.db, source.environment.id, source.path)) {
       if (taken.has(found.secret.key)) continue;
       taken.add(found.secret.key);
-      const value = opts.reveal ? await session.decrypt(source.environment, found) : undefined;
+      const plain = found.current?.sensitive === false;
+      const value =
+        opts.reveal || plain ? await session.decrypt(source.environment, found) : undefined;
       const dto = toDto(found, source, value);
       if (opts.reveal && opts.expand) await session.expandInto(dto, source);
       secrets.push(dto);

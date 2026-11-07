@@ -83,7 +83,7 @@ Prefix: `/projects/:project/environments/:env`.
 
 | Method and path | Purpose |
 |-----------------|---------|
-| `GET /secrets?path=&reveal=&expand=&includeImports=` | List a folder; values only with `reveal=true` |
+| `GET /secrets?path=&reveal=&expand=&includeImports=` | List a folder; values with `reveal=true`, and always for non-sensitive secrets (stored text, not expanded) |
 | `GET /secrets/:key?path=&reveal=&expand=&includeImports=` | Read one secret |
 | `PUT /secrets/:key` | Create or update: `{ value, comment?, path?, type?, sensitive? }`; writing the current content (value, comment, type and flag) is a no-op |
 | `DELETE /secrets/:key?path=` | Delete |
@@ -115,3 +115,7 @@ A value that does not fit is refused with `400 bad_request` and the message
 `value is not valid for type <type>: <reason>`; the value itself is never echoed. Changing only
 the type or the flag creates a new version, and a rollback restores the old version's type and
 flag along with its value.
+
+A non-sensitive secret is still encrypted at rest and readable only with `secret:read` on its
+environment and folder, but a list returns its value without `reveal` and records no
+`secret.read` event for it.

@@ -13,7 +13,11 @@
       "!docs",
       "!.superpowers",
       "!**/worker-configuration.d.ts",
-      "!**/routeTree.gen.ts"
+      "!**/routeTree.gen.ts",
+      "!apps/docs/.astro",
+      "!apps/docs/dist",
+      "!CODE_OF_CONDUCT.md",
+      "!apps/docs/src/content"
     ]
   },
   "formatter": {

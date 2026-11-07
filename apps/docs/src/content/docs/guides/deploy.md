@@ -1,4 +1,9 @@
-# Deploying Anchor
+---
+title: Deploy to Cloudflare
+description: Create the database and queues, set the root key, deploy the Worker and create the first owner.
+sidebar:
+  order: 1
+---
 
 Anchor runs as one Cloudflare Worker with one D1 database. One deployment serves one organization.
 

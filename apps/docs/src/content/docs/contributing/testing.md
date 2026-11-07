@@ -1,4 +1,9 @@
-# Test layout
+---
+title: Test layout
+description: Where tests live, which layer a test belongs to, and the rules that keep the suites fast.
+sidebar:
+  order: 2
+---
 
 Tests live in a `test/` tree beside `src/`, never inside `src/`. Inside `test/`, the first level is
 the **layer** (what a test needs to run). Below that, paths **mirror `src/`**, so the tests for

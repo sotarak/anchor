@@ -40,15 +40,15 @@ pnpm --filter @anchor/docs dev   # http://localhost:4321/anchor/
 
 ## Repository layout
 
-| Path | What |
-|---|---|
-| `apps/server` | The Cloudflare Worker: API (Hono), D1 migrations, queue consumer, cron |
-| `apps/web` | The dashboard (React, TanStack Router/Query), served by the Worker as static assets |
-| `apps/cli` | The `anchor` CLI (Commander) |
-| `apps/docs` | This project's documentation site |
-| `packages/shared` | Zod schemas and types shared by the server, dashboard and CLI |
-| `docs/superpowers` | Design specs and implementation plans (project history) |
-| `.claude` | Optional agent skills and rules used to build Anchor (see below) |
+| Path               | What                                                                                |
+| ------------------ | ----------------------------------------------------------------------------------- |
+| `apps/server`      | The Cloudflare Worker: API (Hono), D1 migrations, queue consumer, cron              |
+| `apps/web`         | The dashboard (React, TanStack Router/Query), served by the Worker as static assets |
+| `apps/cli`         | The `anchor` CLI (Commander)                                                        |
+| `apps/docs`        | This project's documentation site                                                   |
+| `packages/shared`  | Zod schemas and types shared by the server, dashboard and CLI                       |
+| `docs/superpowers` | Design specs and implementation plans (project history)                             |
+| `.claude`          | Optional agent skills and rules used to build Anchor (see below)                    |
 
 ## Checks
 

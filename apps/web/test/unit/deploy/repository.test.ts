@@ -96,8 +96,11 @@ describe("open-source repository", () => {
   it("community files and docs contain no email address (contact is GitHub-only)", () => {
     for (const file of publicText()) {
       const emails = (read(file).match(EMAIL) ?? []).filter(
-        // CONTRIBUTING explains the commit trailer convention, which names this address.
-        (e) => !(file === "CONTRIBUTING.md" && e === "noreply@anthropic.com"),
+        (e) =>
+          // RFC 2606 example domains are placeholders in examples, not contacts.
+          !/@example\.(com|org|net)$/.test(e) &&
+          // CONTRIBUTING explains the commit trailer convention, which names this address.
+          !(file === "CONTRIBUTING.md" && e === "noreply@anthropic.com"),
       );
       expect(emails, file).toEqual([]);
     }

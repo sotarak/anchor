@@ -5,7 +5,7 @@ Cloudflare's developer platform**: Workers for the API and dashboard, plus Cloud
 (D1, Durable Objects, KV, R2, Queues, ...) chosen per requirement. It ships with a CLI for developers
 and CI.
 
-Status: greenfield. No stack decisions are final until recorded in `docs/`.
+Status: greenfield. No stack decisions are final until recorded in `docs/superpowers/specs/`.
 
 ## How we work
 
@@ -23,7 +23,7 @@ Status: greenfield. No stack decisions are final until recorded in `docs/`.
 - The Cloudflare MCP server is configured in `.mcp.json` (docs search + account API).
 
 - Tests live in a layered `test/` tree beside `src/` (`unit/`, `integration/`, `api/`, ... mirroring
-  `src/`), with helpers in `test/support/`. Follow `docs/testing.md`.
+  `src/`), with helpers in `test/support/`. Follow `apps/docs/src/content/docs/contributing/testing.md`.
 
 ## Hard rules
 

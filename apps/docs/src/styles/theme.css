@@ -1,0 +1,11 @@
+/* Accent: the dashboard's brand color (apps/web/src/styles/globals.css, --brand-base hsl(346 73% 50%)). */
+:root {
+  --sl-color-accent-low: hsl(346 60% 18%);
+  --sl-color-accent: hsl(346 73% 55%);
+  --sl-color-accent-high: hsl(346 80% 85%);
+}
+:root[data-theme="light"] {
+  --sl-color-accent-low: hsl(346 80% 92%);
+  --sl-color-accent: hsl(346 73% 50%);
+  --sl-color-accent-high: hsl(346 70% 28%);
+}

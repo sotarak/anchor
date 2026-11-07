@@ -1,0 +1,37 @@
+---
+title: Anchor
+description: A self-hosted secrets manager that runs entirely on Cloudflare Workers, D1 and Queues.
+template: splash
+hero:
+  tagline: Secrets and configuration for your apps and CI, on your own Cloudflare account. One Worker, one D1 database, envelope encryption, and a CLI built for pipelines.
+  image:
+    file: ../../assets/anchor.svg
+  actions:
+    - text: Deploy your own
+      link: /anchor/guides/deploy/
+      icon: right-arrow
+    - text: CLI guide
+      link: /anchor/guides/cli/
+      variant: minimal
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+<CardGrid stagger>
+  <Card title="Yours, on Cloudflare" icon="rocket">
+    The API, dashboard and background jobs run as one Worker in your account. Data lives in your
+    D1 database. No third-party service sees your secrets.
+  </Card>
+  <Card title="Encrypted per project" icon="seti:lock">
+    AES-256-GCM per value under a per-project key, wrapped by a root key held as a Worker secret.
+    Keys rotate in the background.
+  </Card>
+  <Card title="Built for CI" icon="seti:shell">
+    `anchor run -- <cmd>` injects secrets into a process. Scoped, expiring service tokens keep each
+    pipeline to the environments and folders it needs.
+  </Card>
+  <Card title="Audited" icon="document">
+    Every read and change is recorded (never the value), with roles, environment-scoped members and
+    a 365-day append-only log.
+  </Card>
+</CardGrid>

@@ -19,13 +19,13 @@
     {
       "binding": "DB",
       "database_name": "anchor",
-      // Replace with the id printed by `wrangler d1 create anchor` (see docs/deploy.md).
+      // Replace with the id printed by `wrangler d1 create anchor` (see https://sotarak.github.io/anchor/guides/deploy/).
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
   ],
   // KEK rotation re-encryption (src/keys/queue.ts). One message = one batch of ≤ 100 versions.
-  // Create both queues before the first deploy (docs/deploy.md).
+  // Create both queues before the first deploy (https://sotarak.github.io/anchor/guides/deploy/).
   "queues": {
     "producers": [{ "binding": "REENCRYPT_QUEUE", "queue": "anchor-reencrypt" }],
     "consumers": [

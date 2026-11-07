@@ -19,6 +19,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm --filter @anchor/web lint:tokens
+      - run: pnpm --filter @anchor/docs build
       - run: pnpm test
       - run: pnpm test:scripts
 

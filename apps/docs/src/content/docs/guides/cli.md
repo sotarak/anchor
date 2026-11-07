@@ -1,4 +1,9 @@
-# Anchor CLI
+---
+title: CLI
+description: Install the anchor CLI, log in, manage secrets and run commands with secrets injected.
+sidebar:
+  order: 3
+---
 
 `anchor` is the command-line client for Anchor. Developers use it to log in, link a directory to a
 project, manage secrets and run commands with secrets injected. CI uses it with a service token.

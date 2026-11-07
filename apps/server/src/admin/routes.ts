@@ -8,7 +8,7 @@ import { ApiError } from "../lib/errors";
 /** Mounted at /api/v1/admin. Instance owners only. */
 export const adminRoutes = new Hono<AppEnv>();
 
-/** Re-wraps every project KEK under the current root key (root key rotation, docs/deploy.md). */
+/** Re-wraps every project KEK under the current root key (root key rotation, see the operations docs in apps/docs). */
 adminRoutes.post("/root-key/rewrap", async (c) => {
   const user = requireUser(c);
   if (user.role !== "owner") {

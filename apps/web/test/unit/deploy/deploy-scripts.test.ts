@@ -53,10 +53,10 @@ describe("deploy scripts", () => {
     },
   );
 
-  it("the `pnpm <script>` commands in docs/deploy.md's Deploy section are root scripts", () => {
+  it("the `pnpm <script>` commands in the deploy guide's Deploy section are root scripts", () => {
     // That section runs "from the repository root"; other sections run inside a package.
     const section =
-      read("docs/deploy.md")
+      read("apps/docs/src/content/docs/guides/deploy.md")
         .split(/^## 5\. Deploy$/m)[1]
         ?.split(/^## /m)[0] ?? "";
     const commands = [...section.matchAll(/^pnpm ([\w:-]+)\s*$/gm)].map((m) => m[1]);

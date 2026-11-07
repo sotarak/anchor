@@ -1,4 +1,5 @@
 import type { AuditAction } from "./audit";
+import type { OAuthScope } from "./schemas/oauth";
 import type { SecretValueType } from "./value-types";
 
 export type InstanceRole = "owner" | "admin" | "member";
@@ -181,4 +182,20 @@ export type AuditEventDto = {
   userAgent: string | null;
   requestId: string | null;
   metadata: Record<string, unknown>;
+};
+
+/** POST /oauth/authorize/check: what the consent page shows. */
+export type OAuthAuthorizeCheckDto = {
+  client: { id: string; name: string; redirectHost: string };
+  scopes: OAuthScope[];
+  revealRequested: boolean;
+};
+
+/** An app the user approved (Account → Connected apps). */
+export type OAuthGrantDto = {
+  id: string;
+  clientName: string;
+  scopes: OAuthScope[];
+  createdAt: number;
+  lastUsedAt: number | null;
 };

@@ -1,6 +1,6 @@
 {
   "name": "@anchor-secrets/cli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "CLI for Anchor, a self-hosted secrets manager on Cloudflare Workers",
   "keywords": [
     "secrets",

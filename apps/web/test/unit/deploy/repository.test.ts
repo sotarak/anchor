@@ -330,6 +330,37 @@ describe("open-source repository", () => {
     expect(section).toContain(".dev.vars");
   });
 
+  it("the 0.4.0 changelog has typed values, browser login and upgrade notes", () => {
+    const c = read("CHANGELOG.md");
+    const section = c.slice(c.indexOf("## [0.4.0]"), c.indexOf("## [0.3.0]"));
+    expect(section).toMatch(/### Upgrade notes/);
+    expect(section).toContain("0005");
+    expect(section).toContain("0006");
+    expect(section).toContain("--type");
+    expect(section).toContain("sensitive");
+    expect(section).toContain("--with-password");
+    expect(section).toContain("secrets import");
+  });
+
+  it("every workspace package is version 0.4.0", () => {
+    for (const f of [
+      "package.json",
+      "apps/cli/package.json",
+      "apps/docs/package.json",
+      "apps/server/package.json",
+      "apps/web/package.json",
+      "packages/shared/package.json",
+    ]) {
+      expect(JSON.parse(read(f)).version, f).toBe("0.4.0");
+    }
+  });
+
+  it("the CI guide pins the 0.4.0 CLI", () => {
+    const ci = read("apps/docs/src/content/docs/guides/ci.md");
+    expect(ci).not.toContain("0.3.0");
+    expect(ci.match(/0\.4\.0/g)?.length).toBe(4);
+  });
+
   it("README links the docs site", () => {
     expect(read("README.md")).toContain("https://sotarak.github.io/anchor/");
   });

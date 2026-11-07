@@ -7,6 +7,63 @@ dashboard and CLI.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-07
+
+### Added
+
+- **Value types.** Every secret version has a type: `string` (the default), `json`, `pem`,
+  `number`, `boolean` or `list` (a JSON array of strings). The server checks a value against its
+  type on write and answers `400 value is not valid for type <type>: <reason>`.
+- **Sensitive flag.** A secret is sensitive (the default) or plain config. Non-sensitive values are
+  shown in the dashboard table, by `anchor secrets list` and by `anchor secrets get` without a
+  reveal.
+- CLI: `anchor secrets set --type <type>` and `--sensitive` / `--no-sensitive`, checked locally
+  before sending; `secrets list` has a TYPE column (and a VALUE column for non-sensitive rows).
+- `anchor export --format json|yaml` writes typed values (numbers, booleans, arrays, JSON);
+  `dotenv` and `anchor run` keep the stored text.
+- Dashboard: a Type select and a Sensitive checkbox in the secret sheet, a type tag in the secrets
+  table, and plain values for non-sensitive rows.
+- **Browser login for the CLI.** `anchor login` prints a short code, opens
+  `/cli/login?code=XXXX-XXXX` in the browser, and waits until you approve or deny it in the
+  dashboard (device-authorization flow; the request expires after 10 minutes). `--no-browser`
+  only prints the URL.
+- **`anchor secrets import`** loads a dotenv, JSON or YAML file into one environment and folder:
+  nested keys are flattened into UPPER_SNAKE (`configs.openrouter.api_key` →
+  `CONFIGS_OPENROUTER_API_KEY`), types are inferred, existing keys are skipped unless
+  `--overwrite`, `--non-sensitive <glob>` marks plain config, and `--dry-run` shows the plan. The
+  whole file is validated before anything is written, values are never printed, and an
+  interrupted import resumes when run again.
+
+### Changed
+
+- References (`${...}`) expand only in `string` values; typed values are always used as stored.
+- Listing secrets without `reveal` returns the values of non-sensitive secrets; sensitive ones stay
+  masked. Such a list is still not recorded as a secret read, since it holds only plain config.
+- **`anchor login` uses the browser by default.** Email and password login moves behind
+  `--with-password`, which `--email` and `--password-stdin` still imply. Password logins are now
+  audited with `method: "password"`.
+
+### Security
+
+- The value type and the sensitive flag are bound into the AES-GCM additional data (AAD v2), so a
+  database writer cannot flip a secret to non-sensitive or change its type without decryption
+  failing. Versions written before 0.4.0 keep their original AAD and read as sensitive strings.
+- Only a dashboard (web) session can approve or deny a CLI login; CLI sessions and service tokens
+  get `403`. Approvals and denials are audited (`auth.cli_login_approved`,
+  `auth.cli_login_denied`), and the token endpoint is polled with a single-use, rate-limited
+  device code.
+
+### Upgrade notes
+
+- **Migrations** `0005_typed_values` and `0006_cli_logins` are applied by `pnpm deploy` and by
+  Workers Builds (button deploys). Manual deploys run
+  `pnpm exec wrangler d1 migrations apply DB --remote` from the repository root before deploying.
+  No data is rewritten: existing secrets read as sensitive `string` values.
+- **CLI 0.3.x** keeps working against a 0.4.0 server, but cannot set types or log in through the
+  browser.
+- **CLI 0.4.0 against a 0.3.x server** cannot use browser login; it says so and points at
+  `anchor login --with-password`. Upgrade the server first.
+
 ## [0.3.0] - 2026-11-07
 
 ### Added
@@ -121,7 +178,8 @@ Cloudflare Workers, D1 and Queues.
   - A documentation site at https://sotarak.github.io/anchor/ (guides, operations runbooks,
     security model, API reference).
 
-[Unreleased]: https://github.com/sotarak/anchor/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/sotarak/anchor/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/sotarak/anchor/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sotarak/anchor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sotarak/anchor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sotarak/anchor/releases/tag/v0.1.0

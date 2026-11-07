@@ -78,6 +78,13 @@ it after each upgrade) so upgrades do not overwrite it.
 > no longer read; delete it with `pnpm exec wrangler secret delete ANCHOR_SETUP_TOKEN` (or under the
 > Worker's **Settings → Variables and Secrets**). Scripts that still send `setupToken` keep working.
 
+> **0.4.0 adds two migrations** (`0005_typed_values`, `0006_cli_logins`). Button deploys and
+> `pnpm deploy` apply them; a manual deploy runs `pnpm exec wrangler d1 migrations apply DB --remote`
+> from the root first. No data is rewritten: existing secrets read as sensitive `string` values.
+> Upgrade the server before the CLI: CLI 0.4.0 logs in through the browser, which a 0.3.x server
+> does not support (use `anchor login --with-password` until it is upgraded). CLI 0.3.x keeps
+> working against 0.4.0.
+
 If a release changes Worker configuration (a new binding or queue in `wrangler.jsonc`), the changelog
 says so; create the resource before you deploy.
 

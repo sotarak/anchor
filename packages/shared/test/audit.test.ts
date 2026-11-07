@@ -47,7 +47,14 @@ const SPEC_M5_ACTIONS = [
 ];
 
 // 0.4.0: CLI browser login, appended after every earlier action (never renamed or reordered).
-const V040_ACTIONS = ["auth.cli_login_approved", "auth.cli_login_denied"];
+const V040_ACTIONS = [
+  "auth.cli_login_approved",
+  "auth.cli_login_denied",
+  // 0.4.0: OAuth for MCP clients
+  "oauth.authorized",
+  "oauth.denied",
+  "oauth.revoked",
+];
 
 describe("AUDIT_ACTIONS", () => {
   it("AUDIT_ACTIONS contains every M2 and M5 action in spec §13.6, then the 0.4.0 ones", () => {

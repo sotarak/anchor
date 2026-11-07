@@ -25,6 +25,8 @@ const imported: SecretDto = {
   version: 4,
   comment: "",
   updatedAt: Date.UTC(2026, 3, 2),
+  type: "string",
+  sensitive: true,
   importedFrom: { environment: "prod", path: "/shared" },
 };
 

@@ -5,6 +5,7 @@ export * from "./folders";
 export * from "./imports";
 export * from "./invites";
 export * from "./members";
+export * from "./oauth";
 export * from "./projects";
 export * from "./secrets";
 export * from "./service-tokens";

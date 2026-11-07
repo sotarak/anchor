@@ -8,6 +8,7 @@ import {
   secretVersionParamSchema,
 } from "@anchor/shared";
 import { type Context, Hono } from "hono";
+import type { z } from "zod";
 import { capKeys, readSources, recordAudit } from "../audit/record";
 import { requirePrincipal } from "../auth/middleware";
 import { type Action, authorize } from "../authz/policy";
@@ -38,15 +39,24 @@ function keyParam(c: Context<AppEnv>): string {
 export type Target = { principal: Principal; project: ProjectRow; environment: EnvironmentRow };
 
 /** requirePrincipal -> project -> environment. Authorization needs the path, so it comes later. */
-export async function resolveTarget(c: Context<AppEnv>): Promise<Target> {
+export async function resolveTargetBySlugs(
+  c: Context<AppEnv>,
+  projectSlug: string,
+  envSlug: string,
+): Promise<Target> {
   const principal = requirePrincipal(c);
-  const project = await getProjectBySlug(c.env.DB, c.req.param("project") ?? "");
-  const environment = await getEnvironmentBySlug(c.env.DB, project.id, c.req.param("env") ?? "");
+  const project = await getProjectBySlug(c.env.DB, projectSlug);
+  const environment = await getEnvironmentBySlug(c.env.DB, project.id, envSlug);
   return { principal, project, environment };
 }
 
+/** resolveTargetBySlugs with the :project and :env route parameters. */
+export function resolveTarget(c: Context<AppEnv>): Promise<Target> {
+  return resolveTargetBySlugs(c, c.req.param("project") ?? "", c.req.param("env") ?? "");
+}
+
 /** authorize(action on env + path) -> root key -> service context. */
-async function secretContext(
+export async function secretContext(
   c: Context<AppEnv>,
   { principal, project, environment }: Target,
   action: Action,
@@ -151,29 +161,39 @@ secretRoutes.post("/:key/rollback", async (c) => {
   return c.json<{ secret: SecretDto; changed: boolean }>({ secret: withoutValue, changed });
 });
 
-secretRoutes.get("/:key", async (c) => {
-  const target = await resolveTarget(c);
-  const key = keyParam(c);
-  const query = parseQuery(c, secretQuerySchema);
+/**
+ * One secret with its value, audited as secret.read before it is returned (fails closed). Shared
+ * by GET /:key and the MCP reveal path, so both authorize and audit the same way.
+ */
+export async function readSecret(
+  c: Context<AppEnv>,
+  target: Target,
+  query: { path: string; key: string; expand: boolean; includeImports: boolean },
+): Promise<SecretDto> {
   const ctx = await secretContext(c, target, "secret:read", query.path);
   const { secret, referenced, imports } = await composeSecret(
     { ...ctx, principal: target.principal },
-    { ...query, key },
+    query,
   );
   await recordAudit(c, {
     action: "secret.read",
     projectId: target.project.id,
     environmentId: target.environment.id,
-    target: key,
-    metadata: { path: query.path, ...capKeys([key]), ...readSources(referenced, imports) },
+    target: query.key,
+    metadata: { path: query.path, ...capKeys([query.key]), ...readSources(referenced, imports) },
   });
-  return c.json<{ secret: SecretDto }>({ secret });
-});
+  return secret;
+}
 
-secretRoutes.put("/:key", async (c) => {
-  const target = await resolveTarget(c);
-  const key = keyParam(c);
-  const body = await parseJson(c, putSecretBodySchema);
+type PutSecretBody = z.output<typeof putSecretBodySchema>;
+
+/** Creates or updates a secret and audits a change. The result never carries the value. */
+export async function writeSecret(
+  c: Context<AppEnv>,
+  target: Target,
+  key: string,
+  body: PutSecretBody,
+): Promise<{ secret: SecretDto; created: boolean; changed: boolean }> {
   const ctx = await secretContext(c, target, "secret:write", body.path);
   const { secret, created, changed } = await putSecret(ctx, { key, ...body });
   if (changed) {
@@ -182,18 +202,27 @@ secretRoutes.put("/:key", async (c) => {
       projectId: target.project.id,
       environmentId: target.environment.id,
       target: key,
-      metadata: { path: body.path, key, version: secret.version },
+      metadata: {
+        path: body.path,
+        key,
+        version: secret.version,
+        type: secret.type,
+        sensitive: secret.sensitive,
+      },
     });
   }
   // The service never sets value on a put result; strip defensively so a write never echoes it.
   const { value: _omit, ...withoutValue } = secret;
-  return c.json<{ secret: SecretDto }>({ secret: withoutValue }, created ? 201 : 200);
-});
+  return { secret: withoutValue, created, changed };
+}
 
-secretRoutes.delete("/:key", async (c) => {
-  const target = await resolveTarget(c);
-  const key = keyParam(c);
-  const { path } = parseQuery(c, secretQuerySchema);
+/** Deletes a secret and audits it. */
+export async function removeSecret(
+  c: Context<AppEnv>,
+  target: Target,
+  key: string,
+  path: string,
+): Promise<void> {
   const ctx = await secretContext(c, target, "secret:write", path);
   await deleteSecret(ctx, { path, key });
   await recordAudit(c, {
@@ -203,5 +232,28 @@ secretRoutes.delete("/:key", async (c) => {
     target: key,
     metadata: { path, key },
   });
+}
+
+secretRoutes.get("/:key", async (c) => {
+  const target = await resolveTarget(c);
+  const key = keyParam(c);
+  const query = parseQuery(c, secretQuerySchema);
+  const secret = await readSecret(c, target, { ...query, key });
+  return c.json<{ secret: SecretDto }>({ secret });
+});
+
+secretRoutes.put("/:key", async (c) => {
+  const target = await resolveTarget(c);
+  const key = keyParam(c);
+  const body = await parseJson(c, putSecretBodySchema);
+  const { secret, created } = await writeSecret(c, target, key, body);
+  return c.json<{ secret: SecretDto }>({ secret }, created ? 201 : 200);
+});
+
+secretRoutes.delete("/:key", async (c) => {
+  const target = await resolveTarget(c);
+  const key = keyParam(c);
+  const { path } = parseQuery(c, secretQuerySchema);
+  await removeSecret(c, target, key, path);
   return c.body(null, 204);
 });

@@ -18,6 +18,8 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAccountRouteImport } from './routes/_app/account'
 import { Route as AppAuditRouteImport } from './routes/_app/audit'
 import { Route as AppUsersRouteImport } from './routes/_app/users'
+import { Route as CliLoginRouteImport } from './routes/cli/login'
+import { Route as OauthAuthorizeRouteImport } from './routes/oauth/authorize'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects/index'
 import { Route as AppProjectsProjectIndexRouteImport } from './routes/_app/projects/$project/index'
 import { Route as AppProjectsProjectEnvironmentsEnvRouteImport } from './routes/_app/projects/$project/environments/$env'
@@ -70,6 +72,16 @@ const AppUsersRoute = AppUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AppRoute,
 } as any)
+const CliLoginRoute = CliLoginRouteImport.update({
+  id: '/cli/login',
+  path: '/cli/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthAuthorizeRoute = OauthAuthorizeRouteImport.update({
+  id: '/oauth/authorize',
+  path: '/oauth/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppProjectsIndexRoute = AppProjectsIndexRouteImport.update({
   id: '/projects/',
   path: '/projects/',
@@ -120,6 +132,8 @@ export interface FileRoutesByFullPath {
   '/account': typeof AppAccountRoute
   '/audit': typeof AppAuditRoute
   '/users': typeof AppUsersRoute
+  '/cli/login': typeof CliLoginRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
   '/projects/': typeof AppProjectsIndexRoute
   '/projects/$project/': typeof AppProjectsProjectIndexRoute
   '/projects/$project/environments/$env': typeof AppProjectsProjectEnvironmentsEnvRoute
@@ -136,6 +150,8 @@ export interface FileRoutesByTo {
   '/account': typeof AppAccountRoute
   '/audit': typeof AppAuditRoute
   '/users': typeof AppUsersRoute
+  '/cli/login': typeof CliLoginRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
   '/': typeof AppIndexRoute
   '/projects': typeof AppProjectsIndexRoute
   '/projects/$project': typeof AppProjectsProjectIndexRoute
@@ -155,6 +171,8 @@ export interface FileRoutesById {
   '/_app/account': typeof AppAccountRoute
   '/_app/audit': typeof AppAuditRoute
   '/_app/users': typeof AppUsersRoute
+  '/cli/login': typeof CliLoginRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
   '/_app/': typeof AppIndexRoute
   '/_app/projects/': typeof AppProjectsIndexRoute
   '/_app/projects/$project/': typeof AppProjectsProjectIndexRoute
@@ -175,6 +193,8 @@ export interface FileRouteTypes {
     | '/account'
     | '/audit'
     | '/users'
+    | '/cli/login'
+    | '/oauth/authorize'
     | '/projects/'
     | '/projects/$project/'
     | '/projects/$project/environments/$env'
@@ -191,6 +211,8 @@ export interface FileRouteTypes {
     | '/account'
     | '/audit'
     | '/users'
+    | '/cli/login'
+    | '/oauth/authorize'
     | '/'
     | '/projects'
     | '/projects/$project'
@@ -209,6 +231,8 @@ export interface FileRouteTypes {
     | '/_app/account'
     | '/_app/audit'
     | '/_app/users'
+    | '/cli/login'
+    | '/oauth/authorize'
     | '/_app/'
     | '/_app/projects/'
     | '/_app/projects/$project/'
@@ -225,6 +249,8 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SetupRoute: typeof SetupRoute
+  CliLoginRoute: typeof CliLoginRoute
+  OauthAuthorizeRoute: typeof OauthAuthorizeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -291,6 +317,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/users'
       preLoaderRoute: typeof AppUsersRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/cli/login': {
+      id: '/cli/login'
+      path: '/cli/login'
+      fullPath: '/cli/login'
+      preLoaderRoute: typeof CliLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/authorize': {
+      id: '/oauth/authorize'
+      path: '/oauth/authorize'
+      fullPath: '/oauth/authorize'
+      preLoaderRoute: typeof OauthAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_app/projects/': {
       id: '/_app/projects/'
@@ -385,6 +425,8 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SetupRoute: SetupRoute,
+  CliLoginRoute: CliLoginRoute,
+  OauthAuthorizeRoute: OauthAuthorizeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -10,6 +10,7 @@ import {
 } from "#src/keys/rotation";
 import { ApiError } from "#src/lib/errors";
 import { getProjectBySlug, listEnvironments, type ProjectRow } from "#src/projects/repo";
+import { findSecretWithVersion } from "#src/secrets/repo";
 import { putSecret, type SecretContext } from "#src/secrets/service";
 import {
   auditRows,
@@ -17,6 +18,7 @@ import {
   createUserWithSession,
   json,
   jsonInit,
+  resealCurrentVersion,
   resetDb,
   TEST_ORIGIN,
 } from "#test/support";
@@ -272,6 +274,33 @@ describe("KEK rotation", () => {
       .first<{ ciphertext: ArrayBuffer }>();
     expect(new Uint8Array(after?.ciphertext ?? new ArrayBuffer(0))).toEqual(before);
     expect((await readAll()).K000).toBe("rewritten");
+  });
+
+  it("rotation re-seals v1 and v2 rows with their own AAD", async () => {
+    await put("LEGACY", "old-value");
+    await put("TYPED", '{"a":1}');
+    const project = await getProjectBySlug(db, "app");
+    if (!project) throw new Error("project missing");
+    await resealCurrentVersion(db, keyring, project, "LEGACY", {
+      format: 1,
+      type: "string",
+      sensitive: true,
+    });
+    await resealCurrentVersion(db, keyring, project, "TYPED", {
+      format: 2,
+      type: "json",
+      sensitive: false,
+    });
+    await rotate();
+    expect(await processRotationBatch(db, keyring, lastMessage(), Date.now())).toBe("done");
+    expect(await keyVersionsInUse()).toEqual([{ k: 2, n: 2 }]);
+    expect(await readAll()).toEqual({ LEGACY: "old-value", TYPED: '{"a":1}' });
+    const [devEnv] = await listEnvironments(db, project.id);
+    if (!devEnv) throw new Error("dev missing");
+    const legacy = await findSecretWithVersion(db, devEnv.id, "/", "LEGACY");
+    const typed = await findSecretWithVersion(db, devEnv.id, "/", "TYPED");
+    expect(legacy?.current).toMatchObject({ value_type: "string", sensitive: true, aad_format: 1 });
+    expect(typed?.current).toMatchObject({ value_type: "json", sensitive: false, aad_format: 2 });
   });
 
   it("rollback during rotation reads a v1 row and writes v2", async () => {

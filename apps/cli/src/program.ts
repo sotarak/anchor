@@ -1,3 +1,4 @@
+import { SECRET_VALUE_TYPES, type SecretValueType } from "@anchor/shared";
 import { Command, Option } from "commander";
 import { envsList } from "./commands/envs";
 import { EXPORT_FORMATS, type ExportFormat, exportCommand } from "./commands/export";
@@ -15,9 +16,11 @@ import {
   secretsRollback,
   secretsSet,
 } from "./commands/secrets";
+import { type SecretsImportOptions, secretsImport } from "./commands/secrets-import";
 import { tokensCreate, tokensList, tokensRevoke } from "./commands/tokens";
 import { whoami } from "./commands/whoami";
 import { type CliDeps, type CommandContext, createContext, type GlobalFlags } from "./context";
+import { IMPORT_FORMATS } from "./import/parse";
 import { CLI_VERSION } from "./version";
 
 /** Result of one CLI invocation: a handler may return a non-zero exit code (e.g. `run`). */
@@ -54,17 +57,32 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
 
   program
     .command("login")
-    .description("Log in with email and password and store a CLI session (30 days)")
-    .option("--email <email>", "account email (prompted when omitted in a terminal)")
-    .option("--password-stdin", "read the password from stdin (for scripts)")
+    .description("Log in (in the browser by default) and store a CLI session (30 days)")
+    .option("--no-browser", "print the login URL without opening a browser")
+    .option("--with-password", "log in with email and password instead of the browser")
+    .option("--email <email>", "account email, implies --with-password")
+    .option("--password-stdin", "read the password from stdin, implies --with-password")
     .addHelpText(
       "after",
       examples(
-        "anchor login --api-url https://anchor.example.com",
-        "printf '%s' \"$PASSWORD\" | anchor login --email me@example.com --password-stdin",
+        "anchor login",
+        "anchor login --api-url https://anchor.example.com --no-browser",
+        "printf '%s' \"$PW\" | anchor login --with-password --email me@example.com --password-stdin",
       ),
     )
-    .action(act((ctx, opts: { email?: string; passwordStdin?: boolean }) => login(ctx, opts)));
+    .action(
+      act(
+        (
+          ctx,
+          opts: {
+            email?: string;
+            passwordStdin?: boolean;
+            withPassword?: boolean;
+            browser?: boolean;
+          },
+        ) => login(ctx, opts),
+      ),
+    );
 
   program
     .command("logout")
@@ -103,7 +121,7 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     .description("Manage secrets in the current project, environment and path");
   secrets
     .command("list")
-    .description("List secret names and metadata (values only with --reveal)")
+    .description("List secrets with their type and metadata (sensitive values only with --reveal)")
     .option("--reveal", "include values")
     .addHelpText(
       "after",
@@ -114,7 +132,7 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     );
   secrets
     .command("get")
-    .description("Print one secret (the value is masked in a terminal unless --reveal)")
+    .description("Print one secret (a sensitive value is masked in a terminal unless --reveal)")
     .argument("<key>", "secret key")
     .option("--reveal", "show the value in a terminal")
     .option("--expand", "expand ${KEY} references in the value (default)")
@@ -167,17 +185,79 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     .argument("<key>", "secret key")
     .option("--from-file <path>", "read the value from a file (exact bytes)")
     .option("--comment <text>", "comment stored with the secret")
+    .addOption(
+      new Option(
+        "--type <type>",
+        "value type, checked before sending (default: keep the current)",
+      ).choices(SECRET_VALUE_TYPES),
+    )
+    .option("--sensitive", "mask the value unless revealed (default for new secrets)")
+    .option("--no-sensitive", "plain config: shown without --reveal")
     .addHelpText(
       "after",
       examples(
         "anchor secrets set DB_URL            # prompts for the value",
         "printf '%s' \"$DB_URL\" | anchor secrets set DB_URL",
-        "anchor secrets set TLS_KEY --from-file key.pem",
+        "anchor secrets set TLS_KEY --from-file key.pem --type pem",
+        "printf 8080 | anchor secrets set APP_PORT --type number --no-sensitive",
       ),
     )
     .action(
-      act((ctx, key: string, opts: { fromFile?: string; comment?: string }) =>
-        secretsSet(ctx, key, opts),
+      act(
+        (
+          ctx,
+          key: string,
+          opts: {
+            fromFile?: string;
+            comment?: string;
+            type?: SecretValueType;
+            sensitive?: boolean;
+          },
+        ) => secretsSet(ctx, key, opts),
+      ),
+    );
+  secrets
+    .command("import")
+    .description(
+      "Import a dotenv, JSON or YAML file; nested keys become UPPER_SNAKE and types are inferred",
+    )
+    .option("--from-file <path>", "file to import (otherwise piped stdin with --format)")
+    .addOption(
+      new Option("--format <format>", "file format (default: from the extension)").choices(
+        IMPORT_FORMATS,
+      ),
+    )
+    .option("--overwrite", "write a new version of keys that already exist (default: skip them)")
+    .option(
+      "--non-sensitive <glob>",
+      "keys matching this glob (* and ?) are plain config; repeatable",
+      (glob: string, prev: string[] | undefined) => [...(prev ?? []), glob],
+    )
+    .option("--comment <text>", "comment stored with every imported secret")
+    .option("--dry-run", "show what would be written and stop")
+    .addHelpText(
+      "after",
+      examples(
+        "anchor secrets import --from-file application.config.yaml --env prod --path /shared --non-sensitive 'CONFIGS_CONTEXT_*' --non-sensitive 'CONFIGS_AGENT_*' --dry-run",
+        "anchor secrets import --from-file apps/service-agent/.env --env prod --path /service-agent",
+      ),
+    )
+    .action(
+      act(
+        (
+          ctx,
+          opts: Omit<SecretsImportOptions, "overwrite" | "dryRun" | "nonSensitive"> & {
+            overwrite?: boolean;
+            dryRun?: boolean;
+            nonSensitive?: string[];
+          },
+        ) =>
+          secretsImport(ctx, {
+            ...opts,
+            overwrite: opts.overwrite === true,
+            dryRun: opts.dryRun === true,
+            nonSensitive: opts.nonSensitive ?? [],
+          }),
       ),
     );
   secrets
@@ -281,12 +361,13 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
         .choices(["read", "read-write"])
         .default("read"),
     )
-    .option("--expires-in <days>", "lifetime in days (1-365)", "90")
+    .option("--expires-in <days>", "lifetime in days (1-365) or never", "90")
     .addHelpText(
       "after",
       examples(
         "anchor tokens create --name ci --scope prod --permission read",
         "anchor tokens create --name deploy --scope prod:/api --expires-in 30 --json",
+        "anchor tokens create --name home-server --scope prod --expires-in never",
       ),
     )
     .action(

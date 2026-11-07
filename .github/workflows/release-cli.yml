@@ -2,8 +2,9 @@ name: Release
 
 # A `v<version>` tag builds single-file `anchor` binaries with `bun build --compile` and publishes
 # them, with SHA256SUMS, as a GitHub Release whose notes are that version's CHANGELOG.md section.
-# It then publishes @anchor-secrets/cli to npm (trusted publishing; npm binds the publisher to this
-# file name, so do not rename it) and updates Formula/anchor.rb in sotarak/homebrew-tap.
+# It then publishes @anchor-secrets/cli, @anchor-secrets/sdk and @anchor-secrets/nestjs to npm
+# (trusted publishing; npm binds each package's publisher to this file name, so do not rename it)
+# and updates Formula/anchor.rb in sotarak/homebrew-tap.
 # A pre-release version (`0.2.0-rc.1`) is a GitHub pre-release, goes to the npm dist-tag `next`
 # and leaves Homebrew alone. Only a tag push publishes: manual runs (even from a tag) only make a
 # `cli-dev-<n>` draft. Tags are `v*` only, because the install script, the Action and the Homebrew
@@ -209,6 +210,39 @@ jobs:
       - name: Publish
         if: steps.published.outputs.skip != 'true'
         run: npm publish "$RUNNER_TEMP"/pkg/*.tgz --access public --tag "$NPM_TAG"
+      # The SDK and the NestJS module share the version. The SDK goes first: the NestJS package
+      # depends on that exact version. Each package needs its own trusted publisher on npm.
+      - name: Skip the SDK when it is already published
+        id: sdk_published
+        run: |
+          if npm view "@anchor-secrets/sdk@$VERSION" version > /dev/null 2>&1; then
+            echo "::notice::@anchor-secrets/sdk@$VERSION is already on npm"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Skip the NestJS package when it is already published
+        id: nestjs_published
+        run: |
+          if npm view "@anchor-secrets/nestjs@$VERSION" version > /dev/null 2>&1; then
+            echo "::notice::@anchor-secrets/nestjs@$VERSION is already on npm"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Pack and smoke-test the SDK packages
+        run: |
+          # Packing runs each package's prepack build; the NestJS build needs the SDK's.
+          pnpm --filter ./packages/sdk pack --pack-destination "$RUNNER_TEMP/sdk"
+          pnpm --filter ./packages/nestjs pack --pack-destination "$RUNNER_TEMP/nestjs"
+          smoke=$(mktemp -d)
+          cd "$smoke"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "$RUNNER_TEMP"/sdk/*.tgz "$RUNNER_TEMP"/nestjs/*.tgz \
+            @nestjs/common @nestjs/core reflect-metadata rxjs
+          node -e "require('reflect-metadata'); require('@anchor-secrets/nestjs'); import('@anchor-secrets/sdk').then((m) => { if (typeof m.createAnchorClient !== 'function') process.exit(1); })"
+      - name: Publish @anchor-secrets/sdk
+        if: steps.sdk_published.outputs.skip != 'true'
+        run: npm publish "$RUNNER_TEMP"/sdk/*.tgz --access public --tag "$NPM_TAG"
+      - name: Publish @anchor-secrets/nestjs
+        if: steps.nestjs_published.outputs.skip != 'true'
+        run: npm publish "$RUNNER_TEMP"/nestjs/*.tgz --access public --tag "$NPM_TAG"
 
   homebrew:
     if: github.event_name == 'push' && needs.verify.outputs.prerelease == 'false'

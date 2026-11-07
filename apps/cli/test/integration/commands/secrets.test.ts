@@ -11,6 +11,8 @@ const meta = (key: string, version = 1, extra: Partial<SecretDto> = {}): SecretD
   version,
   comment: "",
   updatedAt: Date.UTC(2026, 10, 2),
+  type: "string",
+  sensitive: true,
   ...extra,
 });
 const P = ["--project", "app", "--env", "dev"];
@@ -172,8 +174,95 @@ describe("anchor secrets set", () => {
   });
 });
 
+describe("anchor secrets set --type / --sensitive", () => {
+  it("set --type number --no-sensitive sends both", async () => {
+    const cli = await loggedIn({ stdin: "8080" });
+    const r = await cli.run(
+      ["secrets", "set", "PORT", "--type", "number", "--no-sensitive", ...P],
+      {
+        listSecrets: async () => [],
+        putSecret: async () => ({ secret: meta("PORT"), created: true }),
+      },
+    );
+    expect(r.code).toBe(0);
+    expect(r.fake.called("putSecret")[0]?.args[3]).toEqual({
+      value: "8080",
+      path: "/",
+      type: "number",
+      sensitive: false,
+    });
+  });
+
+  it("set --sensitive sends sensitive: true", async () => {
+    const cli = await loggedIn({ stdin: "v" });
+    const r = await cli.run(["secrets", "set", "K", "--sensitive", ...P], {
+      listSecrets: async () => [],
+      putSecret: async () => ({ secret: meta("K"), created: true }),
+    });
+    expect(r.code).toBe(0);
+    expect(r.fake.called("putSecret")[0]?.args[3]).toEqual({
+      value: "v",
+      path: "/",
+      sensitive: true,
+    });
+  });
+
+  it("set without --type or --sensitive sends neither", async () => {
+    const cli = await loggedIn({ stdin: "v" });
+    const r = await cli.run(["secrets", "set", "K", ...P], {
+      listSecrets: async () => [],
+      putSecret: async () => ({ secret: meta("K"), created: true }),
+    });
+    const body = r.fake.called("putSecret")[0]?.args[3] as Record<string, unknown>;
+    expect(body).not.toHaveProperty("type");
+    expect(body).not.toHaveProperty("sensitive");
+  });
+
+  it("set rejects a value that does not fit the type before calling the API", async () => {
+    const cli = await loggedIn({ stdin: "abc" });
+    const r = await cli.run(["secrets", "set", "PORT", "--type", "number", ...P], {
+      listSecrets: async () => [],
+    });
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("Value of PORT is not valid for type number: not a number");
+    expect(r.err).not.toContain("abc");
+    expect(r.fake.called("putSecret")).toEqual([]);
+  });
+
+  it("set checks against the inherited type", async () => {
+    const cli = await loggedIn({ stdin: "oops" });
+    const r = await cli.run(["secrets", "set", "CFG", ...P], {
+      listSecrets: async () => [meta("CFG", 1, { type: "json" })],
+    });
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("Value of CFG is not valid for type json: not valid JSON");
+    expect(r.fake.called("putSecret")).toEqual([]);
+  });
+
+  it("--type yaml is a usage error", async () => {
+    const cli = await loggedIn({ stdin: "v" });
+    const r = await cli.run(["secrets", "set", "K", "--type", "yaml", ...P], {});
+    expect(r.code).toBe(2);
+    expect(r.fake.calls).toEqual([]);
+  });
+});
+
 describe("anchor secrets get", () => {
   const withValue = { ...meta("DB_URL", 3, { comment: "primary" }), value: CANARY };
+
+  it("get prints a non-sensitive value without --reveal", async () => {
+    const tty = await loggedIn({ tty: true });
+    const r = await tty.run(["secrets", "get", "PORT", ...P], {
+      listSecrets: async () => [
+        { ...meta("PORT", 1, { type: "number", sensitive: false }), value: "8080" },
+      ],
+    });
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/VALUE\s+8080/);
+    expect(r.out).not.toContain("********");
+    expect(r.err).not.toContain("Use --reveal");
+    expect(r.fake.called("getSecret")).toEqual([]);
+  });
 
   it("get in TTY masks without --reveal; piped prints raw value with no added newline; --json follows the same rule", async () => {
     const tty = await loggedIn({ tty: true });
@@ -297,9 +386,9 @@ describe("anchor secrets list", () => {
     });
     expect(r.out).toBe(
       [
-        "KEY       VERSION  UPDATED     COMMENT",
-        "A         1        2026-11-02  first",
-        "LONG_KEY  12       2026-11-02",
+        "KEY       TYPE    VERSION  UPDATED     COMMENT",
+        "A         string  1        2026-11-02  first",
+        "LONG_KEY  string  12       2026-11-02",
         "",
       ].join("\n"),
     );
@@ -307,8 +396,22 @@ describe("anchor secrets list", () => {
     const rv = await rev.run(["secrets", "list", "--reveal", ...P], {
       listSecrets: async () => [{ ...meta("A"), value: CANARY }],
     });
-    expect(rv.out.split("\n")[0]).toBe("KEY  VERSION  UPDATED     COMMENT  VALUE");
+    expect(rv.out.split("\n")[0]).toBe("KEY  TYPE    VERSION  UPDATED     COMMENT  VALUE");
     expect(rv.out).toContain(CANARY);
+  });
+
+  it("list shows TYPE, and values of non-sensitive rows without --reveal", async () => {
+    const cli = await loggedIn();
+    const r = await cli.run(["secrets", "list", ...P], {
+      listSecrets: async () => [
+        meta("A"),
+        { ...meta("B", 1, { type: "number", sensitive: false }), value: "30" },
+      ],
+    });
+    const [header, a, b] = r.out.split("\n");
+    expect(header).toBe("KEY  TYPE    VERSION  UPDATED     COMMENT  VALUE");
+    expect(a).toMatch(/^A\s+string\s.*\*{8}$/);
+    expect(b).toMatch(/^B\s+number\s.*\s30$/);
   });
 });
 

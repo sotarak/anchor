@@ -35,6 +35,12 @@ Example: `DATABASE_URL` = `postgres://app:${prod:/db/PASSWORD}@db.internal:5432/
   reference.
 - Changing the referenced secret changes every value that references it, on the next read.
 - The audit event of a read lists the secrets its references loaded.
+- **Only `string` values expand.** A typed value (`json`, `pem`, `number`, `boolean`, `list`) is
+  always returned literally, so it cannot change shape after it was validated. A `string` may
+  still reference a typed secret and gets that secret's stored text, so `http://h:${PORT}` with
+  a `number` `PORT` of `8080` expands to `http://h:8080`.
+- A non-sensitive value listed without `reveal` is returned as stored, never expanded, so a
+  non-sensitive `${DB_PASSWORD}` cannot leak the password it points to.
 
 ## Imports
 

@@ -84,7 +84,7 @@ The install script uses `ANCHOR_INSTALL_DIR` in place of `~/.local/bin` if you s
 ## Getting started
 
 ```sh
-anchor login --api-url https://anchor.example.com   # email + hidden password prompt
+anchor login --api-url https://anchor.example.com   # approve in the browser
 cd my-app
 anchor init                                          # pick a project and default environment
 anchor secrets set DATABASE_URL                      # hidden prompt for the value
@@ -93,6 +93,23 @@ anchor run -- npm start                              # npm start sees DATABASE_U
 
 `anchor login` stores a CLI session (valid 30 days) in your OS keychain and remembers the API URL in
 your user config. `anchor init` writes `.anchor.json`, which is meant to be committed.
+
+### Logging in
+
+`anchor login` logs in through the browser, like `gh auth login`:
+
+1. It prints `Open https://<server>/cli/login?code=WDJB-MJHT and confirm the code WDJB-MJHT` and,
+   in a terminal, opens that page (`--no-browser` only prints it).
+2. On the page, signed in to the dashboard, check that the code matches and click **Approve**.
+3. The CLI, which polls every 5 seconds, stores the session. The request expires after 10 minutes.
+
+It works over SSH and in containers: open the URL on any device. Only a dashboard session can
+approve a request. `Login was denied in the browser` and
+`Login request expired; run anchor login again` exit with code 3. Against a server older than
+0.4.0 it says `This server does not support browser login; use anchor login --with-password`.
+
+`anchor login --with-password` keeps the email and password flow; `--email` and
+`--password-stdin` imply it, so existing scripts keep working. CI should use `ANCHOR_TOKEN`.
 
 ## Commands
 
@@ -104,26 +121,92 @@ described in [Versions and rollback](/anchor/guides/versions/).
 
 | Command | Purpose |
 |---------|---------|
-| `anchor login [--email <email>] [--password-stdin]` | Log in and store a CLI session |
+| `anchor login [--no-browser] [--with-password] [--email <email>] [--password-stdin]` | Log in (in the browser by default) and store a CLI session |
 | `anchor logout` | Revoke the stored session on the server and delete it locally |
 | `anchor whoami` | Show the current user or service token |
 | `anchor init` | Link the current directory to a project (writes `.anchor.json`) |
 | `anchor projects list` | List the projects you can access |
 | `anchor envs list` | List the environments of the current project |
-| `anchor secrets list [--reveal]` | List secret names and metadata (values only with `--reveal`) |
-| `anchor secrets get <key> [--reveal] [--no-expand] [--at-version <n>]` | Print one secret; masked in a terminal unless `--reveal` |
+| `anchor secrets list [--reveal]` | List secrets with their type and metadata (sensitive values only with `--reveal`) |
+| `anchor secrets get <key> [--reveal] [--no-expand] [--at-version <n>]` | Print one secret; a sensitive value is masked in a terminal unless `--reveal` |
 | `anchor secrets history <key>` | List the versions of a secret (no values) |
 | `anchor secrets rollback <key> --to <n>` | Restore a past version as a new version |
-| `anchor secrets set <key> [--from-file <path>] [--comment <text>]` | Create or update a secret |
+| `anchor secrets set <key> [--from-file <path>] [--comment <text>] [--type <type>] [--sensitive \| --no-sensitive]` | Create or update a secret |
+| `anchor secrets import [--from-file <path>] [--format dotenv\|json\|yaml] [--overwrite] [--non-sensitive <glob>]... [--comment <text>] [--dry-run]` | Import a dotenv, JSON or YAML file into the current environment and path |
 | `anchor secrets delete <key>` | Delete a secret |
 | `anchor folders list` | List the subfolders of `--path` (default `/`) |
 | `anchor folders create <path>` | Create a folder and its parents (no-op if it exists) |
 | `anchor folders delete <path> [--force]` | Delete an empty folder; `--force` deletes its contents too |
 | `anchor run [--no-override] [--no-expand] -- <command> [args...]` | Run a command with secrets in its environment |
 | `anchor export [--format dotenv\|json\|yaml] [--output <file>] [--no-expand]` | Write secrets to a file or a pipe |
-| `anchor tokens create --name <name> [--scope <env[:path]>]... [--permission read\|read-write] [--expires-in <days>]` | Create a service token |
+| `anchor tokens create --name <name> [--scope <env[:path]>]... [--permission read\|read-write] [--expires-in <days\|never>]` | Create a service token (`never`: valid until revoked) |
 | `anchor tokens list` | List the project's service tokens |
 | `anchor tokens revoke <id>` | Revoke a service token |
+
+### Value types and plain config
+
+Every secret has a type: `string` (the default), `json`, `pem`, `number`, `boolean` or `list` (a
+JSON array of strings), and is either sensitive (the default) or plain config:
+
+```sh
+printf 8080 | anchor secrets set APP_PORT --type number --no-sensitive
+anchor secrets set JWT_KEYS --from-file keys.json --type json
+anchor secrets set TLS_CERT --from-file cert.pem --type pem
+```
+
+- `set` checks the value against its type before sending it, and fails with
+  `Value of <KEY> is not valid for type <type>: <reason>` (exit 2) without printing the value.
+  Without `--type` or `--sensitive`/`--no-sensitive`, the secret keeps its current type and flag
+  (a new secret is a sensitive `string`).
+- `secrets list` has a TYPE column. Non-sensitive values are shown without `--reveal`; sensitive
+  ones show `********` unless you pass `--reveal`. `secrets get` prints a non-sensitive value
+  without `--reveal` too.
+- References (`${...}`) expand only in `string` values; typed values are always used as stored.
+
+### Import a file
+
+`anchor secrets import` loads a whole file into one environment and folder (`--env`, `--path`, or
+`.anchor.json`), so a service can move to `anchor run` without one `secrets set` per key.
+
+- **Format** comes from `--format`, otherwise from the name: `.json` is JSON, `.yaml`/`.yml` is
+  YAML, and `.env`, `*.env` or a name starting with `.env` (`.env.production`) is dotenv. Piped
+  stdin, or any other name, needs `--format`.
+- **dotenv** values are imported as `string`, byte for byte; nothing is guessed.
+- **JSON and YAML** must hold an object. Nested keys are joined with `_` and uppercased, with `-`,
+  `.` and spaces turned into `_`: `configs.openrouter.api_key` becomes
+  `CONFIGS_OPENROUTER_API_KEY` and `transporters.grpc-clients` becomes
+  `TRANSPORTERS_GRPC_CLIENTS`. Types are inferred: numbers are `number` and keep the text written
+  in the file (`1.0` stays `1.0`; a YAML number such as `0x1F` or `.inf` is imported as a `string`),
+  `true`/`false` are `boolean`, an array of strings is `list`, any other array is `json`, a PEM block is `pem`, and
+  other strings are `string`. A blank value (`api_key:`) or an empty object is reported as
+  **empty** and nothing is created for it.
+- **Before anything is sent**, the whole file is checked; a key that is not a valid Anchor key
+  (`Cannot import 2fa: 2FA is not a valid key`), two paths that map to the same key
+  (`a.b-c and a.b_c both become A_B_C`), or a value over 64 KiB or invalid for its type stops the
+  import with exit 2. Every problem is listed at once, and values are never printed.
+- **Existing keys** are skipped and listed as `skip`. `--overwrite` writes a new version for them
+  with the imported type and flag (a key whose value, type, flag and comment are already the same
+  is reported as unchanged). Without `--comment`, an overwritten key keeps its comment.
+- **Sensitivity:** every key is sensitive unless it matches a `--non-sensitive <glob>` (`*` and
+  `?`, case-sensitive, matched against the final key; repeat the flag for more globs).
+- **Writes** go one at a time, in key order. On the first failure the import stops with exit 1 and
+  `Imported <n> of <m>; <KEY> failed: <error>. Re-run to continue`; a re-run skips the keys already
+  written.
+- **Output** is a KEY, TYPE, SENSITIVE and ACTION table, then
+  `Created <a>, updated <b>, skipped <c> existing, <d> empty in <env>:<path>`. `--dry-run` prints
+  the same table with `Dry run: would create ...` and writes nothing. Values are never shown.
+
+For example, moving zepo-engine's shared config and one service's `.env` into `prod`:
+
+```sh
+anchor secrets import --from-file application.config.yaml --env prod --path /shared \
+  --non-sensitive 'CONFIGS_CONTEXT_*' --non-sensitive 'CONFIGS_AGENT_*' --dry-run
+# check the plan, then run it again without --dry-run
+anchor secrets import --from-file apps/service-agent/.env --env prod --path /service-agent
+```
+
+Then replace each value in `application.config.yaml` with its placeholder
+(`api_key: ${CONFIGS_OPENROUTER_API_KEY}`) and start the service with `anchor run`.
 
 ### Handling of secret values
 
@@ -134,7 +217,7 @@ described in [Versions and rollback](/anchor/guides/versions/).
   way. An empty stdin exits 2 so `</dev/null` cannot blank a secret; set an empty value with
   `--from-file` and an empty file.
 - `secrets get` prints the raw value (no added newline) when stdout is a pipe or a file. In a
-  terminal it shows the value masked unless you pass `--reveal`; a masked view does not read the
+  terminal it shows a sensitive value masked unless you pass `--reveal`; a masked view does not read the
   value from the server, so it is not recorded as a secret read.
 - `anchor run` fetches secrets before starting the command. If the fetch fails (network error,
   expired session, missing permission) the command is **not** started. `SIGTERM` and `SIGHUP` are
@@ -150,6 +233,9 @@ described in [Versions and rollback](/anchor/guides/versions/).
   when the file is not gitignored. `--format dotenv` fails with a hint when a value cannot be written
   so that a dotenv parser reads it back exactly (a value that contains both `"` and a newline); use
   `--format json` or `--format yaml` for such values.
+- `--format json` and `--format yaml` write typed values: a `number` as a number, a `boolean` as
+  `true`/`false`, a `list` as an array and a `json` value as its JSON. `dotenv` and `anchor run`
+  always use the stored text (`PORT=8080`, `MODELS=["a","b"]`).
 - `--debug` prints one line per request (`debug: GET /api/v1/... -> 200 (12ms)`): never headers,
   bodies, tokens or values.
 
@@ -212,9 +298,9 @@ starting with `anc_` (a token): remove it and rotate the token.
 
 The URL is reduced to its origin. `https://` is required, except for `localhost`, `127.0.0.1` and
 `[::1]`. `anchor login` always prints the server it is logging in to. When the URL comes only from
-`.anchor.json` and differs from your user config, it warns and asks before sending your password
-(without a terminal it exits 2 unless you pass `--api-url` or `--yes`), and it never saves that URL
-as your user config.
+`.anchor.json` and differs from your user config, it warns and asks before logging in
+(`Log in to <url>?`, or `Send your password to <url>?` with `--with-password`; without a terminal it
+exits 2 unless you pass `--api-url` or `--yes`), and it never saves that URL as your user config.
 
 ### Environment variables
 
@@ -273,10 +359,11 @@ existing fields are not renamed or removed without a major version.
 | `init` | `{ projectFile, project, defaultEnv }` |
 | `projects list` | `{ projects: ProjectDto[] }` |
 | `envs list` | `{ environments: EnvironmentDto[] }` |
-| `secrets list` | `{ secrets: SecretDto[] }` (`value` only with `--reveal`) |
+| `secrets list` | `{ secrets: SecretDto[] }` (`value` with `--reveal`, and for non-sensitive secrets) |
 | `secrets get` | `{ secret: SecretDto }` (`value` only with `--reveal` or when stdout is not a terminal) |
 | `secrets set` | `{ secret: SecretDto, created: boolean }` (never the value) |
 | `secrets delete` | `{ deleted: { key, environment, path } }` |
+| `secrets import` | `{ created, updated, unchanged, skipped, empty }` (arrays of keys; `empty` holds source paths; `dryRun: true` with `--dry-run`, where the arrays hold the planned keys) |
 | `export --output` | `{ path, count, format }` (without `--output`, use `--format json` instead of `--json`) |
 | `tokens create` | `{ serviceToken: ServiceTokenDto, token }` |
 | `tokens list` | `{ serviceTokens: ServiceTokenDto[] }` |

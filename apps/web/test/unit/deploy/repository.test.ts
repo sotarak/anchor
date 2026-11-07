@@ -2,6 +2,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { SECRET_LIKE, TOKEN_KINDS } from "../../support/secret-like";
 
 const path = (rel: string) => fileURLToPath(new URL(`../../../../../${rel}`, import.meta.url));
 const read = (rel: string) => readFileSync(path(rel), "utf8");
@@ -39,8 +40,6 @@ const publicText = () => [
 
 // The last domain label is letters, so `setup-action@v0.2.0` and `cli@0.2.0` are not addresses.
 const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\b/g;
-/** A bearer token of any kind (`anc_s_`, `anc_st_`, `anc_inv_`, `anc_rst_`) at real length. */
-const SECRET_LIKE = /anc_(s|st|inv|rst)_[A-Za-z0-9_-]{20,}/;
 
 const PACKAGES = [
   "package.json",
@@ -122,7 +121,7 @@ describe("open-source repository", () => {
   it("the secret-string guard catches every bearer token kind", () => {
     // Built at runtime so this file holds no token-shaped literal; 43 chars = base64url(32 bytes).
     const body = "A".repeat(43);
-    for (const kind of ["s", "st", "inv", "rst"]) {
+    for (const kind of TOKEN_KINDS) {
       expect(`see anc_${kind}_${body} here`).toMatch(SECRET_LIKE);
     }
     expect("anc_st_<token>").not.toMatch(SECRET_LIKE);
@@ -205,6 +204,8 @@ describe("open-source repository", () => {
       "apps/cli/package.json",
       "apps/docs/package.json",
       "packages/shared/package.json",
+      "packages/sdk/package.json",
+      "packages/nestjs/package.json",
     ];
     const version = json("package.json").version as string;
     expect(version).toMatch(/^\d+\.\d+\.\d+$/);
@@ -328,6 +329,167 @@ describe("open-source repository", () => {
     expect(section).toContain("database_id");
     expect(section).toContain("wrangler.jsonc");
     expect(section).toContain(".dev.vars");
+  });
+
+  it("the 0.4.0 changelog has typed values, browser login and upgrade notes", () => {
+    const c = read("CHANGELOG.md");
+    const section = c.slice(c.indexOf("## [0.4.0]"), c.indexOf("## [0.3.0]"));
+    expect(section).toMatch(/### Upgrade notes/);
+    expect(section).toContain("0005");
+    expect(section).toContain("0006");
+    expect(section).toContain("--type");
+    expect(section).toContain("sensitive");
+    expect(section).toContain("--with-password");
+    expect(section).toContain("secrets import");
+    expect(section).toMatch(/[Rr]olling back below 0\.4\.0/);
+    expect(read("apps/docs/src/content/docs/operations/upgrading.md")).toMatch(
+      /[Rr]olling back below 0\.4\.0/,
+    );
+  });
+
+  it("the 0.4.0 changelog covers agents, the SDK packages and tokens without expiry", () => {
+    const c = read("CHANGELOG.md");
+    const section = c.slice(c.indexOf("## [0.4.0]"), c.indexOf("## [0.3.0]"));
+    for (const s of [
+      "--expires-in never",
+      "MCP",
+      "secrets:reveal",
+      "0007",
+      "0008",
+      "@anchor-secrets/sdk",
+      "@anchor-secrets/nestjs",
+      "npx skills add",
+      "run_worker_first",
+      "/oauth/*",
+    ]) {
+      expect(section, s).toContain(s);
+    }
+    const upgrading = read("apps/docs/src/content/docs/operations/upgrading.md");
+    expect(upgrading).toContain("0007_service_token_no_expiry");
+    expect(upgrading).toContain("0008_oauth");
+    expect(upgrading).toContain("run_worker_first");
+  });
+
+  it("every workspace package is version 0.4.0", () => {
+    for (const f of [
+      "package.json",
+      "apps/cli/package.json",
+      "apps/docs/package.json",
+      "apps/server/package.json",
+      "apps/web/package.json",
+      "packages/shared/package.json",
+      "packages/sdk/package.json",
+      "packages/nestjs/package.json",
+    ]) {
+      expect(JSON.parse(read(f)).version, f).toBe("0.4.0");
+    }
+    // The MCP server reports this as its version.
+    expect(read("apps/server/src/version.ts")).toContain('SERVER_VERSION = "0.4.0"');
+  });
+
+  it("the MCP guide shows Claude Code and Codex setup and the reveal permission", () => {
+    const mcp = read("apps/docs/src/content/docs/guides/mcp.md");
+    expect(mcp).toContain("claude mcp add --transport http anchor");
+    expect(mcp).toContain("codex mcp add anchor --url");
+    expect(mcp).toContain("secrets:reveal");
+  });
+
+  it("the release publishes the SDK before the NestJS module, each skipped once on npm", () => {
+    const wf = read(".github/workflows/release-cli.yml");
+    const npmJob = wf.slice(wf.indexOf("\n  npm:\n"), wf.indexOf("\n  homebrew:\n"));
+    const at = (s: string) => {
+      const i = npmJob.indexOf(s);
+      expect(i, s).toBeGreaterThan(-1);
+      return i;
+    };
+    const cliPublish = at('npm publish "$RUNNER_TEMP"/pkg/*.tgz');
+    const sdkSkip = at('npm view "@anchor-secrets/sdk@$VERSION" version');
+    const nestSkip = at('npm view "@anchor-secrets/nestjs@$VERSION" version');
+    const sdkPack = at("pnpm --filter ./packages/sdk pack");
+    const nestPack = at("pnpm --filter ./packages/nestjs pack");
+    const smoke = at("require('@anchor-secrets/nestjs')");
+    expect(npmJob).toContain("import('@anchor-secrets/sdk')");
+    const sdkPublish = at('npm publish "$RUNNER_TEMP"/sdk/*.tgz --access public --tag "$NPM_TAG"');
+    const nestPublish = at(
+      'npm publish "$RUNNER_TEMP"/nestjs/*.tgz --access public --tag "$NPM_TAG"',
+    );
+    expect(cliPublish).toBeLessThan(sdkPack);
+    expect(sdkPack).toBeLessThan(nestPack);
+    expect(nestPack).toBeLessThan(smoke);
+    expect(smoke).toBeLessThan(sdkPublish);
+    expect(sdkPublish).toBeLessThan(nestPublish);
+    expect(Math.max(sdkSkip, nestSkip)).toBeLessThan(sdkPublish);
+    expect(npmJob).toContain("if: steps.sdk_published.outputs.skip != 'true'");
+    expect(npmJob).toContain("if: steps.nestjs_published.outputs.skip != 'true'");
+  });
+
+  it("the SDK guide covers the NestJS module, loadAnchorEnv and the token", () => {
+    const sdk = read("apps/docs/src/content/docs/guides/sdk.md");
+    expect(sdk).toContain("AnchorModule.forRoot");
+    expect(sdk).toContain(
+      'AnchorModule.forRoot({ project: "zepo", environment: "prod", path: "/shared" })',
+    );
+    expect(sdk).toContain("loadAnchorEnv");
+    expect(sdk).toContain("ANCHOR_TOKEN");
+    expect(sdk).toContain("npm install @anchor-secrets/nestjs");
+  });
+
+  it("loadAnchorEnv examples run inside bootstrap(), since CommonJS Nest apps reject top-level await", () => {
+    for (const file of ["apps/docs/src/content/docs/guides/sdk.md", "packages/nestjs/README.md"]) {
+      const doc = read(file);
+      const example = doc.slice(
+        doc.indexOf("// main.ts"),
+        doc.indexOf("```", doc.indexOf("// main.ts")),
+      );
+      expect(example, file).toContain("async function bootstrap() {");
+      expect(example, file).toMatch(/^ {2}await loadAnchorEnv\(/m);
+      expect(example, file).not.toMatch(/^await /m);
+      expect(example, file).toMatch(/^void bootstrap\(\);$/m);
+    }
+  });
+
+  it("the SDK guide documents caching, retries, folders and events", () => {
+    const sdk = read("apps/docs/src/content/docs/guides/sdk.md");
+    for (const s of [
+      "ttlMs",
+      "maxStaleMs",
+      "cache: false",
+      "retry",
+      "client.folder(",
+      "refresh_failed",
+      "CacheStore",
+    ]) {
+      expect(sdk).toContain(s);
+    }
+    expect(sdk).not.toContain("ANCHOR_SECRETS");
+    expect(read("packages/nestjs/README.md")).not.toContain("ANCHOR_SECRETS");
+  });
+
+  it("loadAnchorEnv examples import AppModule after the env is loaded", () => {
+    for (const file of ["apps/docs/src/content/docs/guides/sdk.md", "packages/nestjs/README.md"]) {
+      const doc = read(file);
+      const start = doc.indexOf("// main.ts");
+      const example = doc.slice(start, doc.indexOf("```", start));
+      expect(example, file).not.toMatch(/^import \{ AppModule \}/m);
+      const load = example.indexOf("await loadAnchorEnv(");
+      expect(load, file).toBeGreaterThan(-1);
+      expect(load, file).toBeLessThan(example.indexOf('await import("./app.module")'));
+    }
+  });
+
+  it("the agent-skills guide installs the three skills by name and the README links it", () => {
+    const guide = read("apps/docs/src/content/docs/guides/agent-skills.md");
+    expect(guide).toContain(
+      "npx skills add sotarak/anchor --skill anchor-cli --skill anchor-migrate --skill anchor-ci",
+    );
+    expect(guide).toContain("npx skills update");
+    expect(read("README.md")).toContain("https://sotarak.github.io/anchor/guides/agent-skills/");
+  });
+
+  it("the CI guide pins the 0.4.0 CLI", () => {
+    const ci = read("apps/docs/src/content/docs/guides/ci.md");
+    expect(ci).not.toContain("0.3.0");
+    expect(ci.match(/0\.4\.0/g)?.length).toBe(4);
   });
 
   it("README links the docs site", () => {

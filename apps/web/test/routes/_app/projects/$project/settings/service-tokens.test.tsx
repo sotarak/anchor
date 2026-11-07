@@ -124,6 +124,41 @@ describe("/projects/$project/settings/service-tokens", () => {
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
   });
 
+  it("No expiry shows the hint and sends expiresInDays null", async () => {
+    setup();
+    const bodies: unknown[] = [];
+    server.use(
+      http.post(URL_, async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json(
+          { serviceToken: { ...active, id: "st_new", expiresAt: null }, token: TOKEN },
+          { status: 201 },
+        );
+      }),
+    );
+    const { user } = await renderApp(PAGE);
+    await screen.findByText("ci-deploy");
+    await user.click(screen.getByRole("button", { name: "New token" }));
+    const sheet = await screen.findByRole("dialog");
+    await user.type(within(sheet).getByLabelText("Name"), "home-server");
+    expect(within(sheet).queryByText("The token stays valid until you revoke it.")).toBeNull();
+    await pick(user, within(sheet).getByRole("combobox", { name: "Expires in" }), /^No expiry/);
+    expect(
+      within(sheet).getByText("The token stays valid until you revoke it."),
+    ).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Create token" }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({ name: "home-server", expiresInDays: null });
+  });
+
+  it("a token without an expiry shows Never and Active", async () => {
+    setup([{ ...active, expiresAt: null }]);
+    await renderApp(PAGE);
+    const row = await rowOf("ci-deploy");
+    expect(within(row).getByText("Never")).toBeInTheDocument();
+    expect(within(row).getByText("Active")).toBeInTheDocument();
+  });
+
   it("invalid scope path blocks submit", async () => {
     setup();
     const create = vi.fn(() => HttpResponse.json({}));

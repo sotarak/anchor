@@ -89,7 +89,19 @@ describe("/projects/$project/environments/$env", () => {
 
   it("a long comment is truncated in its own column", async () => {
     const long = "c".repeat(300);
-    setup({ secrets: [{ key: "LONG", path: "/", version: 1, comment: long, updatedAt: 0 }] });
+    setup({
+      secrets: [
+        {
+          key: "LONG",
+          path: "/",
+          version: 1,
+          comment: long,
+          updatedAt: 0,
+          type: "string",
+          sensitive: true,
+        },
+      ],
+    });
     const { user } = await renderApp("/projects/app/environments/dev");
     const cell = within(await rowOf("LONG")).getAllByRole("cell")[2] as HTMLElement;
     const text = within(cell).getByText(long);
@@ -197,7 +209,13 @@ describe("/projects/$project/environments/$env", () => {
   it("add secret validates key (1BAD rejected client-side) and submits path from search", async () => {
     setup();
     const put = vi.fn(async ({ request }: { request: Request }) => {
-      expect(await request.json()).toEqual({ value: "x", comment: "", path: "/api" });
+      expect(await request.json()).toEqual({
+        value: "x",
+        comment: "",
+        path: "/api",
+        type: "string",
+        sensitive: true,
+      });
       return HttpResponse.json(
         {
           secret: { key: "NEW_KEY", path: "/api", version: 1, comment: "", updatedAt: 0 },
@@ -249,7 +267,13 @@ describe("/projects/$project/environments/$env", () => {
   it("edit with untouched value re-sends the current value and the new comment", async () => {
     const { get } = setup();
     const put = vi.fn(async ({ request }: { request: Request }) => {
-      expect(await request.json()).toEqual({ value: CANARY, comment: "Rotated", path: "/" });
+      expect(await request.json()).toEqual({
+        value: CANARY,
+        comment: "Rotated",
+        path: "/",
+        type: "string",
+        sensitive: true,
+      });
       return HttpResponse.json({
         secret: { ...fixtures.secrets[0], version: 3, comment: "Rotated" },
         created: false,
@@ -341,6 +365,113 @@ describe("/projects/$project/environments/$env", () => {
     await user.type(within(sheet).getByLabelText("Value"), "big");
     await user.click(within(sheet).getByRole("button", { name: "Save changes" }));
     expect(await within(sheet).findByText("Value is larger than 64 KiB")).toBeInTheDocument();
+  });
+
+  it("adds a typed non-sensitive secret", async () => {
+    setup();
+    const bodies: unknown[] = [];
+    server.use(
+      http.put(`${base}/dev/secrets/:key`, async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json(
+          {
+            secret: { ...fixtures.secrets[1], key: "PORT", type: "number", sensitive: false },
+            created: true,
+          },
+          { status: 201 },
+        );
+      }),
+    );
+    const { user } = await renderApp("/projects/app/environments/dev");
+    await screen.findByText("API_KEY");
+    await user.click(screen.getByRole("button", { name: "Add secret" }));
+    const sheet = await screen.findByRole("dialog");
+    await user.type(within(sheet).getByLabelText("Key"), "PORT");
+    await user.click(within(sheet).getByRole("combobox", { name: "Type" }));
+    await user.click(await screen.findByRole("option", { name: "number" }));
+    await user.click(within(sheet).getByRole("checkbox", { name: "Sensitive" }));
+    await user.type(within(sheet).getByLabelText("Value"), "8080");
+    await user.click(within(sheet).getByRole("button", { name: "Add secret" }));
+    await waitFor(() =>
+      expect(bodies).toEqual([
+        { value: "8080", comment: "", path: "/", type: "number", sensitive: false },
+      ]),
+    );
+  });
+
+  it("shows the type reason under Value", async () => {
+    setup();
+    const put = vi.fn(() => HttpResponse.json({}));
+    server.use(http.put(`${base}/dev/secrets/:key`, put));
+    const { user } = await renderApp("/projects/app/environments/dev");
+    await screen.findByText("API_KEY");
+    await user.click(screen.getByRole("button", { name: "Add secret" }));
+    const sheet = await screen.findByRole("dialog");
+    await user.type(within(sheet).getByLabelText("Key"), "CFG");
+    await user.click(within(sheet).getByRole("combobox", { name: "Type" }));
+    await user.click(await screen.findByRole("option", { name: "json" }));
+    await user.type(within(sheet).getByLabelText("Value"), "{{a");
+    await user.click(within(sheet).getByRole("button", { name: "Add secret" }));
+    expect(await within(sheet).findByText("not valid JSON")).toBeInTheDocument();
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it("edit keeps the current type and flag preselected", async () => {
+    const pem = {
+      ...(fixtures.secrets[0] as SecretDto),
+      key: "TLS_CERT",
+      type: "pem" as const,
+      sensitive: true,
+    };
+    setup({ secrets: [pem] });
+    const { user } = await renderApp("/projects/app/environments/dev");
+    await openMenu(user, "TLS_CERT");
+    await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByRole("combobox", { name: "Type" })).toHaveTextContent("pem");
+    expect(within(sheet).getByRole("checkbox", { name: "Sensitive" })).toBeChecked();
+  });
+
+  it("changing the type with an untouched value surfaces the server reason", async () => {
+    setup();
+    server.use(
+      http.put(`${base}/dev/secrets/API_KEY`, () =>
+        apiError(400, "bad_request", "value is not valid for type number: not a number"),
+      ),
+    );
+    const { user } = await renderApp("/projects/app/environments/dev");
+    await openMenu(user, "API_KEY");
+    await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    const sheet = await screen.findByRole("dialog");
+    await user.click(within(sheet).getByRole("combobox", { name: "Type" }));
+    await user.click(await screen.findByRole("option", { name: "number" }));
+    await user.click(within(sheet).getByRole("button", { name: "Save changes" }));
+    expect(await within(sheet).findByText("not a number")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("table shows a type tag and plain non-sensitive values", async () => {
+    setup({
+      secrets: [
+        { ...(fixtures.secrets[0] as SecretDto), key: "A" },
+        {
+          ...(fixtures.secrets[1] as SecretDto),
+          key: "B",
+          type: "number",
+          sensitive: false,
+          value: "30",
+        },
+      ],
+    });
+    await renderApp("/projects/app/environments/dev");
+    const b = await rowOf("B");
+    expect(within(b).getByText("number")).toBeInTheDocument();
+    expect(within(b).getByText("30")).toBeInTheDocument();
+    expect(within(b).queryByRole("button", { name: /reveal/i })).toBeNull();
+    const a = await rowOf("A");
+    expect(within(a).getByText(MASK)).toBeInTheDocument();
+    expect(within(a).getByRole("button", { name: /reveal/i })).toBeInTheDocument();
+    expect(within(a).queryByText("string")).toBeNull();
   });
 
   it("delete confirm names the key and calls DELETE with path", async () => {

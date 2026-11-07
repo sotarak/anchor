@@ -11,6 +11,8 @@ const secret = (key: string, value: string): SecretDto => ({
   version: 1,
   comment: "",
   updatedAt: 0,
+  type: "string",
+  sensitive: true,
   value,
 });
 

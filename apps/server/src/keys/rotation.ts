@@ -1,11 +1,12 @@
 import type { KeyRotationDto, ProjectKeyDto } from "@anchor/shared";
 import { systemAuditStatement } from "../audit/record";
 import { AEAD_ALG, open, seal } from "../crypto/aead";
-import { createWrappedKek, type RootKeyring, secretAad } from "../crypto/keyring";
+import { createWrappedKek, type RootKeyring, versionAad } from "../crypto/keyring";
 import { isUniqueViolation, toBytes } from "../lib/d1";
 import { log } from "../lib/log";
 import { newId } from "../lib/random";
 import { getProjectKek, type ProjectRow } from "../projects/repo";
+import { type RawVersionMeta, versionMeta } from "../secrets/repo";
 
 /** One unit of re-encryption work on the anchor-reencrypt queue. */
 export type ReencryptMessage = {
@@ -220,7 +221,7 @@ export async function startOrResumeRotation(
   return { rotation: toRotationDto(created), resumed: false };
 }
 
-type PendingVersion = {
+type PendingVersion = RawVersionMeta & {
   secret_id: string;
   version: number;
   alg: string;
@@ -253,7 +254,8 @@ export async function processRotationBatch(
 
   const { results } = await db
     .prepare(
-      `SELECT v.secret_id, v.version, v.alg, v.key_version, v.iv, v.ciphertext, s.environment_id
+      `SELECT v.secret_id, v.version, v.alg, v.key_version, v.iv, v.ciphertext, v.value_type,
+         v.sensitive, v.aad_format, s.environment_id
        FROM secret_versions v JOIN secrets s ON s.id = v.secret_id
        WHERE s.project_id = ? AND v.key_version != ? LIMIT ?`,
     )
@@ -272,11 +274,16 @@ export async function processRotationBatch(
 
   const updates: D1PreparedStatement[] = [];
   for (const row of results) {
-    const aad = secretAad({
+    // Each row is re-sealed with the AAD of its own format; aad_format is left unchanged.
+    const meta = versionMeta(row);
+    const aad = versionAad({
       projectId: project.id,
       environmentId: row.environment_id,
       secretId: row.secret_id,
       version: row.version,
+      format: meta.aad_format,
+      type: meta.value_type,
+      sensitive: meta.sensitive,
     });
     // A KEK that does not unwrap throws (IntegrityError -> the queue retries, then the DLQ); a
     // version row that does not open is that row's integrity failure and fails the rotation.

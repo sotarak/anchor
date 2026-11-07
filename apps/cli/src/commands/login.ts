@@ -6,15 +6,32 @@ import { readUserConfig, writeUserConfig } from "../config/user-config";
 import type { CommandContext } from "../context";
 import { CliError, EXIT, toCliError } from "../errors";
 import { isInteractive, stripOneNewline } from "../interactive";
+import { loginWithBrowser } from "./login-browser";
 
+/**
+ * `anchor login`: the browser flow by default; the password flow with --with-password, or when
+ * --email or --password-stdin is given (so existing scripts keep working).
+ */
 export async function login(
   ctx: CommandContext,
-  opts: { email?: string; passwordStdin?: boolean },
+  opts: { email?: string; passwordStdin?: boolean; withPassword?: boolean; browser?: boolean },
 ): Promise<void> {
-  const { io, prompts } = ctx.deps;
-  const interactive = isInteractive(ctx);
+  if (opts.withPassword || opts.email !== undefined || opts.passwordStdin) {
+    return loginWithPassword(ctx, opts);
+  }
+  return loginWithBrowser(ctx, { noBrowser: opts.browser === false });
+}
 
-  // 1. Target origin, validated before any credential is read.
+/**
+ * The API URL to log in to, validated before any credential is read or any request is sent.
+ * An URL that comes only from .anchor.json needs a confirmation (or --yes).
+ */
+export async function resolveLoginTarget(
+  ctx: CommandContext,
+  mode: "browser" | "password",
+): Promise<{ apiUrl: string; fromProject: boolean }> {
+  const { prompts } = ctx.deps;
+  const interactive = isInteractive(ctx);
   let apiUrl = ctx.config.apiUrl?.value;
   if (!apiUrl) {
     if (!interactive) {
@@ -41,16 +58,26 @@ export async function login(
           `Pass --api-url ${apiUrl} (or --yes) if you trust this server`,
         );
       }
-      if (
-        !(await prompts.confirm({ message: `Send your password to ${apiUrl}?`, default: false }))
-      ) {
+      const message =
+        mode === "password" ? `Send your password to ${apiUrl}?` : `Log in to ${apiUrl}?`;
+      if (!(await prompts.confirm({ message, default: false }))) {
         throw new CliError(EXIT.ERROR, "Aborted");
       }
     }
   }
   ctx.out.notice(`Logging in to ${apiUrl}`);
+  return { apiUrl, fromProject };
+}
 
-  // 2. Email and password. The password never comes from argv.
+async function loginWithPassword(
+  ctx: CommandContext,
+  opts: { email?: string; passwordStdin?: boolean },
+): Promise<void> {
+  const { io, prompts } = ctx.deps;
+  const interactive = isInteractive(ctx);
+  const { apiUrl, fromProject } = await resolveLoginTarget(ctx, "password");
+
+  // Email and password. The password never comes from argv.
   let email = opts.email;
   if (!email) {
     if (!interactive) {
@@ -76,7 +103,7 @@ export async function login(
     );
   }
 
-  // 3. Log in and store the session token.
+  // Log in and store the session token.
   let res: LoginResponse;
   try {
     res = await rawApiFor(ctx, apiUrl).login(email, password);
@@ -89,6 +116,17 @@ export async function login(
     }
     throw toCliError(e, { apiUrl });
   }
+  await saveLogin(ctx, apiUrl, fromProject, res);
+}
+
+/** Stores the CLI session and reports it; the same for both login flows. */
+export async function saveLogin(
+  ctx: CommandContext,
+  apiUrl: string,
+  fromProject: boolean,
+  res: LoginResponse,
+): Promise<void> {
+  const { io } = ctx.deps;
   if (!res.token) throw new CliError(EXIT.ERROR, "The server did not return a CLI session");
   const store = await credentialStore(ctx);
   await store.set({ apiUrl, token: res.token, email: res.user.email, expiresAt: res.expiresAt });

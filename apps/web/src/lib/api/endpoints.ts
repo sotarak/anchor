@@ -1,6 +1,7 @@
 import type {
   AuditAction,
   AuditEventDto,
+  CliLoginRequestDto,
   EnvironmentDto,
   FolderDto,
   FolderImportDto,
@@ -9,11 +10,15 @@ import type {
   KeyRotationDto,
   LoginResponse,
   MemberDto,
+  OAuthAuthorizeCheckDto,
+  OAuthAuthorizeRequest,
+  OAuthGrantDto,
   OverviewDto,
   ProjectDto,
   ProjectKeyDto,
   ProjectRole,
   SecretDto,
+  SecretValueType,
   SecretVersionDto,
   ServiceTokenDto,
   SessionDto,
@@ -56,6 +61,28 @@ export const api = {
     revokeSession: (id: string) => apiFetch<void>(`/auth/sessions/${e(id)}`, { method: "DELETE" }),
     resetPassword: (body: { token: string; password: string }) =>
       apiFetch<void>("/auth/password-reset", { method: "POST", body }),
+  },
+  cliLogin: {
+    get: (code: string) => apiFetch<CliLoginRequestDto>(`/auth/cli/requests/${e(code)}`),
+    approve: (code: string) =>
+      apiFetch<void>(`/auth/cli/requests/${e(code)}/approve`, { method: "POST" }),
+    deny: (code: string) =>
+      apiFetch<void>(`/auth/cli/requests/${e(code)}/deny`, { method: "POST" }),
+  },
+  oauth: {
+    /** 200 with the consent details, or with `redirectTo` when the client must get an error. */
+    check: (req: OAuthAuthorizeRequest) =>
+      apiFetch<OAuthAuthorizeCheckDto | { redirectTo: string }>("/oauth/authorize/check", {
+        method: "POST",
+        body: req,
+      }),
+    decide: (req: OAuthAuthorizeRequest, decision: { approve: boolean; allowReveal: boolean }) =>
+      apiFetch<{ redirectTo: string }>("/oauth/authorize/decision", {
+        method: "POST",
+        body: { ...req, ...decision },
+      }),
+    grants: async () => (await apiFetch<{ grants: OAuthGrantDto[] }>("/oauth/grants")).grants,
+    revokeGrant: (id: string) => apiFetch<void>(`/oauth/grants/${e(id)}`, { method: "DELETE" }),
   },
   invites: {
     list: async () => (await apiFetch<{ invites: InviteDto[] }>("/invites")).invites,
@@ -132,7 +159,13 @@ export const api = {
       p: string,
       env: string,
       key: string,
-      body: { value: string; comment: string; path: string },
+      body: {
+        value: string;
+        comment: string;
+        path: string;
+        type: SecretValueType;
+        sensitive: boolean;
+      },
     ) =>
       (
         await apiFetch<{ secret: SecretDto }>(`${envUrl(p, env)}/secrets/${e(key)}`, {
@@ -242,7 +275,7 @@ export const api = {
         name: string;
         permission: "read" | "read-write";
         scopes: { environment: string; path: string }[];
-        expiresInDays: number;
+        expiresInDays: number | null;
       },
     ) =>
       apiFetch<{ serviceToken: ServiceTokenDto; token: string }>(

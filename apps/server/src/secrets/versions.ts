@@ -1,12 +1,12 @@
 import type { SecretDto, SecretVersionDto } from "@anchor/shared";
 import { toBytes } from "../lib/d1";
 import { ApiError } from "../lib/errors";
-import type { VersionRow } from "./repo";
+import { type RawVersionMeta, type VersionRow, versionMeta } from "./repo";
 import { decryptVersion, putSecret, requireSecret, type SecretContext } from "./service";
 
 type Address = { path: string; key: string };
 
-type VersionMetaRow = {
+type VersionMetaRow = RawVersionMeta & {
   version: number;
   comment: string;
   created_at: number;
@@ -14,16 +14,20 @@ type VersionMetaRow = {
   email: string | null;
 };
 
-const META_SELECT = `SELECT v.version, v.comment, v.created_at, v.created_by, u.email
+const META_SELECT = `SELECT v.version, v.comment, v.created_at, v.created_by, u.email,
+    v.value_type, v.sensitive, v.aad_format
   FROM secret_versions v LEFT JOIN users u ON u.id = v.created_by`;
 
 /** created_by holds a user id (service-token writes store NULL; see secrets/routes.ts). */
 function toVersionDto(r: VersionMetaRow): SecretVersionDto {
+  const meta = versionMeta(r);
   return {
     version: r.version,
     comment: r.comment,
     createdAt: r.created_at,
     createdBy: r.created_by && r.email ? { id: r.created_by, label: r.email } : null,
+    type: meta.value_type,
+    sensitive: meta.sensitive,
   };
 }
 
@@ -46,7 +50,7 @@ export async function getVersionValue(
   const row = await ctx.db
     .prepare(
       `SELECT v.version, v.comment, v.created_at, v.created_by, u.email, v.alg, v.key_version,
-         v.iv, v.ciphertext
+         v.iv, v.ciphertext, v.value_type, v.sensitive, v.aad_format
        FROM secret_versions v LEFT JOIN users u ON u.id = v.created_by
        WHERE v.secret_id = ? AND v.version = ?`,
     )
@@ -63,13 +67,14 @@ export async function getVersionValue(
     iv: toBytes(row.iv),
     ciphertext: toBytes(row.ciphertext),
     comment: row.comment,
+    ...versionMeta(row),
   };
   const value = await decryptVersion(ctx, new Map(), secret.id, version, q.version);
   return { ...toVersionDto(row), value };
 }
 
 /**
- * Writes the value and comment of `version` as a new version, under the current KEK and with
+ * Writes the value, comment, type and flag of `version` as a new version, under the current KEK and with
  * the new version's AAD (it goes through putSecret). Content equal to the current one is a no-op.
  */
 export async function rollbackSecret(
@@ -83,6 +88,8 @@ export async function rollbackSecret(
     key: q.key,
     value: old.value,
     comment: old.comment,
+    type: old.type,
+    sensitive: old.sensitive,
   });
   return { secret, changed, fromVersion: before.current_version };
 }

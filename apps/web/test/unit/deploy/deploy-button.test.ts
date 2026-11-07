@@ -40,6 +40,20 @@ describe("Deploy to Cloudflare button", () => {
     expect(cfg.queues.consumers[0].dead_letter_queue).toBe("anchor-reencrypt-dlq");
   });
 
+  it("the OAuth and MCP endpoints run in the Worker; /oauth/authorize stays a dashboard page", () => {
+    // Exact paths: the docs do not promise mid-segment wildcards.
+    expect(wranglerConfig().assets.run_worker_first).toEqual([
+      "/api/*",
+      "/mcp",
+      "/.well-known/oauth-authorization-server",
+      "/.well-known/oauth-protected-resource",
+      "/.well-known/oauth-protected-resource/*",
+      "/oauth/token",
+      "/oauth/register",
+      "/oauth/revoke",
+    ]);
+  });
+
   it("the setup page asks for exactly one secret, the root key, described", () => {
     const keys = read(".dev.vars.example")
       .split("\n")

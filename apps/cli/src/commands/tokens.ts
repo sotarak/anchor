@@ -20,10 +20,15 @@ export function parseScope(input: string): Scope {
   }
 }
 
-function parseDays(input: string): number {
+/** Days 1-365, or `never` (null) for a token that stays valid until revoked. */
+function parseDays(input: string): number | null {
+  if (input === "never") return null;
   const days = /^\d+$/.test(input) ? Number(input) : Number.NaN;
   if (!Number.isInteger(days) || days < 1 || days > 365) {
-    throw new CliError(EXIT.USAGE, "--expires-in must be a whole number of days between 1 and 365");
+    throw new CliError(
+      EXIT.USAGE,
+      "--expires-in must be a whole number of days between 1 and 365, or never",
+    );
   }
   return days;
 }
@@ -43,16 +48,17 @@ export async function tokensCreate(
     expiresInDays,
   });
   const t = res.serviceToken;
-  ctx.out.info(
-    `Created service token ${t.name} (${t.permission}), expires ${new Date(t.expiresAt).toISOString()}`,
-  );
+  const expiry =
+    t.expiresAt === null ? "never expires" : `expires ${new Date(t.expiresAt).toISOString()}`;
+  ctx.out.info(`Created service token ${t.name} (${t.permission}), ${expiry}`);
+  if (t.expiresAt === null) ctx.out.warn("This token stays valid until you revoke it");
   ctx.out.info("Store this token now; it will not be shown again.");
   ctx.out.data(res, () => res.token);
 }
 
 function status(t: ServiceTokenDto, now: number): "active" | "expired" | "revoked" {
   if (t.revokedAt !== null) return "revoked";
-  return t.expiresAt <= now ? "expired" : "active";
+  return t.expiresAt !== null && t.expiresAt <= now ? "expired" : "active";
 }
 
 export async function tokensList(ctx: CommandContext): Promise<void> {
@@ -69,7 +75,7 @@ export async function tokensList(ctx: CommandContext): Promise<void> {
         t.tokenPrefix,
         t.permission,
         t.scopes.map((s) => `${s.environment}:${s.path}`).join(","),
-        formatDate(t.expiresAt),
+        t.expiresAt === null ? "never" : formatDate(t.expiresAt),
         t.lastUsedAt === null ? "never" : formatDate(t.lastUsedAt),
         status(t, now),
       ]),

@@ -21,6 +21,7 @@ rotation work, and it lets CI read secrets with a plain bearer token.
 | Can write to D1 but not run the Worker | Can grant themselves access (insert a session or token hash, change a role or a scope) and then read everything through the API, or point a secret back at an older version. The AAD only stops a ciphertext being moved to another secret, version, environment or project. **Protect D1 write access like access to the Worker** |
 | Steals a service token | Reads (or writes, for `read-write`) only the environments and folders in its scopes, until it expires or is revoked; every value read and every write is audited with the token's id (listing names is not) |
 | Steals a session | Acts as that user until the session expires (7 days for the dashboard, 30 days for the CLI) or is revoked from the **Account** page |
+| Steals an agent's OAuth tokens | Calls the MCP tools as that user within the app's permissions until the refresh token expires (30 days) or the app is revoked on **Account → Connected apps** or the user's password changes; if the agent and the thief both refresh, the grant is revoked |
 | A malicious project member | Limited to the member's role and allowed environments; cannot read the audit log unless a project admin |
 | Reaches a freshly deployed instance's URL before its owner exists | **Becomes the owner**: the first account created at `/setup` owns the instance. Nothing is stored yet at that point, but create the owner right after the deploy, and start over with an empty database if `/setup` says an owner exists that you did not create (see [Troubleshooting](/anchor/troubleshooting/#setup-says-the-instance-already-has-an-owner)) |
 | Controls your Cloudflare account, or the Worker and its secrets | **Reads everything.** Anchor cannot protect against the platform it runs on |
@@ -31,7 +32,13 @@ rotation work, and it lets CI read secrets with a plain bearer token.
 - Each project has its own key (KEK), versioned; the root key wraps every KEK. See the
   [key hierarchy](/anchor/start/architecture/#key-hierarchy).
 - Every ciphertext stores its algorithm and key version, and is bound by AAD to project,
-  environment, secret and version.
+  environment, secret and version. Since 0.4.0 the AAD (format 2) also binds the version's value
+  type and sensitive flag, so changing either column in D1 makes the value fail to decrypt instead
+  of exposing a secret as plain config. Versions written before 0.4.0 keep format 1 and are always
+  read as a sensitive `string`.
+- The value type and the sensitive flag are stored in plaintext next to the ciphertext, so a copy
+  of the database shows which secrets are JSON, PEM, numbers and so on, and which are marked as
+  non-sensitive. It does not show any value.
 - The root key is a Worker secret. It is never in source, `wrangler.jsonc`, logs, the database or
   test fixtures. Losing it loses every value: there is no recovery path by design.
 
@@ -45,6 +52,33 @@ rotation work, and it lets CI read secrets with a plain bearer token.
 - The dashboard session is an `HttpOnly`, `Secure` `__Host-` cookie. State-changing requests
   authenticated by cookie must carry the instance's own `Origin`, or they are rejected (CSRF).
 - Service tokens are accepted only as `Authorization: Bearer`, never from a cookie.
+- A service token created with no expiry (0.4.0) is a standing credential: it works until someone
+  revokes it, so a leak is not retired by time. Scope it narrowly, prefer `read`, and revoke it when
+  it is no longer used. Revocation takes effect on the next request.
+- `anchor login` (0.4.0) uses a browser flow modeled on the OAuth device authorization grant. The
+  CLI keeps a 256-bit device code (prefix `anc_dc_`, only its SHA-256 hash is stored) and polls;
+  the person approves the short code shown in the terminal on the dashboard's `/cli/login` page.
+  Only a dashboard (`web`) session sent as the cookie can approve or deny: a CLI session, even
+  pasted into the cookie, and a service token are refused, so a stolen CLI token cannot mint more
+  sessions. Requests expire after 10 minutes, a device code yields at most one session, and
+  approvals, denials and the resulting login are audited. Residual risk, as with `gh auth login`:
+  someone who starts a login and talks you into approving their code gets a session as you. The
+  approval page shows the code, the client name, the IP and the request's age; approve only a
+  code you just saw in your own terminal.
+- AI agents connect over MCP (0.4.0) with OAuth 2.1: authorization code with PKCE `S256`, public
+  clients registered dynamically, and approval on the dashboard by a `web` session sent as the
+  cookie, like CLI logins. Access tokens (`anc_oat_`) last 1 hour and refresh tokens (`anc_ort_`)
+  30 days; authorization codes (`anc_oac_`) last 5 minutes and work once. Only their SHA-256 hash
+  is stored. A refresh token rotates on every use, and presenting a used one (or a used code)
+  revokes the whole grant, since someone else may hold a copy. Redirect URIs must be `https:` or a
+  loopback address, and the approval page shows the app's name and where it returns. OAuth access
+  tokens work only on `/mcp`, and `/mcp` accepts nothing else, so a session or service token
+  cannot be replayed there and an agent token cannot call the REST API. An agent acts as the
+  approving user with that user's roles, narrowed by its permissions: reading **sensitive** values
+  needs `secrets:reveal`, granted only when the person ticks it, and each such read is audited.
+  Residual risk: a value an agent reads enters the AI model's context and may be kept by the AI
+  provider. Revoking an app on **Account → Connected apps**, disabling the user, or changing or
+  resetting their password stops it on the next request.
 
 ## Authorization
 
@@ -69,7 +103,9 @@ access to `prod:/db`, and a forbidden target is a `403` whether it exists or not
   365 days.
 - Logged: logins (successful and failed), every value read (listing names without values is not
   logged), writes, deletes,
-  rollbacks, permission and membership changes, token creation and revocation, key rotations.
+  rollbacks, permission and membership changes, token creation and revocation, key rotations, and
+  approving, denying and revoking AI agents. Events from an agent carry `via: "mcp"` and its
+  client id.
 - Every event has the actor (user or service token), IP address, user agent, time and target.
   Events never contain secret values or tokens.
 - A secret read that cannot be audited fails.

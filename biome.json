@@ -17,7 +17,8 @@
       "!apps/docs/.astro",
       "!apps/docs/dist",
       "!CODE_OF_CONDUCT.md",
-      "!apps/docs/src/content"
+      "!apps/docs/src/content",
+      "!skills"
     ]
   },
   "formatter": {

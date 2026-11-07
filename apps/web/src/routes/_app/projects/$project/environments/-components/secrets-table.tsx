@@ -106,6 +106,7 @@ export function SecretsTable({
                     <RiKey2Line aria-hidden className="size-4 shrink-0 text-text-soft" />
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="truncate">{s.key}</span>
+                      {s.type !== "string" ? <Tag>{s.type}</Tag> : null}
                       {s.importedFrom ? (
                         <Tooltip content={`Edit in ${source(s.importedFrom)}`}>
                           <Tag tabIndex={0}>{`from ${source(s.importedFrom)}`}</Tag>
@@ -115,16 +116,23 @@ export function SecretsTable({
                   </div>
                 </TableCell>
                 <TableCell className="max-w-64">
-                  <ReferenceValue
-                    // Any write (edit, or delete then re-add) remounts it: a revealed or copied
-                    // value is never the stale plaintext of an earlier version.
-                    key={`${s.version}:${s.updatedAt}`}
-                    project={project}
-                    env={env}
-                    path={path}
-                    secretKey={s.key}
-                    importedFrom={s.importedFrom}
-                  />
+                  {/* Plain config comes with the list and is shown as stored, without reveal. */}
+                  {!s.sensitive ? (
+                    <span className="block truncate text-code-xs text-text-strong" title={s.value}>
+                      {s.value ?? ""}
+                    </span>
+                  ) : (
+                    <ReferenceValue
+                      // Any write (edit, or delete then re-add) remounts it: a revealed or copied
+                      // value is never the stale plaintext of an earlier version.
+                      key={`${s.version}:${s.updatedAt}`}
+                      project={project}
+                      env={env}
+                      path={path}
+                      secretKey={s.key}
+                      importedFrom={s.importedFrom}
+                    />
+                  )}
                 </TableCell>
                 <TableCell className="text-paragraph-sm">
                   {/* Its own column keeps every row one line; the full text is in the tooltip. */}

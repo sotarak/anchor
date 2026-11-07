@@ -1,0 +1,79 @@
+{
+  "name": "@anchor-secrets/nestjs",
+  "version": "0.4.0",
+  "description": "NestJS module that loads configuration and secrets from Anchor at startup",
+  "keywords": [
+    "nestjs",
+    "secrets",
+    "config",
+    "env",
+    "cloudflare",
+    "anchor"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sotarak/anchor.git",
+    "directory": "packages/nestjs"
+  },
+  "homepage": "https://sotarak.github.io/anchor/guides/sdk/",
+  "bugs": {
+    "url": "https://github.com/sotarak/anchor/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check:package": "publint && attw --pack .",
+    "prepack": "node build.mjs"
+  },
+  "dependencies": {
+    "@anchor-secrets/sdk": "workspace:*"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^10.0.0 || ^11.0.0 || ^12.0.0",
+    "@nestjs/core": "^10.0.0 || ^11.0.0 || ^12.0.0",
+    "reflect-metadata": "^0.1.13 || ^0.2.0",
+    "rxjs": "^7.0.0"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@nestjs/common": "^12.4.0",
+    "@nestjs/core": "^12.4.0",
+    "@nestjs/testing": "^12.4.0",
+    "@types/node": "^22.20.5",
+    "esbuild": "^0.28.2",
+    "publint": "^0.3.25",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  }
+}

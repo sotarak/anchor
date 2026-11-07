@@ -1,4 +1,6 @@
 import type { AuditAction } from "./audit";
+import type { OAuthScope } from "./schemas/oauth";
+import type { SecretValueType } from "./value-types";
 
 export type InstanceRole = "owner" | "admin" | "member";
 
@@ -46,6 +48,10 @@ export type SecretDto = {
   version: number;
   comment: string;
   updatedAt: number;
+  /** The value type of the current version (0.4.0). */
+  type: SecretValueType;
+  /** False for plain config: its value is returned without `reveal` (0.4.0). */
+  sensitive: boolean;
   value?: string;
   /** The stored value, present only when `value` was expanded and differs from it (M5). */
   rawValue?: string;
@@ -59,6 +65,8 @@ export type SecretVersionDto = {
   comment: string;
   createdAt: number;
   createdBy: { id: string; label: string } | null;
+  type: SecretValueType;
+  sensitive: boolean;
 };
 
 /** A folder that imports the secrets stored directly at another (environment, path). */
@@ -96,6 +104,27 @@ export type FolderDto = { path: string; name: string };
 export type LoginResponse = { user: UserDto; token?: string; expiresAt: number };
 
 export type SetupStatusDto = { needsSetup: boolean };
+
+/** `POST /auth/cli/start`: what the CLI shows and polls with (browser login, 0.4.0). */
+export type CliLoginStartDto = {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  verificationUriComplete: string;
+  expiresAt: number;
+  /** Seconds between polls of `POST /auth/cli/token`. */
+  interval: number;
+};
+
+/** A pending CLI login as the dashboard shows it before approval. */
+export type CliLoginRequestDto = {
+  userCode: string;
+  clientName: string | null;
+  userAgent: string | null;
+  ip: string | null;
+  createdAt: number;
+  expiresAt: number;
+};
 
 export type SessionDto = {
   /** First 16 hex chars of the stored session id hash, never the hash itself. */
@@ -135,7 +164,8 @@ export type ServiceTokenDto = {
   permission: "read" | "read-write";
   scopes: { environment: string; path: string }[];
   createdAt: number;
-  expiresAt: number;
+  /** null = never expires. */
+  expiresAt: number | null;
   lastUsedAt: number | null;
   revokedAt: number | null;
 };
@@ -152,4 +182,20 @@ export type AuditEventDto = {
   userAgent: string | null;
   requestId: string | null;
   metadata: Record<string, unknown>;
+};
+
+/** POST /oauth/authorize/check: what the consent page shows. */
+export type OAuthAuthorizeCheckDto = {
+  client: { id: string; name: string; redirectHost: string };
+  scopes: OAuthScope[];
+  revealRequested: boolean;
+};
+
+/** An app the user approved (Account → Connected apps). */
+export type OAuthGrantDto = {
+  id: string;
+  clientName: string;
+  scopes: OAuthScope[];
+  createdAt: number;
+  lastUsedAt: number | null;
 };

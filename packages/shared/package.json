@@ -1,11 +1,12 @@
 {
   "name": "@anchor/shared",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./value-decode": "./src/value-decode.ts"
   },
   "scripts": {
     "test": "vitest run",

@@ -5,13 +5,16 @@ import type { RunChild } from "#src/context";
 import { apiError, loggedIn } from "#test/support";
 
 const CANARY = "RUN-CANARY-91c";
-const secret = (key: string, value: string): SecretDto => ({
+const secret = (key: string, value: string, extra: Partial<SecretDto> = {}): SecretDto => ({
   key,
   path: "/",
   version: 1,
   comment: "",
   updatedAt: 0,
+  type: "string",
+  sensitive: true,
   value,
+  ...extra,
 });
 const P = ["--project", "app", "--env", "dev"];
 
@@ -55,6 +58,23 @@ describe("anchor run", () => {
     expect(child.calls[0]?.cmd).toBe("node");
     expect(child.calls[0]?.args).toEqual(["app.js"]);
     expect(child.calls[0]?.env).toMatchObject({ DB_URL: CANARY, FOO: "anchor" });
+  });
+
+  it("run injects canonical strings", async () => {
+    const cli = await loggedIn();
+    const child = fakeRunChild();
+    const r = await cli.run(
+      ["run", ...P, "--", "env"],
+      {
+        listSecrets: async () => [
+          secret("MODELS", '["a","b"]', { type: "list" }),
+          secret("PORT", "8080", { type: "number", sensitive: false }),
+        ],
+      },
+      { runChild: child.runChild },
+    );
+    expect(r.code).toBe(0);
+    expect(child.calls[0]?.env).toMatchObject({ MODELS: '["a","b"]', PORT: "8080" });
   });
 
   it("--no-override keeps existing variables", async () => {

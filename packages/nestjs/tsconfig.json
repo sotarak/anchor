@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"],
+    "experimentalDecorators": true,
+    "paths": {
+      "@anchor-secrets/sdk": ["../sdk/src/index.ts"]
+    }
+  },
+  "include": ["src", "test", "*.mjs", "*.ts"]
+}

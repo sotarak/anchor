@@ -21,6 +21,7 @@ import {
   validate,
 } from "@/components/forms/validate";
 import { ConfirmDialog } from "@/components/overlays/confirm-dialog";
+import { ConnectedApps } from "@/components/settings/connected-apps";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import {
@@ -70,6 +71,9 @@ function AccountPage() {
       </Section>
       <Section id="sessions" title="Sessions">
         <Sessions />
+      </Section>
+      <Section id="connected-apps" title="Connected apps">
+        <ConnectedApps />
       </Section>
     </div>
   );

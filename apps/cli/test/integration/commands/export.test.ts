@@ -7,13 +7,16 @@ import { describe, expect, it } from "vitest";
 import { createNodeSpawner } from "#src/process/spawner";
 import { loggedIn } from "#test/support";
 
-const secret = (key: string, value: string): SecretDto => ({
+const secret = (key: string, value: string, extra: Partial<SecretDto> = {}): SecretDto => ({
   key,
   path: "/",
   version: 1,
   comment: "",
   updatedAt: 0,
+  type: "string",
+  sensitive: true,
   value,
+  ...extra,
 });
 const secrets = [secret("B_KEY", "two words"), secret("A_KEY", "postgres://u:p@h/db")];
 const api = { listSecrets: async () => secrets };
@@ -29,6 +32,21 @@ async function repo(opts: Parameters<typeof loggedIn>[0] = {}) {
 const spawner = createNodeSpawner();
 
 describe("anchor export", () => {
+  it("--format json writes typed values; dotenv writes the stored text", async () => {
+    const typedApi = {
+      listSecrets: async () => [
+        secret("PORT", "8080", { type: "number", sensitive: false }),
+        secret("MODELS", '["a","b"]', { type: "list" }),
+      ],
+    };
+    const json = await loggedIn();
+    const j = await json.run(["export", "--format", "json", ...P], typedApi);
+    expect(JSON.parse(j.out)).toEqual({ MODELS: ["a", "b"], PORT: 8080 });
+    const env = await loggedIn();
+    const d = await env.run(["export", ...P], typedApi);
+    expect(parseDotenv(d.out)).toEqual({ MODELS: '["a","b"]', PORT: "8080" });
+  });
+
   it("refuses TTY stdout without --output", async () => {
     const cli = await loggedIn({ stdoutTTY: true });
     const r = await cli.run(["export", ...P], api);

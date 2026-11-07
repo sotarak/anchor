@@ -74,7 +74,7 @@ describe("auth events", () => {
       actor_id: owner.userId,
       actor_label: "owner@example.test",
     });
-    expect(meta(ok)).toEqual({ client: "cli" });
+    expect(meta(ok)).toEqual({ client: "cli", method: "password" });
     const failed = await auditRows("auth.login_failed");
     expect(failed.map((r) => [r.actor_type, r.actor_id, r.actor_label, meta(r)])).toEqual([
       ["anonymous", null, "owner@example.test", { reason: "invalid_credentials" }],
@@ -165,8 +165,12 @@ describe("secret events", () => {
     expect((await put("DB_URL", "two", "/api")).status).toBe(200);
     const created = await auditRows("secret.created");
     const updated = await auditRows("secret.updated");
-    expect(created.map(meta)).toEqual([{ path: "/api", key: "DB_URL", version: 1 }]);
-    expect(updated.map(meta)).toEqual([{ path: "/api", key: "DB_URL", version: 2 }]);
+    expect(created.map(meta)).toEqual([
+      { path: "/api", key: "DB_URL", version: 1, type: "string", sensitive: true },
+    ]);
+    expect(updated.map(meta)).toEqual([
+      { path: "/api", key: "DB_URL", version: 2, type: "string", sensitive: true },
+    ]);
     expect(created[0]?.environment_id).not.toBeNull();
     expect(created[0]?.target).toBe("DB_URL");
     await api(

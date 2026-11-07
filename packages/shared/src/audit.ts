@@ -38,6 +38,13 @@ export const AUDIT_ACTIONS = [
   "kek.rotation_started",
   "kek.rotation_finished",
   "root_key.rewrapped",
+  // 0.4.0: CLI login through the browser
+  "auth.cli_login_approved",
+  "auth.cli_login_denied",
+  // 0.4.0: OAuth for MCP clients
+  "oauth.authorized",
+  "oauth.denied",
+  "oauth.revoked",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { adminRoutes } from "./admin/routes";
 import { instanceAuditRoutes, projectAuditRoutes } from "./audit/routes";
+import { cliLoginRoutes } from "./auth/cli-login-routes";
 import { authenticate, checkOrigin } from "./auth/middleware";
 import { authRoutes } from "./auth/routes";
 import type { AppEnv } from "./env";
@@ -10,7 +11,10 @@ import { inviteRoutes } from "./invites/routes";
 import { keyRoutes } from "./keys/routes";
 import { errorHandler, notFoundHandler } from "./lib/errors";
 import { requestContext } from "./lib/request";
+import { mcpRoutes } from "./mcp/route";
 import { memberRoutes } from "./members/routes";
+import { consentRoutes } from "./oauth/consent-routes";
+import { publicOAuthRoutes } from "./oauth/public-routes";
 import { projectRoutes } from "./projects/routes";
 import { secretRoutes } from "./secrets/routes";
 import { serviceTokenRoutes } from "./service-tokens/routes";
@@ -30,6 +34,7 @@ export function createApp(): Hono<AppEnv> {
 
   app.get("/api/v1/health", (c) => c.json({ status: "ok" }));
   app.route("/api/v1", authRoutes);
+  app.route("/api/v1", cliLoginRoutes);
   app.route("/api/v1/projects/:project/environments/:env/secrets", secretRoutes);
   app.route("/api/v1/projects/:project/environments/:env/folders", folderRoutes);
   app.route("/api/v1/projects/:project/environments/:env/imports", importRoutes);
@@ -42,6 +47,11 @@ export function createApp(): Hono<AppEnv> {
   app.route("/api/v1/invites", inviteRoutes);
   app.route("/api/v1/audit", instanceAuditRoutes);
   app.route("/api/v1/admin", adminRoutes);
+  app.route("/api/v1/oauth", consentRoutes);
+
+  // OAuth for MCP clients: anonymous, cookie-free, outside /api (spec 2026-11-07-v0.4.0-mcp-oauth).
+  app.route("/", publicOAuthRoutes);
+  app.route("/", mcpRoutes);
 
   app.onError(errorHandler);
   app.notFound(notFoundHandler);

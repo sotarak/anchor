@@ -53,7 +53,7 @@ serviceTokenRoutes.post("/", async (c) => {
       name: body.name,
       permission: body.permission,
       scopes,
-      expiresAt: now + body.expiresInDays * DAY_MS,
+      expiresAt: body.expiresInDays === null ? null : now + body.expiresInDays * DAY_MS,
       createdBy: principal.userId,
     },
     now,
@@ -63,7 +63,12 @@ serviceTokenRoutes.post("/", async (c) => {
     action: "service_token.created",
     projectId: project.id,
     target: row.id,
-    metadata: { name: body.name, permission: body.permission, scopes: serviceToken.scopes },
+    metadata: {
+      name: body.name,
+      permission: body.permission,
+      scopes: serviceToken.scopes,
+      expiresAt: row.expires_at,
+    },
   });
   return c.json<{ serviceToken: ServiceTokenDto; token: string }>({ serviceToken, token }, 201);
 });

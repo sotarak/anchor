@@ -1,3 +1,4 @@
+import type { SecretValueType } from "@anchor/shared";
 import type { Bindings } from "../env";
 import { toBytes } from "../lib/d1";
 import { fromBase64 } from "../lib/encoding";
@@ -107,6 +108,39 @@ export function secretAad(p: {
   version: number;
 }): string {
   return `anchor/secret/v1|${p.projectId}|${p.environmentId}|${p.secretId}|${p.version}`;
+}
+
+/** AAD format 2 (0.4.0): also binds the value type and the sensitive flag of the version. */
+export function secretAadV2(p: {
+  projectId: string;
+  environmentId: string;
+  secretId: string;
+  version: number;
+  type: SecretValueType;
+  sensitive: boolean;
+}): string {
+  return `anchor/secret/v2|${p.projectId}|${p.environmentId}|${p.secretId}|${p.version}|${p.type}|${p.sensitive ? 1 : 0}`;
+}
+
+/** The AAD a version row was sealed with. Format 1 ignores type and flag (they were not bound). */
+export function versionAad(p: {
+  projectId: string;
+  environmentId: string;
+  secretId: string;
+  version: number;
+  format: 1 | 2;
+  type: SecretValueType;
+  sensitive: boolean;
+}): string {
+  const base = {
+    projectId: p.projectId,
+    environmentId: p.environmentId,
+    secretId: p.secretId,
+    version: p.version,
+  };
+  return p.format === 1
+    ? secretAad(base)
+    : secretAadV2({ ...base, type: p.type, sensitive: p.sensitive });
 }
 
 export type WrappedKek = {

@@ -5,6 +5,7 @@ import { api, json, jsonInit, resetDb } from "#test/support";
 const SECRET_CANARY = "LEAK-CANARY-7f3a";
 const REFERENCED_CANARY = "LEAK-CANARY-REFERENCED-41d0";
 const IMPORTED_CANARY = "LEAK-CANARY-IMPORTED-8e6b";
+const TYPED_CANARY = "hunter2-secret";
 const PASSWORD_CANARY = "PW-CANARY-9b2c-wrong-password";
 const OWNER_PASSWORD = "owner password long enough";
 const METHODS = ["log", "info", "warn", "error", "debug"] as const;
@@ -91,6 +92,14 @@ describe("no plaintext in logs", () => {
     ).toBe(201);
     expect((await api(`${url}/BROKEN?expand=true`, h)).status).toBe(400);
 
+    // An invalid typed value is rejected without echoing it, in the response or the logs.
+    const typed = await api(
+      `${url}/PORT`,
+      jsonInit("PUT", { value: TYPED_CANARY, type: "number" }, auth),
+    );
+    expect(typed.status).toBe(400);
+    expect(await typed.text()).not.toContain(TYPED_CANARY);
+
     const output = spies
       .flatMap((s) => s.mock.calls)
       .map((args: unknown[]) =>
@@ -99,6 +108,7 @@ describe("no plaintext in logs", () => {
       .join("\n");
     for (const canary of [
       SECRET_CANARY,
+      TYPED_CANARY,
       REFERENCED_CANARY,
       IMPORTED_CANARY,
       PASSWORD_CANARY,

@@ -110,6 +110,11 @@ function serializeMetadata(input: AuditInput): string {
  * responding, so a failed audit write fails the request (no unaudited secret reads).
  */
 export async function recordAudit(c: Context<AppEnv>, input: AuditInput): Promise<void> {
+  // Through MCP: say so, and which OAuth client, on every event (spec 2026-11-07-v0.4.0-mcp-oauth).
+  const oauth = c.get("oauth");
+  if (oauth) {
+    input = { ...input, metadata: { ...input.metadata, via: "mcp", clientId: oauth.clientId } };
+  }
   await insertAudit(c.env.DB, input, serializeMetadata(input), {
     actor: input.actor ?? actorOf(c.get("principal")),
     ip: c.get("clientIp") ?? null,

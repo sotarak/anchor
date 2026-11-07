@@ -40,6 +40,32 @@ beforeEach(async () => {
 });
 
 describe("reference expansion", () => {
+  it("references are literal in typed values", async () => {
+    await put("dev", "/", "PASS", "hunter2");
+    await api(
+      `${secretsUrl("dev")}/CFG`,
+      jsonInit("PUT", { value: '{"p":"${PASS}"}', type: "json" }, { token: owner }),
+    );
+    const cfg = (await secrets(await list("dev", "expand=true&reveal=true"))).find(
+      (s) => s.key === "CFG",
+    );
+    expect(cfg?.value).toBe('{"p":"${PASS}"}');
+    expect(cfg).not.toHaveProperty("rawValue");
+    const one = await json<{ secret: SecretDto }>(await get("dev", "CFG", "expand=true"));
+    expect(one.secret.value).toBe('{"p":"${PASS}"}');
+    expect(one.secret).not.toHaveProperty("rawValue");
+  });
+
+  it("a string may reference a typed secret", async () => {
+    await api(
+      `${secretsUrl("dev")}/PORT`,
+      jsonInit("PUT", { value: "8080", type: "number" }, { token: owner }),
+    );
+    await put("dev", "/", "URL", "http://h:${PORT}");
+    const { secret } = await json<{ secret: SecretDto }>(await get("dev", "URL", "expand=true"));
+    expect(secret.value).toBe("http://h:8080");
+  });
+
   it("expand=true returns expanded value and rawValue; without expand only raw value", async () => {
     await put("dev", "/db", "PASSWORD", "hunter2");
     await put("dev", "/db", "URL", "postgres://u:${PASSWORD}@h/db");

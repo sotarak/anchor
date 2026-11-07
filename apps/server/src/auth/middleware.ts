@@ -61,3 +61,22 @@ export function requireUser(c: Context<AppEnv>): UserPrincipal {
   }
   return principal;
 }
+
+/**
+ * A person signed in to the dashboard: a user session presented as the cookie whose session row
+ * is a `web` session. CLI sessions (even pasted into the cookie) and service tokens are refused,
+ * so a stolen CLI token cannot approve more CLI logins.
+ */
+export async function requireWebUser(
+  c: Context<AppEnv>,
+  message = "Approve CLI logins from the dashboard",
+): Promise<UserPrincipal> {
+  const principal = requirePrincipal(c);
+  const refuse = () => new ApiError(403, "forbidden", message);
+  if (principal.type !== "user" || c.get("authVia") !== "cookie") throw refuse();
+  const row = await c.env.DB.prepare("SELECT kind FROM sessions WHERE id = ?")
+    .bind(principal.sessionId)
+    .first<{ kind: string }>();
+  if (row?.kind !== "web") throw refuse();
+  return principal;
+}

@@ -1,6 +1,6 @@
-import type { SecretDto } from "@anchor/shared";
+import { checkTypedValue, type SecretDto, type SecretValueType } from "@anchor/shared";
 import { AEAD_ALG, open, seal } from "../crypto/aead";
-import { type RootKeyring, secretAad } from "../crypto/keyring";
+import { type RootKeyring, versionAad } from "../crypto/keyring";
 import { ensureFolders } from "../folders/repo";
 import { isRetiredKekWrite, isUniqueViolation } from "../lib/d1";
 import { utf8Decode, utf8Encode } from "../lib/encoding";
@@ -42,12 +42,26 @@ async function kekFor(ctx: SecretContext, cache: KekCache, version: number): Pro
   return kek;
 }
 
-function aadFor(ctx: SecretContext, secretId: string, version: number): string {
-  return secretAad({
+export type VersionMetaInput = { type: SecretValueType; sensitive: boolean };
+
+const metaOf = (v: VersionRow | null): VersionMetaInput => ({
+  type: v?.value_type ?? "string",
+  sensitive: v?.sensitive ?? true,
+});
+
+function aadFor(
+  ctx: SecretContext,
+  secretId: string,
+  v: Pick<VersionRow, "version" | "value_type" | "sensitive" | "aad_format">,
+): string {
+  return versionAad({
     projectId: ctx.project.id,
     environmentId: ctx.environment.id,
     secretId,
-    version,
+    version: v.version,
+    format: v.aad_format,
+    type: v.value_type,
+    sensitive: v.sensitive,
   });
 }
 
@@ -63,11 +77,7 @@ export async function decryptVersion(
   if (!v || v.version !== expectedVersion || v.alg !== AEAD_ALG) throw fail();
   const kek = await kekFor(ctx, cache, v.key_version);
   try {
-    const plain = await open(
-      kek,
-      { iv: v.iv, ciphertext: v.ciphertext },
-      aadFor(ctx, secretId, v.version),
-    );
+    const plain = await open(kek, { iv: v.iv, ciphertext: v.ciphertext }, aadFor(ctx, secretId, v));
     return utf8Decode(plain);
   } catch {
     throw fail();
@@ -81,13 +91,21 @@ async function encryptVersion(
   version: number,
   value: string,
   comment: string,
+  meta: VersionMetaInput,
 ): Promise<VersionRow> {
   const keyVersion = ctx.project.current_key_version;
   const kek = await kekFor(ctx, cache, keyVersion);
-  const sealed = await seal(kek, utf8Encode(value), aadFor(ctx, secretId, version));
-  return {
-    secret_id: secretId,
+  // New versions always use AAD format 2, which binds the type and the flag.
+  const fields = {
     version,
+    value_type: meta.type,
+    sensitive: meta.sensitive,
+    aad_format: 2 as const,
+  };
+  const sealed = await seal(kek, utf8Encode(value), aadFor(ctx, secretId, fields));
+  return {
+    ...fields,
+    secret_id: secretId,
     alg: AEAD_ALG,
     key_version: keyVersion,
     iv: sealed.iv,
@@ -101,9 +119,18 @@ function toDto(
   version: number,
   comment: string,
   updatedAt: number,
+  meta: VersionMetaInput,
   value?: string,
 ): SecretDto {
-  const dto: SecretDto = { key: row.key, path: row.path, version, comment, updatedAt };
+  const dto: SecretDto = {
+    key: row.key,
+    path: row.path,
+    version,
+    comment,
+    updatedAt,
+    type: meta.type,
+    sensitive: meta.sensitive,
+  };
   if (value !== undefined) dto.value = value;
   return dto;
 }
@@ -132,10 +159,31 @@ export async function requireSecret(
 
 export async function putSecret(
   ctx: SecretContext,
-  input: { path: string; key: string; value: string; comment: string },
+  input: {
+    path: string;
+    key: string;
+    value: string;
+    comment: string;
+    type?: SecretValueType;
+    sensitive?: boolean;
+  },
 ): Promise<{ secret: SecretDto; created: boolean; changed: boolean }> {
   const cache: KekCache = new Map();
   const found = await findSecretWithVersion(ctx.db, ctx.environment.id, input.path, input.key);
+  // Omitted type/flag are inherited from the current version, so old clients keep a typed
+  // secret's type (and its validation) when they update the value.
+  const meta: VersionMetaInput = {
+    type: input.type ?? found?.current?.value_type ?? "string",
+    sensitive: input.sensitive ?? found?.current?.sensitive ?? true,
+  };
+  const check = checkTypedValue(meta.type, input.value);
+  if (!check.ok) {
+    throw new ApiError(
+      400,
+      "bad_request",
+      `value is not valid for type ${meta.type}: ${check.reason}`,
+    );
+  }
 
   if (!found) {
     const row: SecretRow = {
@@ -147,13 +195,13 @@ export async function putSecret(
       current_version: 1,
       updated_at: ctx.now,
     };
-    const v = await encryptVersion(ctx, cache, row.id, 1, input.value, input.comment);
+    const v = await encryptVersion(ctx, cache, row.id, 1, input.value, input.comment, meta);
     await batchOrConflict(ctx.db, [
       insertSecretStatement(ctx.db, row, ctx.now),
       insertVersionStatement(ctx.db, v, ctx.actorId, ctx.now),
       ...ensureFolders(ctx.db, ctx.environment.id, input.path, ctx.now),
     ]);
-    return { secret: toDto(row, 1, input.comment, ctx.now), created: true, changed: true };
+    return { secret: toDto(row, 1, input.comment, ctx.now, meta), created: true, changed: true };
   }
 
   const { secret: existing, current } = found;
@@ -164,13 +212,24 @@ export async function putSecret(
     current,
     existing.current_version,
   );
-  if (currentValue === input.value && current?.comment === input.comment) {
-    const secret = toDto(existing, existing.current_version, input.comment, existing.updated_at);
+  if (
+    currentValue === input.value &&
+    current?.comment === input.comment &&
+    current.value_type === meta.type &&
+    current.sensitive === meta.sensitive
+  ) {
+    const secret = toDto(
+      existing,
+      existing.current_version,
+      input.comment,
+      existing.updated_at,
+      meta,
+    );
     return { secret, created: false, changed: false };
   }
 
   const next = existing.current_version + 1;
-  const v = await encryptVersion(ctx, cache, existing.id, next, input.value, input.comment);
+  const v = await encryptVersion(ctx, cache, existing.id, next, input.value, input.comment, meta);
   // The version insert fails on the (secret_id, version) PK if another writer got there first,
   // which rolls back the whole batch: no orphan version, current_version unchanged.
   await batchOrConflict(ctx.db, [
@@ -178,7 +237,11 @@ export async function putSecret(
     setCurrentVersionStatement(ctx.db, existing.id, next, ctx.now),
     ...ensureFolders(ctx.db, ctx.environment.id, input.path, ctx.now),
   ]);
-  return { secret: toDto(existing, next, input.comment, ctx.now), created: false, changed: true };
+  return {
+    secret: toDto(existing, next, input.comment, ctx.now, meta),
+    created: false,
+    changed: true,
+  };
 }
 
 export async function listSecrets(
@@ -192,7 +255,16 @@ export async function listSecrets(
     const value = q.reveal
       ? await decryptVersion(ctx, cache, row.id, current, row.current_version)
       : undefined;
-    out.push(toDto(row, row.current_version, current?.comment ?? "", row.updated_at, value));
+    out.push(
+      toDto(
+        row,
+        row.current_version,
+        current?.comment ?? "",
+        row.updated_at,
+        metaOf(current),
+        value,
+      ),
+    );
   }
   return out;
 }
@@ -203,7 +275,14 @@ export async function getSecret(
 ): Promise<SecretDto> {
   const { secret: row, current } = await requireSecret(ctx, q.path, q.key);
   const value = await decryptVersion(ctx, new Map(), row.id, current, row.current_version);
-  return toDto(row, row.current_version, current?.comment ?? "", row.updated_at, value);
+  return toDto(
+    row,
+    row.current_version,
+    current?.comment ?? "",
+    row.updated_at,
+    metaOf(current),
+    value,
+  );
 }
 
 export async function deleteSecret(

@@ -8,7 +8,7 @@ import {
   updateEnvironmentBodySchema,
   updateProjectBodySchema,
 } from "@anchor/shared";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { recordAudit } from "../audit/record";
 import { requirePrincipal } from "../auth/middleware";
@@ -42,7 +42,8 @@ function withAccess(dto: ProjectDto, access: ProjectDto["access"] | null | undef
   return access ? { ...dto, access } : dto;
 }
 
-projectRoutes.get("/", async (c) => {
+/** The projects the caller can see, with the calling user's access. Shared with MCP. */
+export async function listProjectsWithAccess(c: Context<AppEnv>): Promise<ProjectDto[]> {
   const principal = requirePrincipal(c);
   const projects = await listProjectsForPrincipal(c.env.DB, principal);
   const access = await resolveProjectAccessMany(
@@ -50,9 +51,27 @@ projectRoutes.get("/", async (c) => {
     principal,
     projects.map((p) => p.id),
   );
-  return c.json<{ projects: ProjectDto[] }>({
-    projects: projects.map((p) => withAccess(toProjectDto(p), access.get(p.id))),
-  });
+  return projects.map((p) => withAccess(toProjectDto(p), access.get(p.id)));
+}
+
+/** A project's environments the caller may read. Shared with MCP. */
+export async function listVisibleEnvironments(
+  c: Context<AppEnv>,
+  projectSlug: string,
+): Promise<EnvironmentDto[]> {
+  const principal = requirePrincipal(c);
+  const project = await getProjectBySlug(c.env.DB, projectSlug);
+  await authorize(c.env.DB, principal, "project:read", { projectId: project.id });
+  const [environments, visible] = await Promise.all([
+    listEnvironments(c.env.DB, project.id),
+    visibleEnvironmentIds(c.env.DB, principal, project.id),
+  ]);
+  const shown = visible === "all" ? environments : environments.filter((e) => visible.has(e.id));
+  return shown.map(toEnvironmentDto);
+}
+
+projectRoutes.get("/", async (c) => {
+  return c.json<{ projects: ProjectDto[] }>({ projects: await listProjectsWithAccess(c) });
 });
 
 projectRoutes.post("/", async (c) => {
@@ -127,15 +146,8 @@ projectRoutes.delete("/:project", async (c) => {
 });
 
 projectRoutes.get("/:project/environments", async (c) => {
-  const principal = requirePrincipal(c);
-  const project = await getProjectBySlug(c.env.DB, c.req.param("project"));
-  await authorize(c.env.DB, principal, "project:read", { projectId: project.id });
-  const [environments, visible] = await Promise.all([
-    listEnvironments(c.env.DB, project.id),
-    visibleEnvironmentIds(c.env.DB, principal, project.id),
-  ]);
-  const shown = visible === "all" ? environments : environments.filter((e) => visible.has(e.id));
-  return c.json<{ environments: EnvironmentDto[] }>({ environments: shown.map(toEnvironmentDto) });
+  const environments = await listVisibleEnvironments(c, c.req.param("project"));
+  return c.json<{ environments: EnvironmentDto[] }>({ environments });
 });
 
 projectRoutes.post("/:project/environments", async (c) => {

@@ -7,7 +7,9 @@ import {
   kekAad,
   type RootKeyEnv,
   secretAad,
+  secretAadV2,
   unwrapKek,
+  versionAad,
   type WrappedKek,
 } from "#src/crypto/keyring";
 import { toBase64, utf8Encode } from "#src/lib/encoding";
@@ -113,6 +115,22 @@ describe("AAD builders", () => {
     expect(kekAad("p1", 2)).toBe("anchor/kek/v1|p1|2");
     expect(secretAad({ projectId: "p", environmentId: "e", secretId: "s", version: 3 })).toBe(
       "anchor/secret/v1|p|e|s|3",
+    );
+  });
+  it("v2 binds the type and the sensitive flag", () => {
+    const p = { projectId: "p", environmentId: "e", secretId: "s", version: 3 };
+    expect(secretAadV2({ ...p, type: "json", sensitive: false })).toBe(
+      "anchor/secret/v2|p|e|s|3|json|0",
+    );
+    expect(secretAadV2({ ...p, type: "string", sensitive: true })).toBe(
+      "anchor/secret/v2|p|e|s|3|string|1",
+    );
+  });
+  it("versionAad picks the format and ignores metadata for format 1", () => {
+    const p = { projectId: "p", environmentId: "e", secretId: "s", version: 3 };
+    expect(versionAad({ ...p, format: 1, type: "json", sensitive: false })).toBe(secretAad(p));
+    expect(versionAad({ ...p, format: 2, type: "pem", sensitive: true })).toBe(
+      secretAadV2({ ...p, type: "pem", sensitive: true }),
     );
   });
 });

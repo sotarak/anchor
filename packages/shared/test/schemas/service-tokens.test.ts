@@ -21,6 +21,11 @@ describe("createServiceTokenBodySchema", () => {
     expect(ok(365)).toBe(true);
   });
 
+  it("serviceToken accepts expiresInDays null for no expiry", () => {
+    const parsed = createServiceTokenBodySchema.parse({ ...valid, expiresInDays: null });
+    expect(parsed.expiresInDays).toBeNull();
+  });
+
   it("serviceToken normalizes scope paths", () => {
     const parsed = createServiceTokenBodySchema.parse({
       ...valid,

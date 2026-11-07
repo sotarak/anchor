@@ -15,8 +15,17 @@ const versions: SecretVersionDto[] = [
     comment: "Stripe key",
     createdAt: T + 86_400_000,
     createdBy: { id: "u", label: "owner@example.com" },
+    type: "string",
+    sensitive: true,
   },
-  { version: 1, comment: "first", createdAt: T, createdBy: null },
+  {
+    version: 1,
+    comment: "first",
+    createdAt: T,
+    createdBy: null,
+    type: "string",
+    sensitive: true,
+  },
 ];
 
 function setup(opts: { project?: ProjectDto; versions?: SecretVersionDto[] | "slow" } = {}) {

@@ -19,7 +19,7 @@ Options:
   -h, --help                  display help for command
 
 Commands:
-  login [options]             Log in with email and password and store a CLI session (30 days)
+  login [options]             Log in (in the browser by default) and store a CLI session (30 days)
   logout                      Revoke the stored session on the server and delete it locally
   whoami                      Show the current user or service token
   init                        Link this directory to a project and default environment
@@ -267,11 +267,13 @@ Examples:
 exports[`help text > help for login 1`] = `
 "Usage: anchor login [options]
 
-Log in with email and password and store a CLI session (30 days)
+Log in (in the browser by default) and store a CLI session (30 days)
 
 Options:
-  --email <email>   account email (prompted when omitted in a terminal)
-  --password-stdin  read the password from stdin (for scripts)
+  --no-browser      print the login URL without opening a browser
+  --with-password   log in with email and password instead of the browser
+  --email <email>   account email, implies --with-password
+  --password-stdin  read the password from stdin, implies --with-password
   -h, --help        display help for command
 
 Global Options:
@@ -287,8 +289,9 @@ Global Options:
   -y, --yes         skip confirmations
 
 Examples:
-  $ anchor login --api-url https://anchor.example.com
-  $ printf '%s' "$PASSWORD" | anchor login --email me@example.com --password-stdin
+  $ anchor login
+  $ anchor login --api-url https://anchor.example.com --no-browser
+  $ printf '%s' "$PW" | anchor login --with-password --email me@example.com --password-stdin
 
 "
 `;
@@ -426,13 +429,17 @@ Global Options:
   -y, --yes                 skip confirmations
 
 Commands:
-  list [options]            List secret names and metadata (values only with --reveal)
-  get [options] <key>       Print one secret (the value is masked in a terminal unless --reveal)
+  list [options]            List secrets with their type and metadata (sensitive values only with
+                            --reveal)
+  get [options] <key>       Print one secret (a sensitive value is masked in a terminal unless
+                            --reveal)
   history <key>             List the versions of a secret (no values)
   rollback [options] <key>  Restore a past version as a new version (asks for confirmation; --yes in
                             scripts)
   set [options] <key>       Create or update a secret; the value comes from stdin, --from-file or a
                             prompt
+  import [options]          Import a dotenv, JSON or YAML file; nested keys become UPPER_SNAKE and
+                            types are inferred
   delete <key>              Delete a secret (asks for confirmation; --yes in scripts)
   help [command]            display help for command
 "
@@ -471,7 +478,7 @@ Examples:
 exports[`help text > help for secrets get 1`] = `
 "Usage: anchor secrets get [options] <key>
 
-Print one secret (the value is masked in a terminal unless --reveal)
+Print one secret (a sensitive value is masked in a terminal unless --reveal)
 
 Arguments:
   key               secret key
@@ -533,10 +540,44 @@ Examples:
 "
 `;
 
+exports[`help text > help for secrets import 1`] = `
+"Usage: anchor secrets import [options]
+
+Import a dotenv, JSON or YAML file; nested keys become UPPER_SNAKE and types are inferred
+
+Options:
+  --from-file <path>      file to import (otherwise piped stdin with --format)
+  --format <format>       file format (default: from the extension) (choices: "dotenv", "json",
+                          "yaml")
+  --overwrite             write a new version of keys that already exist (default: skip them)
+  --non-sensitive <glob>  keys matching this glob (* and ?) are plain config; repeatable
+  --comment <text>        comment stored with every imported secret
+  --dry-run               show what would be written and stop
+  -h, --help              display help for command
+
+Global Options:
+  --version               print the CLI version
+  --json                  print machine-readable JSON on stdout
+  -q, --quiet             suppress progress messages
+  --no-color              disable colored output
+  --debug                 print request diagnostics to stderr (never secret values)
+  --api-url <url>         Anchor server URL
+  --project <slug>        project slug
+  --env <slug>            environment slug
+  --path <path>           secret folder path
+  -y, --yes               skip confirmations
+
+Examples:
+  $ anchor secrets import --from-file application.config.yaml --env prod --path /shared --non-sensitive 'CONFIGS_CONTEXT_*' --non-sensitive 'CONFIGS_AGENT_*' --dry-run
+  $ anchor secrets import --from-file apps/service-agent/.env --env prod --path /service-agent
+
+"
+`;
+
 exports[`help text > help for secrets list 1`] = `
 "Usage: anchor secrets list [options]
 
-List secret names and metadata (values only with --reveal)
+List secrets with their type and metadata (sensitive values only with --reveal)
 
 Options:
   --reveal          include values
@@ -603,6 +644,10 @@ Arguments:
 Options:
   --from-file <path>  read the value from a file (exact bytes)
   --comment <text>    comment stored with the secret
+  --type <type>       value type, checked before sending (default: keep the current) (choices:
+                      "string", "json", "pem", "number", "boolean", "list")
+  --sensitive         mask the value unless revealed (default for new secrets)
+  --no-sensitive      plain config: shown without --reveal
   -h, --help          display help for command
 
 Global Options:
@@ -620,7 +665,8 @@ Global Options:
 Examples:
   $ anchor secrets set DB_URL            # prompts for the value
   $ printf '%s' "$DB_URL" | anchor secrets set DB_URL
-  $ anchor secrets set TLS_KEY --from-file key.pem
+  $ anchor secrets set TLS_KEY --from-file key.pem --type pem
+  $ printf 8080 | anchor secrets set APP_PORT --type number --no-sensitive
 
 "
 `;
@@ -663,7 +709,7 @@ Options:
   --scope <env[:path]>       environment and optional path prefix; repeatable (default: current env,
                              /)
   --permission <permission>  access level (choices: "read", "read-write", default: "read")
-  --expires-in <days>        lifetime in days (1-365) (default: "90")
+  --expires-in <days>        lifetime in days (1-365) or never (default: "90")
   -h, --help                 display help for command
 
 Global Options:
@@ -681,6 +727,7 @@ Global Options:
 Examples:
   $ anchor tokens create --name ci --scope prod --permission read
   $ anchor tokens create --name deploy --scope prod:/api --expires-in 30 --json
+  $ anchor tokens create --name home-server --scope prod --expires-in never
 
 "
 `;

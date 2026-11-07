@@ -58,6 +58,7 @@ describe("help text", () => {
         "secrets delete",
         "secrets get",
         "secrets history",
+        "secrets import",
         "secrets list",
         "secrets rollback",
         "secrets set",

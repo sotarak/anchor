@@ -4,6 +4,7 @@ import type { AuditFilters } from "./endpoints";
 export const qk = {
   me: ["me"] as const,
   setupStatus: ["setup-status"] as const,
+  cliLogin: (code: string) => ["cli-login", code] as const,
   projects: ["projects"] as const,
   project: (p: string) => ["projects", p] as const,
   overview: (p: string, path: string) => ["projects", p, "overview", path] as const,
@@ -29,4 +30,6 @@ export const qk = {
   audit: (filters: AuditFilters) => ["audit", filters] as const,
   projectAudit: (p: string, filters: AuditFilters) => ["projects", p, "audit", filters] as const,
   sessions: ["sessions"] as const,
+  oauthGrants: ["oauth-grants"] as const,
+  oauthCheck: (query: string) => ["oauth-check", query] as const,
 };

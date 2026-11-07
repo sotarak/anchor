@@ -457,8 +457,15 @@ describe("option validation", () => {
 });
 
 describe("cancellation with caching on", () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // The aborts below land 10 ms in; pin the jitter so the first retry wait (125 ms) is still running.
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
   const busy = () => json({ error: { code: "unavailable", message: "Busy" } }, 503);
 
   it("stops the request when its only caller aborts during a retry wait", async () => {

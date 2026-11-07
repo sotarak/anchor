@@ -182,7 +182,13 @@ secretRoutes.put("/:key", async (c) => {
       projectId: target.project.id,
       environmentId: target.environment.id,
       target: key,
-      metadata: { path: body.path, key, version: secret.version },
+      metadata: {
+        path: body.path,
+        key,
+        version: secret.version,
+        type: secret.type,
+        sensitive: secret.sensitive,
+      },
     });
   }
   // The service never sets value on a put result; strip defensively so a write never echoes it.

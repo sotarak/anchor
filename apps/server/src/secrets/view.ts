@@ -127,6 +127,8 @@ function toDto(found: SecretWithVersion, source: Source, value?: string): Secret
     version: found.secret.current_version,
     comment: found.current?.comment ?? "",
     updatedAt: found.secret.updated_at,
+    type: found.current?.value_type ?? "string",
+    sensitive: found.current?.sensitive ?? true,
   };
   if (value !== undefined) dto.value = value;
   if (source.importedFrom) dto.importedFrom = source.importedFrom;

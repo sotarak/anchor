@@ -40,8 +40,24 @@ const project: ProjectDto = {
 
 /** Metadata only, as `GET /secrets` returns without reveal. */
 const secrets: SecretDto[] = [
-  { key: "API_KEY", path: "/", version: 2, comment: "Stripe key", updatedAt: T0 + DAY },
-  { key: "DATABASE_URL", path: "/", version: 1, comment: "", updatedAt: T0 },
+  {
+    key: "API_KEY",
+    path: "/",
+    version: 2,
+    comment: "Stripe key",
+    updatedAt: T0 + DAY,
+    type: "string",
+    sensitive: true,
+  },
+  {
+    key: "DATABASE_URL",
+    path: "/",
+    version: 1,
+    comment: "",
+    updatedAt: T0,
+    type: "string",
+    sensitive: true,
+  },
 ];
 
 const serviceToken: ServiceTokenDto = {

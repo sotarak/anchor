@@ -89,7 +89,19 @@ describe("/projects/$project/environments/$env", () => {
 
   it("a long comment is truncated in its own column", async () => {
     const long = "c".repeat(300);
-    setup({ secrets: [{ key: "LONG", path: "/", version: 1, comment: long, updatedAt: 0 }] });
+    setup({
+      secrets: [
+        {
+          key: "LONG",
+          path: "/",
+          version: 1,
+          comment: long,
+          updatedAt: 0,
+          type: "string",
+          sensitive: true,
+        },
+      ],
+    });
     const { user } = await renderApp("/projects/app/environments/dev");
     const cell = within(await rowOf("LONG")).getAllByRole("cell")[2] as HTMLElement;
     const text = within(cell).getByText(long);

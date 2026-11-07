@@ -54,6 +54,40 @@ describe("secret versions", () => {
     expect(body.versions[0]).not.toHaveProperty("value");
   });
 
+  it("versions carry their own type and flag", async () => {
+    await api(
+      `${base()}/K`,
+      jsonInit("PUT", { value: '{"a":1}', type: "json", path: "/" }, { token: owner.token }),
+    );
+    await api(
+      `${base()}/K`,
+      jsonInit("PUT", { value: "x", type: "string", sensitive: false }, { token: owner.token }),
+    );
+    const body = await json<{ versions: SecretVersionDto[] }>(await versions("K"));
+    expect(body.versions.map((v) => [v.version, v.type, v.sensitive])).toEqual([
+      [2, "string", false],
+      [1, "json", true],
+    ]);
+  });
+
+  it("rollback restores the old type and flag", async () => {
+    await api(
+      `${base()}/K`,
+      jsonInit("PUT", { value: '{"a":1}', type: "json", path: "/" }, { token: owner.token }),
+    );
+    await api(
+      `${base()}/K`,
+      jsonInit("PUT", { value: "plain", type: "string", sensitive: false }, { token: owner.token }),
+    );
+    expect((await rollback("K", 1)).status).toBe(200);
+    expect(await current("K")).toMatchObject({
+      version: 3,
+      type: "json",
+      sensitive: true,
+      value: '{"a":1}',
+    });
+  });
+
   it("unknown secret -> 404", async () => {
     expect((await versions("NOPE")).status).toBe(404);
   });

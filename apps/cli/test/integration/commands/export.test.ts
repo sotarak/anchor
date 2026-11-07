@@ -13,6 +13,8 @@ const secret = (key: string, value: string): SecretDto => ({
   version: 1,
   comment: "",
   updatedAt: 0,
+  type: "string",
+  sensitive: true,
   value,
 });
 const secrets = [secret("B_KEY", "two words"), secret("A_KEY", "postgres://u:p@h/db")];

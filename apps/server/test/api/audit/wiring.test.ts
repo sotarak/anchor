@@ -165,8 +165,12 @@ describe("secret events", () => {
     expect((await put("DB_URL", "two", "/api")).status).toBe(200);
     const created = await auditRows("secret.created");
     const updated = await auditRows("secret.updated");
-    expect(created.map(meta)).toEqual([{ path: "/api", key: "DB_URL", version: 1 }]);
-    expect(updated.map(meta)).toEqual([{ path: "/api", key: "DB_URL", version: 2 }]);
+    expect(created.map(meta)).toEqual([
+      { path: "/api", key: "DB_URL", version: 1, type: "string", sensitive: true },
+    ]);
+    expect(updated.map(meta)).toEqual([
+      { path: "/api", key: "DB_URL", version: 2, type: "string", sensitive: true },
+    ]);
     expect(created[0]?.environment_id).not.toBeNull();
     expect(created[0]?.target).toBe("DB_URL");
     await api(

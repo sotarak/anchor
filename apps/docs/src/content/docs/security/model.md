@@ -31,7 +31,13 @@ rotation work, and it lets CI read secrets with a plain bearer token.
 - Each project has its own key (KEK), versioned; the root key wraps every KEK. See the
   [key hierarchy](/anchor/start/architecture/#key-hierarchy).
 - Every ciphertext stores its algorithm and key version, and is bound by AAD to project,
-  environment, secret and version.
+  environment, secret and version. Since 0.4.0 the AAD (format 2) also binds the version's value
+  type and sensitive flag, so changing either column in D1 makes the value fail to decrypt instead
+  of exposing a secret as plain config. Versions written before 0.4.0 keep format 1 and are always
+  read as a sensitive `string`.
+- The value type and the sensitive flag are stored in plaintext next to the ciphertext, so a copy
+  of the database shows which secrets are JSON, PEM, numbers and so on, and which are marked as
+  non-sensitive. It does not show any value.
 - The root key is a Worker secret. It is never in source, `wrangler.jsonc`, logs, the database or
   test fixtures. Losing it loses every value: there is no recovery path by design.
 

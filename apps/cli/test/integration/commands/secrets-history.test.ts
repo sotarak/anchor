@@ -10,13 +10,24 @@ const versions: SecretVersionDto[] = [
     comment: "rotate",
     createdAt: Date.UTC(2026, 10, 3),
     createdBy: { id: "u1", label: "a@x.io" },
+    type: "string",
+    sensitive: true,
   },
-  { version: 2, comment: "", createdAt: Date.UTC(2026, 10, 2), createdBy: null },
+  {
+    version: 2,
+    comment: "",
+    createdAt: Date.UTC(2026, 10, 2),
+    createdBy: null,
+    type: "string",
+    sensitive: true,
+  },
   {
     version: 1,
     comment: "first",
     createdAt: Date.UTC(2026, 10, 1),
     createdBy: { id: "u1", label: "a@x.io" },
+    type: "string",
+    sensitive: true,
   },
 ];
 const secret = (version: number): SecretDto => ({
@@ -25,6 +36,8 @@ const secret = (version: number): SecretDto => ({
   version,
   comment: "first",
   updatedAt: 0,
+  type: "string",
+  sensitive: true,
 });
 
 describe("anchor secrets history", () => {

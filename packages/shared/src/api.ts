@@ -1,4 +1,5 @@
 import type { AuditAction } from "./audit";
+import type { SecretValueType } from "./value-types";
 
 export type InstanceRole = "owner" | "admin" | "member";
 
@@ -46,6 +47,10 @@ export type SecretDto = {
   version: number;
   comment: string;
   updatedAt: number;
+  /** The value type of the current version (0.4.0). */
+  type: SecretValueType;
+  /** False for plain config: its value is returned without `reveal` (0.4.0). */
+  sensitive: boolean;
   value?: string;
   /** The stored value, present only when `value` was expanded and differs from it (M5). */
   rawValue?: string;
@@ -59,6 +64,8 @@ export type SecretVersionDto = {
   comment: string;
   createdAt: number;
   createdBy: { id: string; label: string } | null;
+  type: SecretValueType;
+  sensitive: boolean;
 };
 
 /** A folder that imports the secrets stored directly at another (environment, path). */

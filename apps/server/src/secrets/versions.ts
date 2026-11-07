@@ -6,7 +6,7 @@ import { decryptVersion, putSecret, requireSecret, type SecretContext } from "./
 
 type Address = { path: string; key: string };
 
-type VersionMetaRow = {
+type VersionMetaRow = RawVersionMeta & {
   version: number;
   comment: string;
   created_at: number;
@@ -14,16 +14,20 @@ type VersionMetaRow = {
   email: string | null;
 };
 
-const META_SELECT = `SELECT v.version, v.comment, v.created_at, v.created_by, u.email
+const META_SELECT = `SELECT v.version, v.comment, v.created_at, v.created_by, u.email,
+    v.value_type, v.sensitive, v.aad_format
   FROM secret_versions v LEFT JOIN users u ON u.id = v.created_by`;
 
 /** created_by holds a user id (service-token writes store NULL; see secrets/routes.ts). */
 function toVersionDto(r: VersionMetaRow): SecretVersionDto {
+  const meta = versionMeta(r);
   return {
     version: r.version,
     comment: r.comment,
     createdAt: r.created_at,
     createdBy: r.created_by && r.email ? { id: r.created_by, label: r.email } : null,
+    type: meta.value_type,
+    sensitive: meta.sensitive,
   };
 }
 
@@ -52,8 +56,7 @@ export async function getVersionValue(
     )
     .bind(secret.id, q.version)
     .first<
-      VersionMetaRow &
-        RawVersionMeta & { alg: string; key_version: number; iv: unknown; ciphertext: unknown }
+      VersionMetaRow & { alg: string; key_version: number; iv: unknown; ciphertext: unknown }
     >();
   if (!row) throw new ApiError(404, "not_found", "Version not found");
   const version: VersionRow = {
@@ -71,7 +74,7 @@ export async function getVersionValue(
 }
 
 /**
- * Writes the value and comment of `version` as a new version, under the current KEK and with
+ * Writes the value, comment, type and flag of `version` as a new version, under the current KEK and with
  * the new version's AAD (it goes through putSecret). Content equal to the current one is a no-op.
  */
 export async function rollbackSecret(
@@ -85,6 +88,8 @@ export async function rollbackSecret(
     key: q.key,
     value: old.value,
     comment: old.comment,
+    type: old.type,
+    sensitive: old.sensitive,
   });
   return { secret, changed, fromVersion: before.current_version };
 }

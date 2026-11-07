@@ -85,7 +85,7 @@ Prefix: `/projects/:project/environments/:env`.
 |-----------------|---------|
 | `GET /secrets?path=&reveal=&expand=&includeImports=` | List a folder; values only with `reveal=true` |
 | `GET /secrets/:key?path=&reveal=&expand=&includeImports=` | Read one secret |
-| `PUT /secrets/:key` | Create or update: `{ value, comment?, path? }`; writing the current content is a no-op |
+| `PUT /secrets/:key` | Create or update: `{ value, comment?, path?, type?, sensitive? }`; writing the current content (value, comment, type and flag) is a no-op |
 | `DELETE /secrets/:key?path=` | Delete |
 | `GET /secrets/:key/versions`, `GET /secrets/:key/versions/:version` | History (no values); one past value |
 | `POST /secrets/:key/rollback` | `{ version, path? }`: restore a past version as a new one |
@@ -94,3 +94,24 @@ Prefix: `/projects/:project/environments/:env`.
 
 Reading values (`reveal=true`, one secret, or a past version) writes an audit event first; if that
 fails, the read fails with `500`.
+
+#### Value types and the sensitive flag
+
+Every secret version has a `type` (`string`, `json`, `pem`, `number`, `boolean` or `list`) and a
+`sensitive` flag. Both appear on every secret and version in responses. On `PUT`, an omitted
+`type` or `sensitive` keeps the current version's, or defaults to `string` and `true` for a new
+secret. The value is stored exactly as sent and must fit its type:
+
+| Type | Accepted value |
+|------|----------------|
+| `string` | anything |
+| `json` | any JSON text |
+| `pem` | one or more PEM blocks (`-----BEGIN <LABEL>-----` … `-----END <LABEL>-----`) |
+| `number` | a JSON number, such as `8080` or `0.5` |
+| `boolean` | `true` or `false` |
+| `list` | a JSON array of strings |
+
+A value that does not fit is refused with `400 bad_request` and the message
+`value is not valid for type <type>: <reason>`; the value itself is never echoed. Changing only
+the type or the flag creates a new version, and a rollback restores the old version's type and
+flag along with its value.

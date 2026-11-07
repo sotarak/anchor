@@ -11,6 +11,8 @@ const meta = (key: string, version = 1, extra: Partial<SecretDto> = {}): SecretD
   version,
   comment: "",
   updatedAt: Date.UTC(2026, 10, 2),
+  type: "string",
+  sensitive: true,
   ...extra,
 });
 const P = ["--project", "app", "--env", "dev"];

@@ -202,7 +202,7 @@ function MatrixCell({
     );
   }
   return (
-    <Tooltip content={`v${cell.version} · ${formatRelative(cell.updatedAt)}`}>
+    <Tooltip content={`v${cell.version}, updated ${formatRelative(cell.updatedAt)}`}>
       <Link {...link} className={focus} aria-label={`${row.key} in ${env.name}: v${cell.version}`}>
         <RiCheckboxCircleFill aria-hidden className="size-4 text-success-base" />
       </Link>

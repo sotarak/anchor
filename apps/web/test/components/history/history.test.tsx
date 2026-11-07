@@ -48,7 +48,9 @@ async function openHistory() {
   const row = (await screen.findByText("API_KEY")).closest("tr") as HTMLElement;
   await r.user.click(within(row).getByRole("button", { name: "Actions for API_KEY" }));
   await r.user.click(await screen.findByRole("menuitem", { name: "History" }));
-  const sheet = within(await screen.findByRole("dialog", { name: "History · API_KEY" }));
+  const dialog = await screen.findByRole("dialog", { name: "History" });
+  expect(dialog).toHaveAccessibleDescription("Every saved version of API_KEY at /, newest first.");
+  const sheet = within(dialog);
   return { ...r, sheet };
 }
 

@@ -141,8 +141,8 @@ export function SecretHistorySheet({
     <Sheet open onOpenChange={onOpenChange}>
       <SheetContent>
         <SheetHeader>
-          <SheetTitle>{`History · ${secret.key}`}</SheetTitle>
-          <SheetDescription>{`Every saved version at ${path}, newest first.`}</SheetDescription>
+          <SheetTitle>History</SheetTitle>
+          <SheetDescription>{`Every saved version of ${secret.key} at ${path}, newest first.`}</SheetDescription>
         </SheetHeader>
         <SheetBody>{body}</SheetBody>
       </SheetContent>

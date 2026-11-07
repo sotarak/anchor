@@ -73,7 +73,7 @@ test("folder → reference → resolved preview → history → rollback", async
 
   // History, then roll back to v1: a new v3 becomes current.
   await rowMenu(page, "DB_URL", "History");
-  const history = page.getByRole("dialog", { name: "History · DB_URL" });
+  const history = page.getByRole("dialog", { name: "History" });
   await history.getByRole("button", { name: "Roll back to v1" }).click();
   await page
     .getByRole("dialog", { name: "Roll back DB_URL to v1" })

@@ -56,7 +56,7 @@ describe("/projects/$project/environments/$env", () => {
     await renderApp("/projects/app/environments/dev?path=%2Fapi");
     const header = screen.getByRole("banner");
     expect(
-      await within(header).findByRole("heading", { name: "App · Development" }),
+      await within(header).findByRole("heading", { name: "App / Development" }),
     ).toBeInTheDocument();
     expect(await screen.findByText("Secrets in /api")).toBeInTheDocument();
   });
@@ -122,7 +122,7 @@ describe("/projects/$project/environments/$env", () => {
         params: { project: "app", env: "staging" },
       }),
     );
-    expect(await screen.findByRole("heading", { name: "App · Staging" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "App / Staging" })).toBeInTheDocument();
     await screen.findByText("API_KEY");
     expect(document.body.textContent).not.toContain(CANARY);
     await act(() =>
@@ -131,7 +131,7 @@ describe("/projects/$project/environments/$env", () => {
         params: { project: "app", env: "dev" },
       }),
     );
-    expect(await screen.findByRole("heading", { name: "App · Development" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "App / Development" })).toBeInTheDocument();
     expect(within(await rowOf("API_KEY")).getByText(MASK)).toBeInTheDocument();
     expect(document.body.textContent).not.toContain(CANARY);
   });

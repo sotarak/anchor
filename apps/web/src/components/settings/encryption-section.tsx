@@ -33,9 +33,9 @@ const KEY_STATUS: Record<ProjectKeyDto["status"], { status: Status; label: strin
 };
 
 function rotationBadge(r: KeyRotationDto): { status: Status; label: string } {
-  if (r.status === "running") return { status: "info", label: `Running · ${r.done} / ${r.total}` };
+  if (r.status === "running") return { status: "info", label: `Running ${r.done} of ${r.total}` };
   if (r.status === "completed") return { status: "success", label: "Completed" };
-  return { status: "error", label: `Failed · ${r.error ?? "unknown"}` };
+  return { status: "error", label: `Failed: ${r.error ?? "unknown"}` };
 }
 
 const DateCell = ({ at }: { at: number }) => (

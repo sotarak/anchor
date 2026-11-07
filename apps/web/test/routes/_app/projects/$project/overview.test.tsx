@@ -66,7 +66,7 @@ describe("/projects/$project (overview)", () => {
     expect(within(row).getAllByText("Missing")).toHaveLength(1);
     expect(columnNames()).toEqual(["Key", "Development dev", "Staging staging", "Production prod"]);
     await user.hover(within(row).getByRole("link", { name: "DATABASE_URL in Production: v1" }));
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(/^v1 · /);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/^v1, updated /);
   });
 
   it('Status filter "Missing somewhere" hides complete rows; filtered-empty offers clear', async () => {

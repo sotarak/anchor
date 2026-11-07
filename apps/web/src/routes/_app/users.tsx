@@ -130,7 +130,7 @@ function UsersPage() {
             const { url, expiresAt } = await api.users.createPasswordReset(u.id);
             setReveal({
               title: "Copy the password reset link",
-              label: `${u.name} · expires ${formatDateTime(expiresAt)}`,
+              label: `${u.name}, expires ${formatDateTime(expiresAt)}`,
               value: url,
               notice: `Send this link to ${u.name}. It works once and expires in 1 hour.`,
             });

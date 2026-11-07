@@ -10,7 +10,7 @@ import {
 
 const pagerButton = "disabled:bg-bg-white disabled:ring-stroke-soft disabled:text-text-disabled";
 
-/** Footer row inside the table container: count · pager · page size. */
+/** Footer row inside the table container: count, pager, page size. */
 export function TableFooter({
   total,
   shown,

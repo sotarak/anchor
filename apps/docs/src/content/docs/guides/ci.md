@@ -19,7 +19,7 @@ anchor tokens create --name github-deploy --scope prod --permission read --proje
 - `--scope <env>` or `--scope <env>:<path>` (repeatable, up to 20). A folder scope covers its
   subfolders: `--scope prod:/api` reads `/api` and `/api/v2`, not `/`.
 - `--permission read` (default) or `read-write`.
-- `--expires-in <days>`, 1–365, default 90.
+- `--expires-in <days>`, 1–365, default 90, or `never` (see below).
 
 The token is shown **once**. Store it as a CI secret named `ANCHOR_TOKEN`, then forget it.
 
@@ -68,3 +68,17 @@ npx -y @anchor-secrets/cli@0.4.0 run --project my-app --env prod -- npm run depl
 - The token list shows when each token was last used. Every value read and every write with a token is
   in the project's audit log under that token; listing secret names is not audited.
 - To rotate, create the new token, update the CI secret, then revoke the old one.
+
+### Tokens without an expiry
+
+A machine that runs for years (a home server, an internal deploy box) can use a token that stays
+valid until it is revoked:
+
+```sh
+anchor tokens create --name home-server --scope prod --expires-in never
+```
+
+The CLI warns `This token stays valid until you revoke it`, and the token list shows `never` in
+the EXPIRES column. Such a token is a standing credential: nothing retires it if it leaks. Scope it
+to the narrowest environment and folder, prefer `read`, and revoke it as soon as the machine no
+longer needs it. Choose a dated token whenever someone can rotate it.

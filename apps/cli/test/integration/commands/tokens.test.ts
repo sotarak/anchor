@@ -126,6 +126,47 @@ describe("anchor tokens create", () => {
     }
   });
 
+  it("--expires-in never sends null and warns that the token stays valid", async () => {
+    const forever = { serviceToken: dto({ name: "deploy", expiresAt: null }), token: TOKEN };
+    const cli = await loggedIn();
+    const r = await cli.run(
+      ["tokens", "create", "--name", "deploy", "--expires-in", "never", ...P],
+      { createServiceToken: async () => forever },
+    );
+    expect(r.code).toBe(0);
+    expect(r.fake.called("createServiceToken")[0]?.args[1]).toMatchObject({ expiresInDays: null });
+    expect(r.out).toBe(`${TOKEN}\n`);
+    expect(r.err).toContain("Created service token deploy (read), never expires");
+    expect(r.err).toContain("warning: This token stays valid until you revoke it");
+
+    const json = await loggedIn();
+    const j = await json.run(
+      ["tokens", "create", "--name", "deploy", "--expires-in", "never", "--json", ...P],
+      { createServiceToken: async () => forever },
+    );
+    expect(JSON.parse(j.out).serviceToken.expiresAt).toBeNull();
+  });
+
+  it("a dated token prints no never-expires warning", async () => {
+    const cli = await loggedIn();
+    const r = await cli.run(["tokens", "create", "--name", "ci", ...P], {
+      createServiceToken: async () => created,
+    });
+    expect(r.err).not.toContain("stays valid until you revoke it");
+  });
+
+  it("--expires-in forever exits 2", async () => {
+    const cli = await loggedIn();
+    const r = await cli.run(["tokens", "create", "--name", "ci", "--expires-in", "forever", ...P], {
+      createServiceToken: async () => created,
+    });
+    expect(r.code).toBe(2);
+    expect(r.err).toContain(
+      "error: --expires-in must be a whole number of days between 1 and 365, or never",
+    );
+    expect(r.fake.calls).toEqual([]);
+  });
+
   it("--name is required and --permission is validated", async () => {
     const cli = await loggedIn();
     expect((await cli.run(["tokens", "create", ...P], {})).code).toBe(2);
@@ -183,6 +224,16 @@ describe("anchor tokens list", () => {
       listServiceTokens: async () => tokens,
     });
     expect(JSON.parse(j.out)).toEqual({ serviceTokens: tokens });
+  });
+});
+
+describe("anchor tokens list without an expiry", () => {
+  it("tokens list shows never in EXPIRES and active in STATUS", async () => {
+    const tokens = [dto({ id: "h", name: "home", expiresAt: null })];
+    const cli = await loggedIn();
+    const r = await cli.run(["tokens", "list", ...P], { listServiceTokens: async () => tokens });
+    const lines = r.out.trimEnd().split("\n");
+    expect(lines[1]).toMatch(/^h\s+home\s+anc_st_SECRE\s+read\s+dev:\/\s+never\s+never\s+active$/);
   });
 });
 

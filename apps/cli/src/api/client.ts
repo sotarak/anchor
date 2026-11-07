@@ -16,7 +16,8 @@ export type CreateServiceTokenBody = {
   name: string;
   permission: "read" | "read-write";
   scopes: { environment: string; path: string }[];
-  expiresInDays: number;
+  /** null = never expires. */
+  expiresInDays: number | null;
 };
 
 /** Read flags for secrets; omitted flags are not sent, so the server defaults apply. */

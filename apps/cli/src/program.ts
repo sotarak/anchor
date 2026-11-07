@@ -361,12 +361,13 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
         .choices(["read", "read-write"])
         .default("read"),
     )
-    .option("--expires-in <days>", "lifetime in days (1-365)", "90")
+    .option("--expires-in <days>", "lifetime in days (1-365) or never", "90")
     .addHelpText(
       "after",
       examples(
         "anchor tokens create --name ci --scope prod --permission read",
         "anchor tokens create --name deploy --scope prod:/api --expires-in 30 --json",
+        "anchor tokens create --name home-server --scope prod --expires-in never",
       ),
     )
     .action(

@@ -20,10 +20,15 @@ export function parseScope(input: string): Scope {
   }
 }
 
-function parseDays(input: string): number {
+/** Days 1-365, or `never` (null) for a token that stays valid until revoked. */
+function parseDays(input: string): number | null {
+  if (input === "never") return null;
   const days = /^\d+$/.test(input) ? Number(input) : Number.NaN;
   if (!Number.isInteger(days) || days < 1 || days > 365) {
-    throw new CliError(EXIT.USAGE, "--expires-in must be a whole number of days between 1 and 365");
+    throw new CliError(
+      EXIT.USAGE,
+      "--expires-in must be a whole number of days between 1 and 365, or never",
+    );
   }
   return days;
 }
@@ -46,6 +51,7 @@ export async function tokensCreate(
   const expiry =
     t.expiresAt === null ? "never expires" : `expires ${new Date(t.expiresAt).toISOString()}`;
   ctx.out.info(`Created service token ${t.name} (${t.permission}), ${expiry}`);
+  if (t.expiresAt === null) ctx.out.warn("This token stays valid until you revoke it");
   ctx.out.info("Store this token now; it will not be shown again.");
   ctx.out.data(res, () => res.token);
 }

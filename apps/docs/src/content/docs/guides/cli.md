@@ -139,7 +139,7 @@ described in [Versions and rollback](/anchor/guides/versions/).
 | `anchor folders delete <path> [--force]` | Delete an empty folder; `--force` deletes its contents too |
 | `anchor run [--no-override] [--no-expand] -- <command> [args...]` | Run a command with secrets in its environment |
 | `anchor export [--format dotenv\|json\|yaml] [--output <file>] [--no-expand]` | Write secrets to a file or a pipe |
-| `anchor tokens create --name <name> [--scope <env[:path]>]... [--permission read\|read-write] [--expires-in <days>]` | Create a service token |
+| `anchor tokens create --name <name> [--scope <env[:path]>]... [--permission read\|read-write] [--expires-in <days\|never>]` | Create a service token (`never`: valid until revoked) |
 | `anchor tokens list` | List the project's service tokens |
 | `anchor tokens revoke <id>` | Revoke a service token |
 

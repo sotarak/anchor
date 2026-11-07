@@ -709,7 +709,7 @@ Options:
   --scope <env[:path]>       environment and optional path prefix; repeatable (default: current env,
                              /)
   --permission <permission>  access level (choices: "read", "read-write", default: "read")
-  --expires-in <days>        lifetime in days (1-365) (default: "90")
+  --expires-in <days>        lifetime in days (1-365) or never (default: "90")
   -h, --help                 display help for command
 
 Global Options:
@@ -727,6 +727,7 @@ Global Options:
 Examples:
   $ anchor tokens create --name ci --scope prod --permission read
   $ anchor tokens create --name deploy --scope prod:/api --expires-in 30 --json
+  $ anchor tokens create --name home-server --scope prod --expires-in never
 
 "
 `;

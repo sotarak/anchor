@@ -298,6 +298,29 @@ describe("open-source repository", () => {
     expect(t).toContain("anchor-reencrypt-dlq");
   });
 
+  it("no doc asks for a setup token any more (only the changelog and upgrade guide mention it)", () => {
+    const docs = readdirSync(path("apps/docs/src/content/docs"), { recursive: true })
+      .map(String)
+      .filter((f) => /\.mdx?$/.test(f))
+      .map((f) => `apps/docs/src/content/docs/${f}`)
+      .filter((f) => !f.endsWith("operations/upgrading.md"));
+    const offenders = [...docs, "README.md", "CONTRIBUTING.md", ".dev.vars.example"].filter((f) =>
+      /ANCHOR_SETUP_TOKEN|setup token|setupToken/i.test(read(f)),
+    );
+    expect(offenders).toEqual([]);
+    expect(read("apps/docs/src/content/docs/operations/upgrading.md")).toContain(
+      "ANCHOR_SETUP_TOKEN",
+    );
+  });
+
+  it("the deploy guide says to create the owner right after the deploy, and how to recover", () => {
+    const g = read("apps/docs/src/content/docs/guides/deploy.md");
+    expect(g).toMatch(/right after the deploy/i);
+    expect(g).toMatch(/first account created at `\/setup` owns the\s+(>\s*)?instance/i);
+    const t = read("apps/docs/src/content/docs/troubleshooting.md");
+    expect(t).toMatch(/^## `\/setup` says the instance already has an owner$/m);
+  });
+
   it("the 0.3.0 changelog tells manual installs to move database_id", () => {
     const c = read("CHANGELOG.md");
     const section = c.slice(c.indexOf("## [0.3.0]"), c.indexOf("## [0.2.0]"));

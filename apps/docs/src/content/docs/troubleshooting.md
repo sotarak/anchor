@@ -88,6 +88,27 @@ the build log; Workers Builds runs `pnpm install`, the build command, then the d
   `pnpm exec wrangler queues create anchor-reencrypt-dlq`, then retry the build. Creating a queue
   that already exists fails harmlessly.
 
+## `/setup` says the instance already has an owner
+
+The first account created at `/setup` owns the instance. If you did not create it, someone reached
+your URL first. Nothing of yours is stored yet. To see who did it, read the setup event (run from the
+repository root, with your database's name):
+
+```sh
+pnpm exec wrangler d1 execute anchor --remote \
+  --command "SELECT at, actor_label, ip FROM audit_events WHERE action = 'auth.setup'"
+```
+
+Then start over with an empty database and create the owner as soon as the deploy finishes:
+
+1. Delete the database (`pnpm exec wrangler d1 delete anchor`, or in the Cloudflare dashboard under
+   **Storage & Databases → D1**) and create it again (`pnpm exec wrangler d1 create anchor`).
+2. Put the new `database_id` in the `DB` entry of `wrangler.jsonc` (your copy's, for a button
+   deploy).
+3. Deploy again: push to your copy for a button deploy, or run `pnpm deploy:worker`. Both apply the
+   migrations to the new database.
+4. Open `/setup` right away.
+
 ## Logins time out on the Free plan
 
 Password hashing (PBKDF2, 100,000 iterations) needs more CPU per request than the Workers Free plan

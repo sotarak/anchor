@@ -11,7 +11,8 @@ disabled, and the server rejects the request anyway.
 
 ## First run
 
-- **`/setup`** appears only on a fresh instance. Paste the setup token and create the first owner.
+- **`/setup`** appears only on a fresh instance. The first account created there becomes the owner;
+  do it right after the deploy.
 - **`/login`**, **`/accept-invite`** and **`/reset-password`** are the sign-in page and the
   landing pages of invite and password-reset links.
 

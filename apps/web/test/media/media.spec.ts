@@ -17,9 +17,8 @@ let owner: { email: string; password: string };
 test.describe.configure({ mode: "serial" });
 
 test.beforeAll(async ({ baseURL }) => {
-  const setupToken = process.env.E2E_SETUP_TOKEN;
-  if (!baseURL || !setupToken) throw new Error("baseURL and E2E_SETUP_TOKEN must be set");
-  owner = await seedDemo(baseURL, setupToken);
+  if (!baseURL) throw new Error("baseURL must be set");
+  owner = await seedDemo(baseURL);
 });
 
 async function signIn(page: Page) {

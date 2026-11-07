@@ -124,6 +124,8 @@ ANCHOR_ROOT_KEY (Worker secret, 32 random bytes base64, id "rk1")
 - Setup: `POST /api/v1/setup` works only while there are zero users, and only with a `setupToken`
   equal to the `ANCHOR_SETUP_TOKEN` Worker secret (compared with `timingSafeEqual` over SHA-256
   digests). If the secret is unset, setup is disabled (503 `setup_disabled`).
+  **Superseded in 0.3.0:** setup needs no token; see `2026-11-07-v0.3.0-design.md`, "First-owner
+  setup without a token".
 
 ### 6.4 Authorization
 

@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { emailSchema, passwordSchema } from "./common";
 
+// No setup token (0.3.0): the first submission creates the owner. Unknown keys such as a legacy
+// `setupToken` are stripped, so older clients keep working.
 export const setupBodySchema = z.object({
-  setupToken: z.string().min(1).max(512),
   email: emailSchema,
   name: z.string().min(1).max(100),
   password: passwordSchema,

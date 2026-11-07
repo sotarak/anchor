@@ -46,11 +46,8 @@ async function call(
 }
 
 /** Creates the owner and the demo projects; returns the owner's credentials for signing in. */
-export async function seedDemo(
-  baseURL: string,
-  setupToken: string,
-): Promise<{ email: string; password: string }> {
-  await call(baseURL, null, "POST", "/setup", { setupToken, ...DEMO_OWNER });
+export async function seedDemo(baseURL: string): Promise<{ email: string; password: string }> {
+  await call(baseURL, null, "POST", "/setup", DEMO_OWNER);
   const login = await call(baseURL, null, "POST", "/auth/login", {
     email: DEMO_OWNER.email,
     password: DEMO_OWNER.password,

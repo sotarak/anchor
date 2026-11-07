@@ -40,13 +40,15 @@ describe("Deploy to Cloudflare button", () => {
     expect(cfg.queues.consumers[0].dead_letter_queue).toBe("anchor-reencrypt-dlq");
   });
 
-  it("the setup page asks for exactly the two secrets, each described", () => {
+  it("the setup page asks for exactly one secret, the root key, described", () => {
     const keys = read(".dev.vars.example")
       .split("\n")
       .filter((l) => /^[A-Z_]+=/.test(l))
       .map((l) => l.slice(0, l.indexOf("=")));
-    expect(keys).toEqual(["ANCHOR_ROOT_KEY", "ANCHOR_SETUP_TOKEN"]);
+    expect(keys).toEqual(["ANCHOR_ROOT_KEY"]);
+    expect(read(".dev.vars.example")).not.toContain("ANCHOR_SETUP_TOKEN");
     const bindings = rootPkg().cloudflare?.bindings ?? {};
+    expect(Object.keys(bindings)).toEqual(["ANCHOR_ROOT_KEY"]);
     for (const k of keys) {
       expect(bindings[k]?.description, k).toContain("openssl rand -base64 32");
     }

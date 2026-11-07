@@ -15,8 +15,7 @@ An Anchor instance is one Cloudflare Worker and the platform resources it binds 
                     │   ├─ queue consumer ◀── anchor-reencrypt (dead letters: -dlq)      │
                     │   └─ cron 0 3 * * *: purge old audit events, resume rotations     │
                     │                                                                     │
-                    │  Worker secrets: ANCHOR_ROOT_KEY (+ _ID, _PREVIOUS, _PREVIOUS_ID),  │
-                    │                  ANCHOR_SETUP_TOKEN                                 │
+                    │  Worker secrets: ANCHOR_ROOT_KEY (+ _ID, _PREVIOUS, _PREVIOUS_ID)   │
                     └─────────────────────────────────────────────────────────────────────┘
 ```
 

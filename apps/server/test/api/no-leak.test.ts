@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers";
 import type { LoginResponse } from "@anchor/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, json, jsonInit, resetDb } from "#test/support";
@@ -25,7 +24,6 @@ describe("no plaintext in logs", () => {
     const setup = await api(
       "/api/v1/setup",
       jsonInit("POST", {
-        setupToken: env.ANCHOR_SETUP_TOKEN,
         email: "owner@example.test",
         name: "Owner",
         password: OWNER_PASSWORD,

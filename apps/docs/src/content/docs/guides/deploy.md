@@ -14,7 +14,7 @@ retention, rate limiting, recovery, upgrades) are under **Operations**.
 
 - A Cloudflare account on the **Workers Paid** plan. Password hashing (PBKDF2, 100,000 iterations)
   needs more CPU per login than the Free plan allows (spec §12).
-- `openssl`, to generate the two secrets.
+- `openssl`, to generate the root key.
 - For the manual path only: Node.js 22+ and pnpm.
 
 ## Deploy with the button
@@ -28,7 +28,7 @@ The button copies this repository to your GitHub or GitLab account and deploys i
 - **the D1 database** (`DB`) and **the queues** (`anchor-reencrypt` and its dead letter queue).
   Keep the suggested names or pick your own: Cloudflare creates them and writes their IDs into your
   copy's `wrangler.jsonc`;
-- **two secrets**, `ANCHOR_ROOT_KEY` and `ANCHOR_SETUP_TOKEN`;
+- **one secret**, `ANCHOR_ROOT_KEY`;
 - the **build and deploy commands**, already filled in. The deploy command applies the database
   migrations and then deploys. Leave both as they are.
 
@@ -38,15 +38,18 @@ and those keys encrypt every secret value. Cloudflare never shows a Worker secre
 ```sh
 umask 077
 openssl rand -base64 32 > anchor-root.key   # back this file up offline, then paste its value
-openssl rand -base64 32                     # the setup token; keep it for /setup
 ```
 
 > **Back up `anchor-root.key` offline now** (password manager or offline vault) and confirm the
 > backup reads back the same value. Losing the root key loses every secret, permanently. There is no
 > recovery path by design. Delete the local file once the backup is confirmed.
 
-When the deploy finishes, open `https://<your-worker>/setup`, paste the setup token, and create the
-first owner.
+When the deploy finishes, open `https://<your-worker>/setup` and create the first owner.
+
+> **Create the owner right after the deploy.** The first account created at `/setup` owns the
+> instance, and until it exists anyone who reaches the URL can create it. Open `/setup` as soon as
+> the deploy finishes. If it says the instance already has an owner and you did not create it, see
+> [Troubleshooting](/anchor/troubleshooting/#setup-says-the-instance-already-has-an-owner).
 
 Your copy is an independent repository, not a fork: it does not follow this one. Every push to its
 default branch builds and deploys again. To take a new Anchor release, merge it into your copy (see
@@ -96,15 +99,7 @@ pnpm exec wrangler secret put ANCHOR_ROOT_KEY < anchor-root.key
 rm anchor-root.key
 ```
 
-### 4. Set the setup token
-
-```sh
-openssl rand -base64 32 | tee /dev/stderr | pnpm exec wrangler secret put ANCHOR_SETUP_TOKEN
-```
-
-Keep the printed value for step 6. It is only needed once.
-
-### 5. Deploy
+### 4. Deploy
 
 ```sh
 pnpm deploy:worker
@@ -114,15 +109,19 @@ pnpm deploy:worker
 migrations, then runs `wrangler deploy`. (The script is not called `deploy`: `pnpm deploy` is a pnpm
 built-in and would run instead.)
 
-### 6. Create the first owner
+### 5. Create the first owner
 
-Open `https://<your-worker>/setup`, paste the setup token, and create the owner. Or use the API:
+> **Create the owner right after the deploy.** The first account created at `/setup` owns the
+> instance, and until it exists anyone who reaches the URL can create it. Open `/setup` as soon as
+> the deploy finishes. If it says the instance already has an owner and you did not create it, see
+> [Troubleshooting](/anchor/troubleshooting/#setup-says-the-instance-already-has-an-owner).
+
+Open `https://<your-worker>/setup` and create the owner. Or use the API:
 
 ```sh
 curl -X POST https://<host>/api/v1/setup \
   -H 'content-type: application/json' \
   -d '{
-    "setupToken": "<ANCHOR_SETUP_TOKEN value>",
     "email": "owner@example.com",
     "name": "Owner",
     "password": "<at least 12 characters>"
@@ -147,15 +146,6 @@ Never replace `ANCHOR_ROOT_KEY` with a new random value on a deployment that alr
 refuses to create projects under a root key that cannot open the existing ones (500 with a
 `config_error` log), and every secret read fails until the original key is restored.
 
-## Optional: remove the setup token
-
-```sh
-pnpm exec wrangler secret delete ANCHOR_SETUP_TOKEN
-```
-
-With the token unset, `POST /api/v1/setup` returns `503 setup_disabled`. On a button deploy you can
-also delete it under the Worker's **Settings → Variables and Secrets** in the Cloudflare dashboard.
-
 ## Manage users
 
 The first owner manages everyone else on the dashboard's **Users** page (invite links valid 72
@@ -177,7 +167,7 @@ refuses to demote, disable or delete the last one.
 From the repository root:
 
 ```sh
-cp .dev.vars.example .dev.vars   # then fill in both values with openssl rand -base64 32
+cp .dev.vars.example .dev.vars   # then fill in ANCHOR_ROOT_KEY with openssl rand -base64 32
 pnpm db:migrate:local
 pnpm --filter @anchor/server dev
 ```

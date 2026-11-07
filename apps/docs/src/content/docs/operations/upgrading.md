@@ -73,6 +73,11 @@ it after each upgrade) so upgrades do not overwrite it.
 > `apps/server/.dev.vars` to `.dev.vars` at the root. Run every `wrangler` command from the root
 > from now on. The database name and binding are unchanged, so no data moves.
 
+> **0.3.0 removed the setup token.** `/setup` no longer asks for one: the first account created there
+> owns the instance, and an instance that already has an owner is unaffected. `ANCHOR_SETUP_TOKEN` is
+> no longer read; delete it with `pnpm exec wrangler secret delete ANCHOR_SETUP_TOKEN` (or under the
+> Worker's **Settings → Variables and Secrets**). Scripts that still send `setupToken` keep working.
+
 If a release changes Worker configuration (a new binding or queue in `wrangler.jsonc`), the changelog
 says so; create the resource before you deploy.
 

@@ -13,17 +13,15 @@ const state = fileURLToPath(new URL("./.state", import.meta.url));
 const root = fileURLToPath(new URL("../../../..", import.meta.url));
 const envFile = `${state}/e2e.env`;
 const port = process.env.E2E_PORT ?? "8788";
-const { E2E_ROOT_KEY, E2E_SETUP_TOKEN } = process.env;
-if (!E2E_ROOT_KEY || !E2E_SETUP_TOKEN) {
-  console.error("serve.mjs: E2E_ROOT_KEY and E2E_SETUP_TOKEN must be set (playwright.config.ts)");
+const { E2E_ROOT_KEY } = process.env;
+if (!E2E_ROOT_KEY) {
+  console.error("serve.mjs: E2E_ROOT_KEY must be set (playwright.config.ts)");
   process.exit(1);
 }
 
 rmSync(state, { recursive: true, force: true });
 mkdirSync(state, { recursive: true });
-writeFileSync(envFile, `ANCHOR_ROOT_KEY=${E2E_ROOT_KEY}\nANCHOR_SETUP_TOKEN=${E2E_SETUP_TOKEN}\n`, {
-  mode: 0o600,
-});
+writeFileSync(envFile, `ANCHOR_ROOT_KEY=${E2E_ROOT_KEY}\n`, { mode: 0o600 });
 chmodSync(envFile, 0o600);
 
 const wrangler = (args, opts) => [

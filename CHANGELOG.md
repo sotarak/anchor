@@ -12,8 +12,8 @@ dashboard and CLI.
 ### Added
 
 - **Deploy to Cloudflare button.** One click copies the repository to your GitHub or GitLab
-  account, creates the D1 database and the queues, asks for the two secrets, applies the
-  migrations and deploys. Every push to the copy redeploys through Workers Builds.
+  account, creates the D1 database and the queues, asks for the root key, applies the migrations
+  and deploys. Every push to the copy redeploys through Workers Builds.
 - README screenshots of the dashboard and a recording of the CLI, regenerated from a seeded local
   instance with `pnpm --filter @anchor/web media`.
 - Docs: deploying with the button, upgrading a button deploy (merge the release tag from upstream),
@@ -22,6 +22,10 @@ dashboard and CLI.
 
 ### Changed
 
+- **First-owner setup needs no setup token.** The first account created at `/setup` owns the
+  instance; later attempts get `409` and never touch the existing owner. Create the owner right
+  after deploying. `ANCHOR_SETUP_TOKEN` is no longer read, the `setup_disabled` (503) and
+  invalid-token (403) responses are gone, and a request that still sends `setupToken` is accepted.
 - The Worker config moved to the repository root: `wrangler.jsonc` and `.dev.vars.example` now live
   there, and every `wrangler` command runs from the root. New root scripts:
   `pnpm db:migrate:local`, and `pnpm deploy:worker` now applies the D1 migrations before deploying.
@@ -48,6 +52,8 @@ dashboard and CLI.
   repository root. Run `wrangler` commands from the root from now on. The database name and
   binding are unchanged, so no data moves. See
   [Upgrade an instance](https://sotarak.github.io/anchor/operations/upgrading/).
+- **Setup token:** nothing to do for an instance that already has an owner. Delete the unused
+  `ANCHOR_SETUP_TOKEN` secret with `wrangler secret delete ANCHOR_SETUP_TOKEN`.
 - **CLI:** no breaking changes; update to 0.3.0 with the tool you installed it with.
 
 ## [0.2.0] - 2026-11-07

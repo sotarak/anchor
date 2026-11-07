@@ -36,9 +36,6 @@
     "bindings": {
       "ANCHOR_ROOT_KEY": {
         "description": "The root key that wraps every project key. Generate it with `openssl rand -base64 32` and **back it up offline before you paste it**: Cloudflare never shows it again, and losing it loses every secret. [Why](https://sotarak.github.io/anchor/guides/deploy/)"
-      },
-      "ANCHOR_SETUP_TOKEN": {
-        "description": "A one-time token for creating the first owner at `/setup`. Generate it with `openssl rand -base64 32` and keep it until setup is done."
       }
     }
   }

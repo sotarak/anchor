@@ -33,20 +33,18 @@ function withHash(path: string, hash: string) {
 
 describe("/setup", () => {
   async function fillSetup(user: Awaited<ReturnType<typeof renderApp>>["user"], confirm = STRONG) {
-    await user.type(await screen.findByLabelText("Setup token"), "setup-token-123");
-    await user.type(screen.getByLabelText("Name"), "Olivia Owner");
+    await user.type(await screen.findByLabelText("Name"), "Olivia Owner");
     await user.type(screen.getByLabelText("Email"), "owner@example.com");
     await user.type(screen.getByLabelText("Password"), STRONG);
     await user.type(screen.getByLabelText("Confirm password"), confirm);
     await user.click(screen.getByRole("button", { name: "Create owner account" }));
   }
 
-  it("setup happy path lands on /projects", async () => {
+  it("setup asks for no token and posts only name, email and password", async () => {
     signedOut({ needsSetup: true });
     projectExists();
     const submit = vi.fn(async ({ request }: { request: Request }) => {
       expect(await request.json()).toEqual({
-        setupToken: "setup-token-123",
         name: "Olivia Owner",
         email: "owner@example.com",
         password: STRONG,
@@ -55,32 +53,24 @@ describe("/setup", () => {
     });
     server.use(http.post("/api/v1/setup", submit));
     const { router, user, queryClient } = await renderApp("/setup");
+    expect(await screen.findByLabelText("Name")).toHaveFocus();
+    expect(screen.queryByLabelText(/setup token/i)).toBeNull();
+    expect(document.body.textContent).not.toMatch(/setup token/i);
     await fillSetup(user);
     await waitFor(() => expect(router.state.location.pathname).toBe("/projects"));
     expect(submit).toHaveBeenCalledTimes(1);
-    expectNotInMutationCache(queryClient, STRONG, "setup-token-123");
+    expectNotInMutationCache(queryClient, STRONG);
   });
 
-  it("setup_disabled shows the callout", async () => {
+  it("someone else finished setup first: says so and links to sign in", async () => {
     signedOut({ needsSetup: true });
     server.use(
-      http.post("/api/v1/setup", () => apiError(503, "setup_disabled", "Setup is disabled")),
+      http.post("/api/v1/setup", () => apiError(409, "conflict", "Instance already set up")),
     );
     const { user } = await renderApp("/setup");
     await fillSetup(user);
-    expect(
-      await screen.findByText(
-        "Setup is disabled. Set the ANCHOR_SETUP_TOKEN secret on the Worker and reload.",
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it("wrong setup token shows error", async () => {
-    signedOut({ needsSetup: true });
-    server.use(http.post("/api/v1/setup", () => apiError(403, "forbidden", "Invalid setup token")));
-    const { user } = await renderApp("/setup");
-    await fillSetup(user);
-    expect(await screen.findByText("Invalid setup token")).toBeInTheDocument();
+    expect(await screen.findByText(/This instance already has an owner\./)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
   });
 
   it("mismatched passwords block submit", async () => {

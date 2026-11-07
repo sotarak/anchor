@@ -11,7 +11,6 @@ export type Bindings = {
   /** During root key rotation only: the old key, accepted for unwrapping until rewrap. */
   ANCHOR_ROOT_KEY_PREVIOUS?: string;
   ANCHOR_ROOT_KEY_PREVIOUS_ID?: string;
-  ANCHOR_SETUP_TOKEN?: string;
   /** Queue anchor-reencrypt: KEK rotation batches (src/keys/queue.ts consumes it). */
   REENCRYPT_QUEUE: Queue<ReencryptMessage>;
 };

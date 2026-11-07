@@ -81,9 +81,9 @@ More in [Architecture](https://sotarak.github.io/anchor/start/architecture/) and
 ## Quickstart
 
 **With the button.** Click **Deploy to Cloudflare** above. Cloudflare copies this repository to
-your GitHub account, creates the D1 database and the queues, and asks for two secrets,
-`ANCHOR_ROOT_KEY` and `ANCHOR_SETUP_TOKEN`. Generate each with `openssl rand -base64 32`, and back
-the root key up offline before you paste it. Every push to your copy redeploys.
+your GitHub account, creates the D1 database and the queues, and asks for one secret,
+`ANCHOR_ROOT_KEY`. Generate it with `openssl rand -base64 32` and back it up offline before you
+paste it. Every push to your copy redeploys.
 
 **By hand** (Workers Paid plan, Node.js 22+, pnpm), from the repository root:
 
@@ -91,11 +91,12 @@ the root key up offline before you paste it. Every push to your copy redeploys.
 git clone https://github.com/sotarak/anchor.git && cd anchor && pnpm install
 pnpm exec wrangler d1 create anchor        # add the database_id to wrangler.jsonc
 pnpm exec wrangler queues create anchor-reencrypt && pnpm exec wrangler queues create anchor-reencrypt-dlq
-# generate and back up the root key, set ANCHOR_ROOT_KEY and ANCHOR_SETUP_TOKEN (see the guide)
+# generate and back up the root key, then set ANCHOR_ROOT_KEY (see the guide)
 pnpm deploy:worker                         # applies migrations, then deploys
 ```
 
-Either way, open `https://<your-worker>/setup` to create the first owner. **Read the
+Either way, open `https://<your-worker>/setup` as soon as the deploy finishes: the first account
+created there owns the instance. **Read the
 [deploy guide](https://sotarak.github.io/anchor/guides/deploy/) before storing real secrets**: it
 covers backing up the root key, which cannot be recovered if lost.
 

@@ -12,22 +12,19 @@ const serverConfig = fileURLToPath(new URL("../../../../wrangler.jsonc", import.
 
 export async function startAnchor(): Promise<{
   url: string;
-  setupToken: string;
   stop(): Promise<void>;
 }> {
-  const setupToken = randomBytes(24).toString("base64url");
   const server = createTestHarness({
     workers: [
       {
         configPath: serverConfig,
         secrets: {
           ANCHOR_ROOT_KEY: randomBytes(32).toString("base64"),
-          ANCHOR_SETUP_TOKEN: setupToken,
         },
       },
     ],
   });
   const { url } = await server.listen();
   await server.getWorker().applyD1Migrations("DB");
-  return { url: url.origin, setupToken, stop: () => server.close() };
+  return { url: url.origin, stop: () => server.close() };
 }

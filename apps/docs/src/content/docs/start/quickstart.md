@@ -18,11 +18,10 @@ login than the Free plan allows) and `openssl`.
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/sotarak/anchor)
 
 Cloudflare copies the repository to your account, creates the database and the queues, and asks for
-two secrets. Generate them first, and back the root key up offline **before** you paste it:
+one secret, the root key. Generate it first, and back it up offline **before** you paste it:
 
 ```sh
 umask 077 && openssl rand -base64 32 > anchor-root.key   # ANCHOR_ROOT_KEY: back this file up offline
-openssl rand -base64 32                                  # ANCHOR_SETUP_TOKEN: keep it for step 2
 ```
 
 Leave the build and deploy commands as they are: the deploy command applies the migrations, then
@@ -43,18 +42,18 @@ pnpm exec wrangler queues create anchor-reencrypt-dlq
 umask 077 && openssl rand -base64 32 > anchor-root.key   # back this file up offline first
 pnpm exec wrangler secret put ANCHOR_ROOT_KEY < anchor-root.key
 rm anchor-root.key
-openssl rand -base64 32 | tee /dev/stderr | pnpm exec wrangler secret put ANCHOR_SETUP_TOKEN
 
 pnpm deploy:worker                             # builds, applies migrations, deploys
 ```
 
 Losing the root key makes every stored secret unreadable, permanently. Back it up before the `rm`,
-somewhere other than this machine. Keep the printed setup token for the next step.
+somewhere other than this machine.
 
 ## 2. Create the first owner
 
-Open `https://<your-worker>/setup`, paste the setup token, and create the owner account. Then
-create a project and its environments in the dashboard.
+Open `https://<your-worker>/setup` as soon as the deploy finishes and create the owner account: the
+first account created there owns the instance. Then create a project and its environments in the
+dashboard.
 
 ## 3. Use the CLI
 

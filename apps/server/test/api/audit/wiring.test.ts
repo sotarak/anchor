@@ -48,12 +48,11 @@ describe("auth events", () => {
     const res = await createApp().request(
       `${TEST_ORIGIN}/api/v1/setup`,
       jsonInit("POST", {
-        setupToken: "setup-token-for-audit-test",
         email: "First@Example.test",
         name: "First",
         password: TEST_PASSWORD,
       }),
-      { ...env, ANCHOR_SETUP_TOKEN: "setup-token-for-audit-test" },
+      env,
     );
     expect(res.status).toBe(201);
     const { user } = await json<{ user: { id: string } }>(res);

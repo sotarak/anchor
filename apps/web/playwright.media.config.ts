@@ -4,7 +4,6 @@ import { defineConfig, devices } from "@playwright/test";
 // README media (docs/media): a fresh local instance with fake demo data. Not part of `pnpm e2e`.
 // Run with `pnpm --filter @anchor/web media` (needs `vhs` on PATH for the CLI recording).
 process.env.E2E_ROOT_KEY ??= randomBytes(32).toString("base64");
-process.env.E2E_SETUP_TOKEN ??= `media_setup_${randomBytes(16).toString("hex")}`;
 
 const PORT = 8791;
 

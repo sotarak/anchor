@@ -17,7 +17,7 @@ it up), and `openssl`.
 pnpm install
 
 # from the repository root, where wrangler.jsonc lives
-cp .dev.vars.example .dev.vars   # fill in both values with: openssl rand -base64 32
+cp .dev.vars.example .dev.vars   # fill in ANCHOR_ROOT_KEY with: openssl rand -base64 32
 pnpm db:migrate:local
 pnpm --filter @anchor/server dev # API and last dashboard build on http://localhost:8787
 ```
@@ -30,7 +30,7 @@ For dashboard work, run the API as above and, in a second terminal:
 cd apps/web && pnpm dev          # http://localhost:5173, /api proxied to :8787
 ```
 
-A fresh instance opens on `/setup`; use the `ANCHOR_SETUP_TOKEN` from `.dev.vars`.
+A fresh instance opens on `/setup`, where the first account you create becomes the owner.
 
 The docs site lives in `apps/docs` ([Starlight](https://starlight.astro.build)):
 

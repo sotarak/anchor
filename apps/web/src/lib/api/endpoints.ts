@@ -42,7 +42,7 @@ export type AuditPage = { events: AuditEventDto[]; nextCursor: string | null };
 export const api = {
   setup: {
     status: () => apiFetch<SetupStatusDto>("/setup/status"),
-    submit: (body: { setupToken: string; email: string; name: string; password: string }) =>
+    submit: (body: { email: string; name: string; password: string }) =>
       apiFetch<LoginResponse>("/setup", { method: "POST", body }),
   },
   auth: {

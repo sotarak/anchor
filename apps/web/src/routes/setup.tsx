@@ -1,6 +1,6 @@
 import { setupBodySchema } from "@anchor/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { AuthLayout } from "@/components/auth-layout";
 import { errorMessage } from "@/components/data/table-states";
@@ -27,9 +27,8 @@ export const Route = createFileRoute("/setup")({
   component: SetupPage,
 });
 
-type Key = "setupToken" | "name" | "email" | "password" | "confirm";
+type Key = "name" | "email" | "password" | "confirm";
 const MESSAGES: Record<Key, string> = {
-  setupToken: "Enter the setup token",
   name: "Enter your name",
   email: "Enter a valid email address",
   password: "Use at least 12 characters",
@@ -37,25 +36,26 @@ const MESSAGES: Record<Key, string> = {
 };
 
 function SetupError({ error }: { error: unknown }) {
-  if (error instanceof ApiClientError && error.code === "setup_disabled") {
+  // 409: another submission created the owner first (setup has no token since 0.3.0).
+  if (error instanceof ApiClientError && error.code === "conflict") {
     return (
       <Callout tone="warning">
-        Setup is disabled. Set the ANCHOR_SETUP_TOKEN secret on the Worker and reload.
+        This instance already has an owner.{" "}
+        <Link to="/login" className="underline">
+          Sign in
+        </Link>{" "}
+        with that account. If you did not create it, see Troubleshooting in the docs before you
+        store any secrets.
       </Callout>
     );
   }
-  const message =
-    error instanceof ApiClientError && error.code === "forbidden"
-      ? "Invalid setup token"
-      : errorMessage(error);
-  return <Callout tone="error">{message}</Callout>;
+  return <Callout tone="error">{errorMessage(error)}</Callout>;
 }
 
 function SetupPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [values, setValues] = useState<Record<Key, string>>({
-    setupToken: "",
     name: "",
     email: "",
     password: "",
@@ -96,15 +96,12 @@ function SetupPage() {
   return (
     <AuthLayout
       title="Set up Anchor"
-      description="Create the owner account. You need the setup token configured on the Worker."
+      description="Create the owner account. The first account created here owns this instance."
     >
       <form noValidate onSubmit={submit} className="flex flex-col gap-4">
         {setup.isError ? <SetupError error={setup.error} /> : null}
-        <Field htmlFor="setupToken" label="Setup token" error={errors.setupToken}>
-          <Input type="password" autoComplete="off" autoFocus {...field("setupToken")} />
-        </Field>
         <Field htmlFor="name" label="Name" error={errors.name}>
-          <Input autoComplete="name" {...field("name")} />
+          <Input autoComplete="name" autoFocus {...field("name")} />
         </Field>
         <Field htmlFor="email" label="Email" error={errors.email}>
           <Input type="email" autoComplete="username" {...field("email")} />

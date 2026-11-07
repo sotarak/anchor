@@ -132,6 +132,23 @@ describe("open-source repository", () => {
     expect(missing).toEqual([]);
   });
 
+  it("every workspace package is version 0.1.0 and the changelog has its section", () => {
+    const manifests = [
+      "package.json",
+      "apps/server/package.json",
+      "apps/web/package.json",
+      "apps/cli/package.json",
+      "apps/docs/package.json",
+      "packages/shared/package.json",
+    ];
+    const versions = Object.fromEntries(manifests.map((m) => [m, json(m).version]));
+    expect(versions).toEqual(Object.fromEntries(manifests.map((m) => [m, "0.1.0"])));
+    const changelog = read("CHANGELOG.md");
+    expect(changelog).toMatch(/^## \[0\.1\.0\] - \d{4}-\d{2}-\d{2}$/m);
+    expect(changelog.indexOf("## [Unreleased]")).toBeLessThan(changelog.indexOf("## [0.1.0]"));
+    expect(changelog).toContain("[0.1.0]: https://github.com/sotarak/anchor/releases/tag/v0.1.0");
+  });
+
   it("README links the docs site", () => {
     expect(read("README.md")).toContain("https://sotarak.github.io/anchor/");
   });

@@ -7,6 +7,8 @@ dashboard and CLI.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-07
+
 The first public release of Anchor: a self-hosted secrets manager that runs entirely on
 Cloudflare Workers, D1 and Queues.
 
@@ -45,3 +47,11 @@ Cloudflare Workers, D1 and Queues.
     cycle, depth and size limits.
   - Folder imports.
   - Background project-key rotation through Cloudflare Queues, and root-key rotation by re-wrapping.
+- **Project.**
+  - Licensed under the Apache License 2.0; contributions under the Developer Certificate of
+    Origin, checked in CI.
+  - A documentation site at https://sotarak.github.io/anchor/ (guides, operations runbooks,
+    security model, API reference).
+
+[Unreleased]: https://github.com/sotarak/anchor/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/sotarak/anchor/releases/tag/v0.1.0

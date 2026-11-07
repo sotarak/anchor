@@ -1,17 +1,51 @@
-name: Release CLI
+name: Release
 
-# Builds single-file `anchor` binaries with `bun build --compile` and attaches them, with
-# SHA256SUMS, to a draft GitHub Release. Nothing is published to npm.
+# A `v<version>` tag builds single-file `anchor` binaries with `bun build --compile` and attaches
+# them, with SHA256SUMS, to a draft GitHub Release whose notes are that version's CHANGELOG.md
+# section. `cli-v*` tags still work. Manual runs make a `cli-dev-<n>` draft. Nothing is published
+# to npm.
 on:
   push:
-    tags: ["cli-v*"]
+    tags: ["v*", "cli-v*"]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag, workspace versions and changelog agree
+        id: check
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version=$(node -p "require('./apps/cli/package.json').version")
+          for f in package.json apps/*/package.json packages/*/package.json; do
+            v=$(node -p "require('./$f').version")
+            if [ "$v" != "$version" ]; then
+              echo "::error file=$f::version $v does not match apps/cli ($version)"
+              exit 1
+            fi
+          done
+          if [ "$REF_TYPE" = "tag" ]; then
+            tag_version="${REF_NAME#cli-}"
+            tag_version="${tag_version#v}"
+            if [ "$tag_version" != "$version" ]; then
+              echo "::error::tag $REF_NAME does not match package version $version"
+              exit 1
+            fi
+            node scripts/changelog.mjs "$version" > /dev/null
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: verify
     strategy:
       fail-fast: false
       matrix:
@@ -80,11 +114,12 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: build
+    needs: [verify, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -92,11 +127,21 @@ jobs:
       - name: Checksums
         working-directory: dist
         run: sha256sum anchor-* > SHA256SUMS
+      - name: Release notes
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            node scripts/changelog.mjs "$VERSION" > notes.md
+          else
+            echo "Draft build of the anchor CLI ($VERSION, run ${{ github.run_number }})." > notes.md
+          fi
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
           TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('cli-dev-{0}', github.run_number) }}
         run: >
           gh release create "$TAG" dist/anchor-* dist/SHA256SUMS
-          --repo "${{ github.repository }}" --draft --title "Anchor CLI $TAG"
-          --target "${{ github.sha }}" --notes "Draft build of the anchor CLI."
+          --repo "${{ github.repository }}" --draft --title "Anchor v$VERSION"
+          --target "${{ github.sha }}" --notes-file notes.md

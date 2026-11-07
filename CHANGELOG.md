@@ -7,7 +7,7 @@ dashboard and CLI.
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-11-07
+## [0.4.0] - 2026-11-08
 
 ### Added
 

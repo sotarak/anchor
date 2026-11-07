@@ -1,0 +1,7 @@
+version: 2
+updates:
+  # Workflow actions only: npm dependencies follow pnpm's minimumReleaseAge policy by hand.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

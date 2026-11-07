@@ -1,0 +1,68 @@
+name: Bug report
+description: Something in Anchor does not work as documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Security vulnerabilities do not belong here**: report them
+        privately (see SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release tag or commit (`anchor --version` for the CLI).
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Server / API
+        - Dashboard
+        - CLI
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Where does it run?
+      options:
+        - Deployed to Cloudflare
+        - Local (wrangler dev)
+        - Not applicable
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include error messages and logs (with values removed).
+    validations:
+      required: true
+  - type: checkboxes
+    id: redaction
+    attributes:
+      label: Before you submit
+      options:
+        - label: I removed secret values and tokens from this report.
+          required: true

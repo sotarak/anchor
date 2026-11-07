@@ -75,7 +75,13 @@ export async function listChildFolders(
 }
 
 export type DeleteFolderResult =
-  | { status: "deleted"; secretsDeleted: number; foldersDeleted: number }
+  | {
+      status: "deleted";
+      secretsDeleted: number;
+      foldersDeleted: number;
+      /** "<path>/<KEY>" of every deleted secret, sorted. */
+      secrets: string[];
+    }
   | { status: "not_empty" }
   | { status: "not_found" };
 
@@ -93,7 +99,9 @@ export async function deleteFolder(
   if (force) {
     const [secrets, folders, imports] = await db.batch([
       db
-        .prepare(`DELETE FROM secrets WHERE environment_id = ? AND ${WITHIN("path")} RETURNING id`)
+        .prepare(
+          `DELETE FROM secrets WHERE environment_id = ? AND ${WITHIN("path")} RETURNING path, key`,
+        )
         .bind(environmentId, path, path),
       db
         .prepare(`DELETE FROM folders WHERE environment_id = ? AND ${WITHIN("path")} RETURNING id`)
@@ -105,12 +113,14 @@ export async function deleteFolder(
         .bind(environmentId, path, path),
     ]);
     // RETURNING counts the rows themselves; meta.changes would include cascaded version rows.
-    const secretsDeleted = secrets?.results.length ?? 0;
+    const gone = ((secrets?.results ?? []) as { path: string; key: string }[])
+      .map((r) => `${r.path === "/" ? "" : r.path}/${r.key}`)
+      .sort();
     const foldersDeleted = folders?.results.length ?? 0;
-    if (secretsDeleted + foldersDeleted + (imports?.results.length ?? 0) === 0) {
+    if (gone.length + foldersDeleted + (imports?.results.length ?? 0) === 0) {
       return { status: "not_found" };
     }
-    return deleted(secretsDeleted, foldersDeleted);
+    return deleted(gone, foldersDeleted);
   }
 
   if (await hasContent(db, environmentId, path)) return { status: "not_empty" };
@@ -123,14 +133,14 @@ export async function deleteFolder(
     )
     .bind(environmentId, path)
     .run();
-  if (result.meta.changes === 1) return deleted(0, 1);
+  if (result.meta.changes === 1) return deleted([], 1);
   // Nothing deleted: either it never existed, or content appeared after the check.
   if (await hasContent(db, environmentId, path)) return { status: "not_empty" };
   return { status: "not_found" };
 }
 
-function deleted(secretsDeleted: number, foldersDeleted: number): DeleteFolderResult {
-  return { status: "deleted", secretsDeleted, foldersDeleted };
+function deleted(secrets: string[], foldersDeleted: number): DeleteFolderResult {
+  return { status: "deleted", secretsDeleted: secrets.length, foldersDeleted, secrets };
 }
 
 /** Secrets, subfolders or imports inside `path` (the folder row itself does not count). */

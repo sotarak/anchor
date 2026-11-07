@@ -5,7 +5,7 @@ import {
   folderQuerySchema,
 } from "@anchor/shared";
 import { Hono } from "hono";
-import { recordAudit } from "../audit/record";
+import { capKeys, recordAudit } from "../audit/record";
 import { authorize } from "../authz/policy";
 import type { AppEnv } from "../env";
 import { ApiError } from "../lib/errors";
@@ -72,6 +72,8 @@ folderRoutes.delete("/", async (c) => {
       path,
       secretsDeleted: result.secretsDeleted,
       foldersDeleted: result.foldersDeleted,
+      // Each secret a forced delete destroyed, as a secret.deleted per key would have recorded.
+      ...(result.secrets.length > 0 ? capKeys(result.secrets) : {}),
     },
   });
   return c.body(null, 204);

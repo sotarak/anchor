@@ -179,19 +179,35 @@ describe("folders API", () => {
     expect(await folderRows()).toEqual(["/x"]);
   });
 
-  it("audit records folder.created and folder.deleted with counts", async () => {
+  it("audit records folder.created and folder.deleted with counts and every deleted secret", async () => {
     await create("/c");
     await create("/c");
-    await putSecret("/c/d", "K1");
     await putSecret("/c/d", "K2");
+    await putSecret("/c/d", "K1");
+    await putSecret("/c", "TOP");
     expect((await remove("/c", true)).status).toBe(204);
     const created = await auditRows("folder.created");
     expect(created.map((r) => JSON.parse(r.metadata ?? "null"))).toEqual([{ path: "/c" }]);
     const [deleted] = await auditRows("folder.deleted");
     expect(JSON.parse(deleted?.metadata ?? "null")).toEqual({
       path: "/c",
-      secretsDeleted: 2,
+      secretsDeleted: 3,
       foldersDeleted: 2,
+      keys: ["/c/TOP", "/c/d/K1", "/c/d/K2"],
     });
   });
+
+  it("folder.deleted caps a long list of deleted secrets and flags it", async () => {
+    // ~60-byte entries: 260 of them pass the 10 KiB key-list budget.
+    const key = (i: number) => `KEY_${String(i).padStart(3, "0")}_${"X".repeat(48)}`;
+    for (let i = 0; i < 260; i++) await putSecret("/big", key(i));
+    expect((await remove("/big", true)).status).toBe(204);
+    const [deleted] = await auditRows("folder.deleted");
+    const metadata = JSON.parse(deleted?.metadata ?? "null");
+    expect(metadata.secretsDeleted).toBe(260);
+    expect(metadata.keysTruncated).toBe(true);
+    expect(metadata.keys.length).toBeGreaterThan(0);
+    expect(metadata.keys.length).toBeLessThan(260);
+    expect(metadata.keys[0]).toBe(`/big/${key(0)}`);
+  }, 60_000);
 });

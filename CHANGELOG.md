@@ -63,6 +63,10 @@ dashboard and CLI.
   browser.
 - **CLI 0.4.0 against a 0.3.x server** cannot use browser login; it says so and points at
   `anchor login --with-password`. Upgrade the server first.
+- **Rolling back below 0.4.0 is not supported once 0.4.0 has written a secret.** Versions written
+  by 0.4.0 are sealed with AAD v2, which 0.3.x cannot open: revealing them, `anchor run` on a folder
+  that holds one, and updating them fail with a 500 until you upgrade again. No data is lost. Take
+  the D1 Time Travel bookmark before upgrading if you may need to go back.
 
 ## [0.3.0] - 2026-11-07
 

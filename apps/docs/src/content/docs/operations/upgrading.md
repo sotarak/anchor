@@ -83,7 +83,11 @@ it after each upgrade) so upgrades do not overwrite it.
 > from the root first. No data is rewritten: existing secrets read as sensitive `string` values.
 > Upgrade the server before the CLI: CLI 0.4.0 logs in through the browser, which a 0.3.x server
 > does not support (use `anchor login --with-password` until it is upgraded). CLI 0.3.x keeps
-> working against 0.4.0.
+> working against 0.4.0. **Rolling back below 0.4.0** (for example with the Worker's one-click
+> rollback) is not supported once 0.4.0 has written a secret: 0.3.x cannot open versions sealed
+> with the 0.4.0 format, so revealing them, `anchor run` on their folder and updating them fail
+> with a 500 until you upgrade again. No data is lost. To run 0.3.x again, restore the bookmark
+> from the step above, which discards every write made since.
 
 If a release changes Worker configuration (a new binding or queue in `wrangler.jsonc`), the changelog
 says so; create the resource before you deploy.

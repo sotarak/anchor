@@ -340,6 +340,10 @@ describe("open-source repository", () => {
     expect(section).toContain("sensitive");
     expect(section).toContain("--with-password");
     expect(section).toContain("secrets import");
+    expect(section).toMatch(/[Rr]olling back below 0\.4\.0/);
+    expect(read("apps/docs/src/content/docs/operations/upgrading.md")).toMatch(
+      /[Rr]olling back below 0\.4\.0/,
+    );
   });
 
   it("every workspace package is version 0.4.0", () => {

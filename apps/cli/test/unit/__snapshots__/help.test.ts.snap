@@ -438,6 +438,8 @@ Commands:
                             scripts)
   set [options] <key>       Create or update a secret; the value comes from stdin, --from-file or a
                             prompt
+  import [options]          Import a dotenv, JSON or YAML file; nested keys become UPPER_SNAKE and
+                            types are inferred
   delete <key>              Delete a secret (asks for confirmation; --yes in scripts)
   help [command]            display help for command
 "
@@ -534,6 +536,40 @@ Global Options:
 Examples:
   $ anchor secrets history DB_URL
   $ anchor secrets history DB_URL --json
+
+"
+`;
+
+exports[`help text > help for secrets import 1`] = `
+"Usage: anchor secrets import [options]
+
+Import a dotenv, JSON or YAML file; nested keys become UPPER_SNAKE and types are inferred
+
+Options:
+  --from-file <path>      file to import (otherwise piped stdin with --format)
+  --format <format>       file format (default: from the extension) (choices: "dotenv", "json",
+                          "yaml")
+  --overwrite             write a new version of keys that already exist (default: skip them)
+  --non-sensitive <glob>  keys matching this glob (* and ?) are plain config; repeatable
+  --comment <text>        comment stored with every imported secret
+  --dry-run               show what would be written and stop
+  -h, --help              display help for command
+
+Global Options:
+  --version               print the CLI version
+  --json                  print machine-readable JSON on stdout
+  -q, --quiet             suppress progress messages
+  --no-color              disable colored output
+  --debug                 print request diagnostics to stderr (never secret values)
+  --api-url <url>         Anchor server URL
+  --project <slug>        project slug
+  --env <slug>            environment slug
+  --path <path>           secret folder path
+  -y, --yes               skip confirmations
+
+Examples:
+  $ anchor secrets import --from-file application.config.yaml --env prod --path /shared --non-sensitive 'CONFIGS_CONTEXT_*' --non-sensitive 'CONFIGS_AGENT_*' --dry-run
+  $ anchor secrets import --from-file apps/service-agent/.env --env prod --path /service-agent
 
 "
 `;

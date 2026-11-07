@@ -16,9 +16,11 @@ import {
   secretsRollback,
   secretsSet,
 } from "./commands/secrets";
+import { type SecretsImportOptions, secretsImport } from "./commands/secrets-import";
 import { tokensCreate, tokensList, tokensRevoke } from "./commands/tokens";
 import { whoami } from "./commands/whoami";
 import { type CliDeps, type CommandContext, createContext, type GlobalFlags } from "./context";
+import { IMPORT_FORMATS } from "./import/parse";
 import { CLI_VERSION } from "./version";
 
 /** Result of one CLI invocation: a handler may return a non-zero exit code (e.g. `run`). */
@@ -212,6 +214,50 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
             sensitive?: boolean;
           },
         ) => secretsSet(ctx, key, opts),
+      ),
+    );
+  secrets
+    .command("import")
+    .description(
+      "Import a dotenv, JSON or YAML file; nested keys become UPPER_SNAKE and types are inferred",
+    )
+    .option("--from-file <path>", "file to import (otherwise piped stdin with --format)")
+    .addOption(
+      new Option("--format <format>", "file format (default: from the extension)").choices(
+        IMPORT_FORMATS,
+      ),
+    )
+    .option("--overwrite", "write a new version of keys that already exist (default: skip them)")
+    .option(
+      "--non-sensitive <glob>",
+      "keys matching this glob (* and ?) are plain config; repeatable",
+      (glob: string, prev: string[] | undefined) => [...(prev ?? []), glob],
+    )
+    .option("--comment <text>", "comment stored with every imported secret")
+    .option("--dry-run", "show what would be written and stop")
+    .addHelpText(
+      "after",
+      examples(
+        "anchor secrets import --from-file application.config.yaml --env prod --path /shared --non-sensitive 'CONFIGS_CONTEXT_*' --non-sensitive 'CONFIGS_AGENT_*' --dry-run",
+        "anchor secrets import --from-file apps/service-agent/.env --env prod --path /service-agent",
+      ),
+    )
+    .action(
+      act(
+        (
+          ctx,
+          opts: Omit<SecretsImportOptions, "overwrite" | "dryRun" | "nonSensitive"> & {
+            overwrite?: boolean;
+            dryRun?: boolean;
+            nonSensitive?: string[];
+          },
+        ) =>
+          secretsImport(ctx, {
+            ...opts,
+            overwrite: opts.overwrite === true,
+            dryRun: opts.dryRun === true,
+            nonSensitive: opts.nonSensitive ?? [],
+          }),
       ),
     );
   secrets

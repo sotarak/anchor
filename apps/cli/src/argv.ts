@@ -8,6 +8,7 @@ const VALUE_OPTIONS = new Set([
   "--from-file",
   "--format",
   "--type",
+  "--non-sensitive",
   "--output",
   "--email",
   "--name",

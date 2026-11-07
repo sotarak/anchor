@@ -132,6 +132,7 @@ described in [Versions and rollback](/anchor/guides/versions/).
 | `anchor secrets history <key>` | List the versions of a secret (no values) |
 | `anchor secrets rollback <key> --to <n>` | Restore a past version as a new version |
 | `anchor secrets set <key> [--from-file <path>] [--comment <text>] [--type <type>] [--sensitive \| --no-sensitive]` | Create or update a secret |
+| `anchor secrets import [--from-file <path>] [--format dotenv\|json\|yaml] [--overwrite] [--non-sensitive <glob>]... [--comment <text>] [--dry-run]` | Import a dotenv, JSON or YAML file into the current environment and path |
 | `anchor secrets delete <key>` | Delete a secret |
 | `anchor folders list` | List the subfolders of `--path` (default `/`) |
 | `anchor folders create <path>` | Create a folder and its parents (no-op if it exists) |
@@ -161,6 +162,50 @@ anchor secrets set TLS_CERT --from-file cert.pem --type pem
   ones show `********` unless you pass `--reveal`. `secrets get` prints a non-sensitive value
   without `--reveal` too.
 - References (`${...}`) expand only in `string` values; typed values are always used as stored.
+
+### Import a file
+
+`anchor secrets import` loads a whole file into one environment and folder (`--env`, `--path`, or
+`.anchor.json`), so a service can move to `anchor run` without one `secrets set` per key.
+
+- **Format** comes from `--format`, otherwise from the name: `.json` is JSON, `.yaml`/`.yml` is
+  YAML, and `.env`, `*.env` or a name starting with `.env` (`.env.production`) is dotenv. Piped
+  stdin, or any other name, needs `--format`.
+- **dotenv** values are imported as `string`, byte for byte; nothing is guessed.
+- **JSON and YAML** must hold an object. Nested keys are joined with `_` and uppercased, with `-`,
+  `.` and spaces turned into `_`: `configs.openrouter.api_key` becomes
+  `CONFIGS_OPENROUTER_API_KEY` and `transporters.grpc-clients` becomes
+  `TRANSPORTERS_GRPC_CLIENTS`. Types are inferred: numbers are `number`, `true`/`false` are
+  `boolean`, an array of strings is `list`, any other array is `json`, a PEM block is `pem`, and
+  other strings are `string`. A blank value (`api_key:`) or an empty object is reported as
+  **empty** and nothing is created for it.
+- **Before anything is sent**, the whole file is checked; a key that is not a valid Anchor key
+  (`Cannot import 2fa: 2FA is not a valid key`), two paths that map to the same key
+  (`a.b-c and a.b_c both become A_B_C`), or a value over 64 KiB or invalid for its type stops the
+  import with exit 2. Every problem is listed at once, and values are never printed.
+- **Existing keys** are skipped and listed as `skip`. `--overwrite` writes a new version for them
+  with the imported type and flag (a key whose value, type, flag and comment are already the same
+  is reported as unchanged). Without `--comment`, an overwritten key keeps its comment.
+- **Sensitivity:** every key is sensitive unless it matches a `--non-sensitive <glob>` (`*` and
+  `?`, case-sensitive, matched against the final key; repeat the flag for more globs).
+- **Writes** go one at a time, in key order. On the first failure the import stops with exit 1 and
+  `Imported <n> of <m>; <KEY> failed: <error>. Re-run to continue`; a re-run skips the keys already
+  written.
+- **Output** is a KEY, TYPE, SENSITIVE and ACTION table, then
+  `Created <a>, updated <b>, skipped <c> existing, <d> empty in <env>:<path>`. `--dry-run` prints
+  the same table with `Dry run: would create ...` and writes nothing. Values are never shown.
+
+For example, moving zepo-engine's shared config and one service's `.env` into `prod`:
+
+```sh
+anchor secrets import --from-file application.config.yaml --env prod --path /shared \
+  --non-sensitive 'CONFIGS_CONTEXT_*' --non-sensitive 'CONFIGS_AGENT_*' --dry-run
+# check the plan, then run it again without --dry-run
+anchor secrets import --from-file apps/service-agent/.env --env prod --path /service-agent
+```
+
+Then replace each value in `application.config.yaml` with its placeholder
+(`api_key: ${CONFIGS_OPENROUTER_API_KEY}`) and start the service with `anchor run`.
 
 ### Handling of secret values
 
@@ -317,6 +362,7 @@ existing fields are not renamed or removed without a major version.
 | `secrets get` | `{ secret: SecretDto }` (`value` only with `--reveal` or when stdout is not a terminal) |
 | `secrets set` | `{ secret: SecretDto, created: boolean }` (never the value) |
 | `secrets delete` | `{ deleted: { key, environment, path } }` |
+| `secrets import` | `{ created, updated, unchanged, skipped, empty }` (arrays of keys; `empty` holds source paths; `dryRun: true` with `--dry-run`, where the arrays hold the planned keys) |
 | `export --output` | `{ path, count, format }` (without `--output`, use `--format json` instead of `--json`) |
 | `tokens create` | `{ serviceToken: ServiceTokenDto, token }` |
 | `tokens list` | `{ serviceTokens: ServiceTokenDto[] }` |

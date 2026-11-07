@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { positionals } from "#src/argv";
 import { CliError, EXIT } from "#src/errors";
 import { assertNoSecretInArgv } from "#src/secret-input";
 
@@ -57,5 +58,11 @@ describe("assertNoSecretInArgv", () => {
     ]) {
       expect(() => assertNoSecretInArgv(argv)).not.toThrow();
     }
+  });
+
+  it("--non-sensitive takes a value, so its glob is not a positional", () => {
+    const argv = ["secrets", "import", "--non-sensitive", "X_*", "--from-file", "a.yaml"];
+    expect(() => assertNoSecretInArgv(argv)).not.toThrow();
+    expect(positionals(argv).map((p) => p.value)).toEqual(["secrets", "import"]);
   });
 });

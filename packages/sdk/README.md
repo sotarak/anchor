@@ -1,8 +1,9 @@
 # @anchor-secrets/sdk
 
 A Node client for [Anchor](https://sotarak.github.io/anchor/), a self-hosted secrets and
-configuration manager that runs on your own Cloudflare account. Use it to load a folder of
-secrets when your service starts, without wrapping the process in `anchor run`. For NestJS, use
+configuration manager that runs on your own Cloudflare account. Use it to read a folder of
+secrets from your service, without wrapping the process in `anchor run`: values are cached,
+refreshed in the background, and kept when Anchor is unreachable. For NestJS, use
 [`@anchor-secrets/nestjs`](https://www.npmjs.com/package/@anchor-secrets/nestjs), which is built on
 this package.
 
@@ -28,27 +29,49 @@ ANCHOR_TOKEN=anc_st_...
 import { createAnchorClient } from "@anchor-secrets/sdk";
 
 const anchor = createAnchorClient(); // reads ANCHOR_API_URL and ANCHOR_TOKEN
-const config = await anchor.loadSecrets({ project: "shop", environment: "prod", path: "/api" });
-// { DATABASE_URL: "postgres://...", PORT: 8080, FEATURE_FLAGS: { beta: true } }
+const folder = await anchor.folder({ project: "shop", environment: "prod", path: "/api" });
+
+folder.get<string>("DATABASE_URL"); // synchronous, never waits for the network
 ```
 
-- `loadSecrets` returns `{ KEY: value }` with typed values decoded: `number` and `boolean` become
-  numbers and booleans, `json` and `list` are parsed, `string` and `pem` stay strings.
-- `listSecrets` returns the secrets with their metadata (`key`, `path`, `type`, `sensitive`,
-  `version`, `value` as a string, `importedFrom`).
-- Both take `{ project, environment, path?, expand?, includeImports? }`. `path` defaults to `/`;
+- `client.folder(query)` loads once and returns an `AnchorFolder`: `get`, `getOrThrow`, `has`,
+  `keys`, `toObject` (frozen) and `refresh()`. A read of values older than the cache ttl returns
+  them at once and starts one background refresh.
+- `loadSecrets(query)` returns `{ KEY: value }` with typed values decoded: `number` and `boolean`
+  become numbers and booleans, `json` and `list` are parsed, `string` and `pem` stay strings.
+  `listSecrets(query)` returns the secrets with their metadata (`key`, `path`, `type`,
+  `sensitive`, `version`, `value` as a string, `importedFrom`). Both take `{ signal, fresh }`.
+- `query` is `{ project, environment, path?, expand?, includeImports? }`. `path` defaults to `/`;
   `${...}` references are expanded and folder imports are included unless you pass `false`.
-- Options: `createAnchorClient({ apiUrl?, token?, fetch?, timeoutMs? })`.
 
-## Errors and retries
+## Options
 
-Every failure is an `AnchorError` with `status` (0 when there was no response) and `code`:
-`config` (URL or token missing, before any request), `network`, `timeout`, or the server's error
-code such as `unauthenticated`, `forbidden` or `not_found`. Messages never contain tokens or
-values.
+```ts
+createAnchorClient({
+  apiUrl, // default ANCHOR_API_URL
+  token, // default ANCHOR_TOKEN
+  timeoutMs: 10_000, // per attempt
+  retry: { attempts: 3, baseDelayMs: 250, maxDelayMs: 5_000 }, // or false
+  cache: { ttlMs: 60_000, maxStaleMs: Infinity }, // or false; store: a custom CacheStore
+  onEvent: (event) => {}, // "retry" and "refresh_failed"
+  fetch, // replaces the global fetch
+});
+```
 
-Each attempt times out after 10 seconds. Network errors, timeouts and HTTP 502, 503 and 504 are
-retried twice, after 250 ms and 1 s; other errors are not retried.
+- **Cache:** in memory, per client, keyed by a fingerprint of the token (never the token).
+  Concurrent reads of one folder share a request. A custom `CacheStore` receives plaintext
+  values: encrypt them.
+- **Failures:** network errors, timeouts and HTTP 429/502/503/504 are retried with jittered
+  backoff, honoring `Retry-After`. When a refresh fails, the last good values are served (up to
+  `maxStaleMs` past the ttl), `refresh_failed` is emitted, and Anchor is not asked again for one
+  ttl. The first load has nothing to fall back on and throws.
+
+## Errors
+
+Every failure is an `AnchorError` with `status` (0 when there was no response), `code` and
+`retryable`: `config` (URL or token missing, before any request), `network`, `timeout`,
+`aborted`, or the server's error code such as `unauthenticated`, `forbidden` or `not_found`.
+Messages and events never contain tokens or values.
 
 Every value the client reads is recorded in the project's audit log under the token's name.
 

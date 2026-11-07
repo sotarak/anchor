@@ -1,7 +1,8 @@
 # @anchor-secrets/nestjs
 
 Load configuration and secrets from [Anchor](https://sotarak.github.io/anchor/), a self-hosted
-secrets manager on your own Cloudflare account, when a NestJS application starts. Built on
+secrets manager on your own Cloudflare account, into a NestJS application, cached and refreshed in
+the background. Built on
 [`@anchor-secrets/sdk`](https://www.npmjs.com/package/@anchor-secrets/sdk).
 
 ## Install
@@ -43,15 +44,18 @@ export class Database {
 }
 ```
 
-- Secrets load once while the application initializes. If loading fails, startup fails with an
+- Secrets load while the application initializes. If loading fails, startup fails with an
   `AnchorError`, so the app never runs without its configuration.
-- `AnchorService`: `get<T>(key)` (or `undefined`), `getOrThrow<T>(key)` (throws
-  `Anchor secret KEY is not set`), `has(key)`, `keys()`. Typed values are decoded: a `number`
-  secret is a number, `json` and `list` are parsed.
-- The module is global unless you pass `isGlobal: false`. The `ANCHOR_SECRETS` token injects the
-  raw `{ KEY: value }` record, `ANCHOR_OPTIONS` the options.
+- `AnchorService` reads synchronously: `get<T>(key)` (or `undefined`), `getOrThrow<T>(key)`
+  (throws `Anchor secret KEY is not set`), `has(key)`, `keys()`, `toObject()`; `refresh()`
+  fetches now. Typed values are decoded: a `number` secret is a number, `json` and `list` are
+  parsed.
+- Values refresh in the background: a read of values older than `cache.ttlMs` (default one
+  minute) returns them at once and starts one refresh. If Anchor is down, the app keeps its
+  values and `onEvent` receives `refresh_failed`.
+- The module is global unless you pass `isGlobal: false`. `ANCHOR_OPTIONS` injects the options.
 - Options are the SDK's: `project`, `environment`, `path?`, `expand?`, `includeImports?`,
-  `apiUrl?`, `token?`, `fetch?`, `timeoutMs?`.
+  `apiUrl?`, `token?`, `timeoutMs?`, `retry?`, `cache?`, `onEvent?`, `fetch?`.
 
 Options from other providers:
 
@@ -69,16 +73,17 @@ AnchorModule.forRootAsync({
 ## loadAnchorEnv
 
 For apps that read configuration from `process.env` (including `@nestjs/config`), copy the
-secrets into the environment before Nest starts:
+secrets into the environment before Nest starts, and import the app module after that
+(`ConfigModule.forRoot` reads and validates `process.env` when `app.module` loads):
 
 ```ts
 // main.ts
 import { NestFactory } from "@nestjs/core";
 import { loadAnchorEnv } from "@anchor-secrets/nestjs";
-import { AppModule } from "./app.module";
 
 async function bootstrap() {
   await loadAnchorEnv({ project: "shop", environment: "prod", path: "/api" });
+  const { AppModule } = await import("./app.module");
   const app = await NestFactory.create(AppModule);
   await app.listen(3000);
 }
@@ -87,6 +92,7 @@ void bootstrap();
 
 Values are written as the strings Anchor stores. Variables that are already set win unless you
 pass `override: true`. Nothing is written unless the whole folder loads, and nothing is logged.
+These values are written once and do not refresh.
 
 ## License
 

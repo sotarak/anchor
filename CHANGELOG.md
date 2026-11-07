@@ -43,10 +43,12 @@ dashboard and CLI.
   metadata, token revocation): the dashboard shows an approval page, and **Account → Connected
   apps** lists and revokes approved agents. Permissions are `secrets:read`, `secrets:write` and
   the opt-in `secrets:reveal` for sensitive values.
-- **Node SDK and NestJS module.** `@anchor-secrets/sdk` loads a folder of secrets in any Node 20+
-  service (typed values decoded, retries and timeouts, no runtime dependencies);
-  `@anchor-secrets/nestjs` adds `AnchorModule.forRoot` / `forRootAsync`, `AnchorService` and
-  `loadAnchorEnv` for NestJS 10 to 12. Both ship ESM and CommonJS and are published with the CLI.
+- **Node SDK and NestJS module.** `@anchor-secrets/sdk` reads folders of secrets in any Node 20+
+  service: typed values decoded, an in-memory cache (one minute by default) with background
+  refresh, retries with jittered backoff, and the last good values kept when Anchor is
+  unreachable; no runtime dependencies. `@anchor-secrets/nestjs` adds `AnchorModule.forRoot` /
+  `forRootAsync`, `AnchorService` and `loadAnchorEnv` for NestJS 10 to 12. Both ship ESM and
+  CommonJS and are published with the CLI.
 - **Agent skills.** `npx skills add sotarak/anchor --skill anchor-cli --skill anchor-migrate
   --skill anchor-ci` installs skills that teach coding agents to run apps with `anchor run`, keep
   secret values out of their context, migrate config files and set up CI tokens.

@@ -448,6 +448,35 @@ describe("open-source repository", () => {
     }
   });
 
+  it("the SDK guide documents caching, retries, folders and events", () => {
+    const sdk = read("apps/docs/src/content/docs/guides/sdk.md");
+    for (const s of [
+      "ttlMs",
+      "maxStaleMs",
+      "cache: false",
+      "retry",
+      "client.folder(",
+      "refresh_failed",
+      "CacheStore",
+    ]) {
+      expect(sdk).toContain(s);
+    }
+    expect(sdk).not.toContain("ANCHOR_SECRETS");
+    expect(read("packages/nestjs/README.md")).not.toContain("ANCHOR_SECRETS");
+  });
+
+  it("loadAnchorEnv examples import AppModule after the env is loaded", () => {
+    for (const file of ["apps/docs/src/content/docs/guides/sdk.md", "packages/nestjs/README.md"]) {
+      const doc = read(file);
+      const start = doc.indexOf("// main.ts");
+      const example = doc.slice(start, doc.indexOf("```", start));
+      expect(example, file).not.toMatch(/^import \{ AppModule \}/m);
+      const load = example.indexOf("await loadAnchorEnv(");
+      expect(load, file).toBeGreaterThan(-1);
+      expect(load, file).toBeLessThan(example.indexOf('await import("./app.module")'));
+    }
+  });
+
   it("the agent-skills guide installs the three skills by name and the README links it", () => {
     const guide = read("apps/docs/src/content/docs/guides/agent-skills.md");
     expect(guide).toContain(

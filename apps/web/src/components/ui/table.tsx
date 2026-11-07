@@ -32,8 +32,16 @@ export function TableHeader({ className, ...props }: ComponentProps<"thead">) {
   );
 }
 
-export function TableBody(props: ComponentProps<"tbody">) {
-  return <tbody data-slot="table-body" {...props} />;
+export function TableBody({ className, ...props }: ComponentProps<"tbody">) {
+  return (
+    <tbody
+      data-slot="table-body"
+      // Rows fade in when they mount (data replacing the skeleton, a new page); a refetch
+      // keeps row keys, so existing rows do not flash.
+      className={cn("[&>tr]:animate-in [&>tr]:fade-in-0 [&>tr]:duration-200", className)}
+      {...props}
+    />
+  );
 }
 
 export function TableRow({
@@ -45,7 +53,7 @@ export function TableRow({
     <tr
       data-slot="table-row"
       className={cn(
-        "group [&>td]:border-b last:[&>td]:border-0",
+        "group transition-colors duration-150 [&>td]:border-b last:[&>td]:border-0",
         clickable && "cursor-pointer hover:bg-bg-weak",
         !clickable && "hover:bg-bg-weak",
         className,

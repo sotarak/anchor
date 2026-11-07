@@ -2,6 +2,7 @@ import { Dialog as SheetPrimitive } from "radix-ui";
 import type { ComponentProps } from "react";
 import { RiCloseLine } from "react-icons/ri";
 import { cn } from "@/lib/cn";
+import { overlayMotion, sheetMotion } from "./motion";
 
 // Right-side sheet for create / edit forms. Recipe: components.md (Dialog and Sheet).
 export const Sheet = SheetPrimitive.Root;
@@ -17,13 +18,13 @@ export function SheetContent({
     <SheetPrimitive.Portal>
       <SheetPrimitive.Overlay
         data-slot="sheet-overlay"
-        className="fixed inset-0 z-50 bg-black/20 data-[state=open]:animate-in data-[state=open]:fade-in-0"
+        className={cn("fixed inset-0 z-50 bg-black/20", overlayMotion)}
       />
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
           "fixed inset-y-0 right-0 z-50 flex h-full w-3/4 flex-col border-l bg-bg-white shadow-md outline-none sm:max-w-xl",
-          "data-[state=open]:animate-in data-[state=open]:slide-in-from-right",
+          sheetMotion,
           className,
         )}
         {...props}

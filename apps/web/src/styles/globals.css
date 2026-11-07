@@ -282,6 +282,20 @@
   }
 }
 
+/* Motion is decoration only: people who ask for less get none (WCAG 2.3.3). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    /* biome-ignore lint/complexity/noImportantStyles: must beat every duration utility */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must beat every duration utility */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must beat every animation utility */
+    animation-iteration-count: 1 !important;
+  }
+}
+
 /* Radix Select hides its viewport scrollbar with a runtime <style>, which the CSP blocks; the
    element is stripped at build time (scripts/vite-plugin-csp-styles.ts) and the rule lives here. */
 [data-radix-select-viewport] {

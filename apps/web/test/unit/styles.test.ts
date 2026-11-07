@@ -16,6 +16,12 @@ describe("global styles", () => {
     );
   });
 
+  it("reduced motion removes animation and transition time", () => {
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*animation-duration:\s*0\.01ms !important;[^}]*transition-duration:\s*0\.01ms !important;/s,
+    );
+  });
+
   it("disabled controls get not-allowed", () => {
     expect(css).toMatch(/:disabled[^{]*\[aria-disabled="true"\][^{]*\{\s*cursor:\s*not-allowed/s);
   });

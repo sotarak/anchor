@@ -1,6 +1,7 @@
 import { Popover as PopoverPrimitive } from "radix-ui";
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/cn";
+import { popMotion } from "./motion";
 
 export const Popover = PopoverPrimitive.Root;
 export const PopoverTrigger = PopoverPrimitive.Trigger;
@@ -20,6 +21,7 @@ export function PopoverContent({
         sideOffset={sideOffset}
         className={cn(
           "z-50 w-72 rounded-xl border bg-bg-white p-3 shadow-md outline-none",
+          popMotion,
           className,
         )}
         {...props}

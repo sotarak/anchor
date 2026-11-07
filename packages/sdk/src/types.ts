@@ -67,3 +67,24 @@ export interface AnchorClient {
   /** The same secrets as `{ KEY: value }`, with typed values decoded. */
   loadSecrets(query: ListQuery): Promise<Record<string, AnchorValue>>;
 }
+
+/** What the cache keeps per folder. `secrets` hold plaintext values. */
+export type CacheEntry = { secrets: AnchorSecret[]; fetchedAt: number };
+
+/**
+ * Where cached folders live; the default keeps them in memory. A custom store (a file, Redis)
+ * receives plaintext values and must protect them, for example by encrypting them.
+ */
+export interface CacheStore {
+  get(key: string): CacheEntry | undefined | Promise<CacheEntry | undefined>;
+  set(key: string, entry: CacheEntry): void | Promise<void>;
+}
+
+export type CacheOptions = {
+  /** How long a fetched folder is served without asking the server; default 60 000 ms. */
+  ttlMs?: number;
+  /** How long past `ttlMs` a folder may still be served when the server fails; default no limit. */
+  maxStaleMs?: number;
+  /** Default: an in-memory store per client. */
+  store?: CacheStore;
+};

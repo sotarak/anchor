@@ -61,6 +61,28 @@ jobs:
       - run: pnpm --filter @anchor/web build
       - run: pnpm --filter ./apps/cli test:e2e
 
+  # setup-action/ (install.sh behind it) against a published release, on every runner OS.
+  setup-action:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: anchor
+        uses: ./setup-action
+        with:
+          version: 0.1.0
+      - shell: bash
+        env:
+          INSTALLED: ${{ steps.anchor.outputs.version }}
+        run: |
+          test "$(anchor --version)" = 0.1.0
+          test "$INSTALLED" = 0.1.0
+      - if: runner.os != 'Windows'
+        run: test "$(anchor-secrets --version)" = 0.1.0
+
   # `anchor run` on Windows: PATHEXT lookup and .cmd shims (npm, npx, pnpm) through cross-spawn.
   cli-windows-run:
     needs: check

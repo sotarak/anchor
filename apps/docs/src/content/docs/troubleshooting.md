@@ -51,8 +51,12 @@ the build ship together; `wrangler deploy` alone ships whatever is in `apps/web/
 ## `anchor` runs a different program
 
 Another tool may install a binary named `anchor` (for example the Solana Anchor framework's
-`anchor` CLI). Check with `which -a anchor`. Put Anchor's binary first on your `PATH`, call it
-by its full path, or install it under another name and alias it:
+`anchor` CLI). Check with `which -a anchor`.
+
+npm, Homebrew and the install script also install the CLI as `anchor-secrets`. Use that name,
+optionally with `alias anchor=anchor-secrets` in your shell profile. With a raw release binary, put
+Anchor's binary first on your `PATH`, call it by its full path, or install it under another name
+and alias it:
 
 ```sh
 sudo mv anchor-linux-x64 /usr/local/bin/anchor-secrets

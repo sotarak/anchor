@@ -7,6 +7,23 @@ dashboard and CLI.
 
 ## [Unreleased]
 
+### Added
+
+- **CLI distribution.**
+  - The CLI is published to npm as `@anchor-secrets/cli` (`npm install -g @anchor-secrets/cli`),
+    with provenance.
+  - Homebrew tap: `brew install sotarak/tap/anchor`.
+  - Install script for macOS and Linux that verifies the download against `SHA256SUMS`:
+    `curl -fsSL https://sotarak.github.io/anchor/install.sh | sh`.
+  - GitHub Action for CI: `uses: sotarak/anchor/setup-action@v<version>`.
+  - npm, Homebrew and the install script also install the CLI as `anchor-secrets`, for machines
+    where another `anchor` is on `PATH`.
+
+### Changed
+
+- Tag releases are published right away instead of as drafts, and also publish to npm and
+  Homebrew. Release tags are `v<version>` only; `cli-v<version>` tags no longer start a release.
+
 ## [0.1.0] - 2026-11-07
 
 The first public release of Anchor: a self-hosted secrets manager that runs entirely on

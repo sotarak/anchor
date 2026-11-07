@@ -74,8 +74,13 @@ covers backing up the root key, which cannot be recovered if lost.
 
 ## The CLI
 
-Download a binary from the [latest release](https://github.com/sotarak/anchor/releases/latest),
-then:
+```sh
+npm install -g @anchor-secrets/cli      # Node.js 22.19+, or:
+brew install sotarak/tap/anchor         # or: curl -fsSL https://sotarak.github.io/anchor/install.sh | sh
+```
+
+Release binaries and the GitHub Action for CI are in the
+[CLI guide](https://sotarak.github.io/anchor/guides/cli/). Then:
 
 ```sh
 anchor login --api-url https://anchor.example.com

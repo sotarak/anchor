@@ -37,7 +37,8 @@ const publicText = () => [
   ...filesUnder("apps/docs/src/content"),
 ];
 
-const EMAIL = /[\w.+-]+@[\w-]+\.[\w.]+/g;
+// The last domain label is letters, so `setup-action@v0.2.0` and `cli@0.2.0` are not addresses.
+const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\b/g;
 /** A bearer token of any kind (`anc_s_`, `anc_st_`, `anc_inv_`, `anc_rst_`) at real length. */
 const SECRET_LIKE = /anc_(s|st|inv|rst)_[A-Za-z0-9_-]{20,}/;
 
@@ -97,6 +98,12 @@ describe("open-source repository", () => {
 
   it.each(COMMUNITY_FILES)("%s exists", (file) => {
     expect(existsSync(path(file))).toBe(true);
+  });
+
+  it("the email pattern finds addresses but not package@version specifiers", () => {
+    const text =
+      "mail dev.name+x@mail.example.io, or uses: sotarak/anchor/setup-action@v0.2.0, npx @anchor-secrets/cli@0.2.0";
+    expect(text.match(EMAIL)).toEqual(["dev.name+x@mail.example.io"]);
   });
 
   it("community files and docs contain no email address (contact is GitHub-only)", () => {

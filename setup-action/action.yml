@@ -1,0 +1,38 @@
+name: Setup Anchor CLI
+description: Install the anchor CLI, verified against the release's SHA256SUMS, and add it to PATH.
+author: sotarak
+branding:
+  icon: anchor
+  color: red
+inputs:
+  version:
+    description: Version to install (e.g. 0.2.0), or latest
+    required: false
+    default: latest
+outputs:
+  version:
+    description: The installed version, as printed by `anchor --version`
+    value: ${{ steps.install.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: bash
+      env:
+        ANCHOR_VERSION: ${{ inputs.version }}
+      # install.sh is POSIX sh. On Windows runners it runs under Git Bash, which wants Unix-style
+      # paths, while GITHUB_PATH wants the Windows form.
+      run: |
+        script="$GITHUB_ACTION_PATH/../apps/docs/public/install.sh"
+        if [ "$RUNNER_OS" = Windows ]; then
+          script=$(cygpath -u "$script")
+          ANCHOR_INSTALL_DIR="$(cygpath -u "$RUNNER_TEMP")/anchor-bin"
+          path_entry=$(cygpath -w "$ANCHOR_INSTALL_DIR")
+        else
+          ANCHOR_INSTALL_DIR="$RUNNER_TEMP/anchor-bin"
+          path_entry=$ANCHOR_INSTALL_DIR
+        fi
+        export ANCHOR_INSTALL_DIR
+        sh "$script"
+        echo "$path_entry" >> "$GITHUB_PATH"
+        echo "version=$("$ANCHOR_INSTALL_DIR/anchor" --version)" >> "$GITHUB_OUTPUT"

@@ -34,15 +34,22 @@ jobs:
       ANCHOR_TOKEN: ${{ secrets.ANCHOR_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install anchor
-        run: |
-          curl -fsSL -o anchor https://github.com/sotarak/anchor/releases/latest/download/anchor-linux-x64
-          chmod +x anchor && sudo mv anchor /usr/local/bin/anchor
+      - uses: sotarak/anchor/setup-action@v0.2.0
+        with:
+          version: 0.2.0
       - run: anchor run --project my-app --env prod -- npm run deploy
 ```
 
-Pin a version (`releases/download/v0.1.0/anchor-linux-x64`) and check it against `SHA256SUMS` if
-you want reproducible builds.
+The action downloads the release binary for the runner (Linux, macOS or Windows), verifies it
+against the release's `SHA256SUMS`, and puts `anchor` on `PATH`. `version` defaults to `latest`;
+pin it for reproducible builds. The installed version is available as the step output `version`.
+
+On other CI systems, or when Node.js is already on the runner, either of these works too:
+
+```sh
+curl -fsSL https://sotarak.github.io/anchor/install.sh | ANCHOR_VERSION=0.2.0 sh   # ~/.local/bin
+npx -y @anchor-secrets/cli@0.2.0 run --project my-app --env prod -- npm run deploy
+```
 
 - **Set `ANCHOR_API_URL` next to `ANCHOR_TOKEN`.** The CLI only sends `ANCHOR_TOKEN` to an API URL
   from `--api-url`, `ANCHOR_API_URL` or the user config, never to the URL in a committed

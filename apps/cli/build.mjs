@@ -1,6 +1,6 @@
 // Bundles the CLI into one ESM file for Node (dist/anchor.mjs). Release binaries use
 // `bun build --compile` instead (.github/workflows/release-cli.yml).
-import { chmod, readFile } from "node:fs/promises";
+import { chmod, copyFile, readFile } from "node:fs/promises";
 import { build } from "esbuild";
 
 const pkg = JSON.parse(await readFile(new URL("./package.json", import.meta.url), "utf8"));
@@ -26,3 +26,5 @@ await build({
   logLevel: "warning",
 });
 await chmod(outfile, 0o755);
+// The npm package carries the Apache-2.0 NOTICE. (`pnpm pack` adds the root LICENSE itself.)
+await copyFile(new URL("../../NOTICE", import.meta.url), new URL("./dist/NOTICE", import.meta.url));

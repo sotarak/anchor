@@ -107,6 +107,41 @@ the commits of an existing branch: `git rebase --signoff main`, then force-push 
 
 Contributions are accepted under the Apache License 2.0 (section 5 of the license).
 
+## Releasing
+
+One version covers the server, dashboard and CLI. To release `X.Y.Z`:
+
+1. Set `"version": "X.Y.Z"` in every `package.json` (the root, `apps/*` and `packages/*`) and add a
+   `## [X.Y.Z] - <date>` section to `CHANGELOG.md`.
+2. Merge to `main`, then push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+The tag runs `.github/workflows/release-cli.yml`. It checks that the tag, the versions and the
+changelog agree, builds the binaries, then publishes the release right away (no draft):
+
+- a GitHub Release with the binaries, `SHA256SUMS` and the changelog section as notes;
+- `@anchor-secrets/cli` on npm, through trusted publishing with provenance (a version already on
+  npm is skipped);
+- `Formula/anchor.rb` in [`sotarak/homebrew-tap`](https://github.com/sotarak/homebrew-tap).
+
+A pre-release version (`X.Y.Z-rc.1`) becomes a GitHub pre-release, goes to the npm dist-tag `next`,
+and does not touch Homebrew. Running the workflow by hand, even from a tag, makes a `cli-dev-<n>`
+draft and publishes nothing else.
+
+If a job fails (for example the first npm publish), fix the cause and re-run the workflow: the
+existing GitHub Release is kept as it is, a version already on npm is skipped, and the formula is
+rebuilt from the release's `SHA256SUMS`.
+
+One-time setup (maintainer):
+
+- Create the npm organization `anchor-secrets`. If npm only lets you add a trusted publisher to a
+  package that already exists, publish the first version by hand:
+  `pnpm --filter ./apps/cli pack`, then `npm publish anchor-secrets-cli-X.Y.Z.tgz --access public`.
+- On npmjs.com, add a trusted publisher to `@anchor-secrets/cli`: GitHub Actions, repository
+  `sotarak/anchor`, workflow `release-cli.yml`.
+- Create the public repository `sotarak/homebrew-tap`. Create a fine-grained personal access token
+  with **Contents: read and write** on that repository only, and store it as the Actions secret
+  `HOMEBREW_TAP_TOKEN` of `sotarak/anchor`. Without it the release warns and skips Homebrew.
+
 ## AI-assisted development
 
 Anchor was built with AI coding agents. The `.claude/` directory holds the skills and rules they

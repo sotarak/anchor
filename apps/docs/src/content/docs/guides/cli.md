@@ -10,16 +10,60 @@ project, manage secrets and run commands with secrets injected. CI uses it with 
 
 ## Install
 
-- **Release binaries.** Download the binary for your platform from the GitHub Release
-  (`anchor-darwin-arm64`, `anchor-darwin-x64`, `anchor-linux-x64`, `anchor-linux-arm64`,
-  `anchor-windows-x64.exe`), check it against `SHA256SUMS`, make it executable, and put it on your
-  `PATH` as `anchor`.
-- **Node bundle.** `pnpm --filter ./apps/cli build` writes `apps/cli/dist/anchor.mjs`, a single file
-  that runs on Node 22.19 or later (`node apps/cli/dist/anchor.mjs --help`).
-- **From the workspace (development).** `pnpm --filter ./apps/cli dev <args>` runs the TypeScript
-  source with `tsx`.
+npm, Homebrew and the install script all install two commands, `anchor` and `anchor-secrets`.
+They are the same program. Use `anchor-secrets` when another tool already owns `anchor` on your
+`PATH` (see [Troubleshooting](/anchor/troubleshooting/)).
 
-The npm package name `@anchor-secrets/cli` is a placeholder; the package is not published yet.
+### npm (macOS, Linux, Windows)
+
+Needs Node.js 22.19 or later.
+
+```sh
+npm install -g @anchor-secrets/cli
+npx @anchor-secrets/cli --help        # or run it without installing
+```
+
+### Homebrew (macOS, Linux)
+
+```sh
+brew install sotarak/tap/anchor
+```
+
+### Install script (macOS, Linux)
+
+```sh
+curl -fsSL https://sotarak.github.io/anchor/install.sh | sh
+```
+
+The script picks the release binary for your platform, verifies it against the release's
+`SHA256SUMS`, and installs it to `~/.local/bin` without sudo. Nothing is installed if the checksum
+does not match. Read it first if you pipe scripts to `sh`. Options are environment variables:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ANCHOR_VERSION` | `latest` | Version to install, `0.2.0` or `v0.2.0` |
+| `ANCHOR_INSTALL_DIR` | `~/.local/bin` | Target directory |
+| `ANCHOR_DOWNLOAD_BASE` | `https://github.com/sotarak/anchor/releases` | Release mirror |
+
+```sh
+curl -fsSL https://sotarak.github.io/anchor/install.sh | ANCHOR_VERSION=0.2.0 sh
+```
+
+### Release binaries
+
+Every [GitHub Release](https://github.com/sotarak/anchor/releases) has single-file binaries
+(`anchor-darwin-arm64`, `anchor-darwin-x64`, `anchor-linux-x64`, `anchor-linux-arm64`,
+`anchor-windows-x64.exe`) and a `SHA256SUMS` file. Check the binary against `SHA256SUMS`, make it
+executable, and put it on your `PATH` as `anchor` (`anchor.exe` on Windows). This is the
+Windows install path when Node.js is not available.
+
+### From the workspace
+
+- `pnpm --filter ./apps/cli build` writes `apps/cli/dist/anchor.mjs`, the same single file the npm
+  package ships (`node apps/cli/dist/anchor.mjs --help`).
+- `pnpm --filter ./apps/cli dev <args>` runs the TypeScript source with `tsx` (development).
+
+In CI, use the [setup action](/anchor/guides/ci/).
 
 ## Getting started
 

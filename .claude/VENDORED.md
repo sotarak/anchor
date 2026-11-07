@@ -6,7 +6,8 @@
 | cloudflare, workers-best-practices, wrangler, cf-cli, durable-objects, workers-profiling | [cloudflare/skills](https://github.com/cloudflare/skills) | `1f2cd0a19588e2c6197c91dd7c71729df1fb6156` | Apache-2.0 © Cloudflare |
 
 License texts: [obra/superpowers (MIT)](THIRD_PARTY_LICENSES/obra-superpowers-MIT.txt),
-[cloudflare/skills (Apache-2.0)](THIRD_PARTY_LICENSES/cloudflare-skills-Apache-2.0.txt). The
+[cloudflare/skills (Apache-2.0)](THIRD_PARTY_LICENSES/cloudflare-skills-Apache-2.0.txt),
+[novuhq/novu (MIT)](THIRD_PARTY_LICENSES/novu-MIT.txt). The
 repository's `NOTICE` lists them as well.
 
 ## Local modifications

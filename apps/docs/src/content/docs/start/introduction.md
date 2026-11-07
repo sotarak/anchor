@@ -32,9 +32,9 @@ injects secrets into local processes and CI jobs.
 
 ## Why Cloudflare
 
-Workers, D1 and Queues give a globally deployed API with no servers to patch, a strongly
-consistent database for secrets and permissions, and a free tier that covers a small team. The
-whole instance is one `wrangler deploy`.
+Workers, D1 and Queues give a globally deployed API with no servers to patch and a strongly
+consistent database for secrets and permissions. The whole instance is one `wrangler deploy` on
+the Workers Paid plan (password hashing needs more CPU per login than the Free plan allows).
 
 ## What Anchor is not
 

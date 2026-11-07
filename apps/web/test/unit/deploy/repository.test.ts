@@ -38,6 +38,8 @@ const publicText = () => [
 ];
 
 const EMAIL = /[\w.+-]+@[\w-]+\.[\w.]+/g;
+/** A bearer token of any kind (`anc_s_`, `anc_st_`, `anc_inv_`, `anc_rst_`) at real length. */
+const SECRET_LIKE = /anc_(s|st|inv|rst)_[A-Za-z0-9_-]{20,}/;
 
 const PACKAGES = [
   "package.json",
@@ -87,6 +89,10 @@ describe("open-source repository", () => {
     expect(read(".claude/THIRD_PARTY_LICENSES/cloudflare-skills-Apache-2.0.txt")).toContain(
       "Apache License",
     );
+    const novu = read(".claude/THIRD_PARTY_LICENSES/novu-MIT.txt");
+    expect(novu).toContain("MIT License");
+    expect(novu).toContain("Copyright (c) 2019 Noti-fire Apps Ltd.");
+    expect(read("NOTICE")).toContain(".claude/THIRD_PARTY_LICENSES/novu-MIT.txt");
   });
 
   it.each(COMMUNITY_FILES)("%s exists", (file) => {
@@ -106,12 +112,64 @@ describe("open-source repository", () => {
     }
   });
 
+  it("the secret-string guard catches every bearer token kind", () => {
+    // Built at runtime so this file holds no token-shaped literal; 43 chars = base64url(32 bytes).
+    const body = "A".repeat(43);
+    for (const kind of ["s", "st", "inv", "rst"]) {
+      expect(`see anc_${kind}_${body} here`).toMatch(SECRET_LIKE);
+    }
+    expect("anc_st_<token>").not.toMatch(SECRET_LIKE);
+  });
+
   it("docs content and README hold no secret-looking strings", () => {
     for (const file of [...filesUnder("apps/docs/src/content"), "README.md"]) {
       const text = read(file);
-      expect(text, file).not.toMatch(/anc_[stp]_[A-Za-z0-9_-]{40,}/);
+      expect(text, file).not.toMatch(SECRET_LIKE);
       expect(text, file).not.toMatch(/-----BEGIN [A-Z ]*PRIVATE KEY-----/);
     }
+  });
+
+  describe("the security docs do not overstate guarantees", () => {
+    const model = () => read("apps/docs/src/content/docs/security/model.md");
+
+    it("a D1 writer is said to be able to grant themselves access", () => {
+      const row = model()
+        .split("\n")
+        .find((l) => l.startsWith("| Can write to D1"));
+      expect(row).toMatch(/session/i);
+      expect(row).toMatch(/read everything|reads everything/i);
+    });
+
+    it("a database copy is said to expose password hashes", () => {
+      const row = model()
+        .split("\n")
+        .find((l) => l.startsWith("| Gets a copy of the D1 database"));
+      expect(row).toMatch(/password hashes/i);
+    });
+
+    it("token audit coverage is limited to value reads and writes", () => {
+      const ci = read("apps/docs/src/content/docs/guides/ci.md");
+      expect(model()).not.toMatch(/every use is audited/i);
+      expect(ci).not.toMatch(/every read with a token/i);
+      expect(model()).toMatch(/value read/i);
+    });
+
+    it("no page says the Workers Free plan is enough", () => {
+      for (const file of filesUnder("apps/docs/src/content")) {
+        expect(read(file), file).not.toMatch(/free tier that covers/i);
+      }
+    });
+
+    it("root key troubleshooting names both log lines", () => {
+      for (const file of [
+        "apps/docs/src/content/docs/troubleshooting.md",
+        "apps/docs/src/content/docs/operations/root-key-rotation.md",
+      ]) {
+        expect(read(file), file).toContain("config_error");
+        expect(read(file), file).toContain("secret_decrypt_failed");
+        expect(read(file), file).toContain("kekVersion");
+      }
+    });
   });
 
   it("the bug report requires removing secrets", () => {

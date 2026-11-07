@@ -5,17 +5,19 @@ description: Common errors when deploying or using Anchor, and how to fix them.
 
 ## Every secret read returns `500 internal`
 
-The Worker logs say `config_error`. The root key configuration is inconsistent:
+The root key configuration is wrong. Look for one of two log lines (`pnpm exec wrangler tail` in
+`apps/server`):
 
-- `ANCHOR_ROOT_KEY_PREVIOUS` is set without `ANCHOR_ROOT_KEY_PREVIOUS_ID`, or the previous id
-  equals `ANCHOR_ROOT_KEY_ID`;
-- project keys are wrapped under a root key id that is not configured (a rotation was half done);
-- `ANCHOR_ROOT_KEY` was replaced with a new random value on an instance that already has data.
+- **`config_error`**: a root key variable is missing or malformed, `ANCHOR_ROOT_KEY_PREVIOUS` is
+  set without `ANCHOR_ROOT_KEY_PREVIOUS_ID`, or the previous id equals `ANCHOR_ROOT_KEY_ID`.
+  Creating a project under a root key that cannot open the existing project keys logs it too.
+- **`secret_decrypt_failed`** with a `projectId` and `kekVersion`: the project key was wrapped by a root key
+  the Worker does not have. Either its id is not configured (a rotation was half done), or
+  `ANCHOR_ROOT_KEY` was replaced with a new value on an instance that already has data.
 
 Restore the right key from your offline backup, and change the root key variables together with
 one `wrangler secret bulk` request, as in
-[Rotate the root key](/anchor/operations/root-key-rotation/). See the logs with
-`pnpm exec wrangler tail` in `apps/server`.
+[Rotate the root key](/anchor/operations/root-key-rotation/).
 
 ## A write returns `409 conflict`
 

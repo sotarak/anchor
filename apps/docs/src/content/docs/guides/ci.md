@@ -58,6 +58,6 @@ you want reproducible builds.
 
 - Revoke a token in **Settings → Service tokens** or with `anchor tokens revoke <id>`. The next
   request with it fails: there is no cache.
-- The token list shows when each token was last used. Every read with a token is in the project's
-  audit log under that token.
+- The token list shows when each token was last used. Every value read and every write with a token is
+  in the project's audit log under that token; listing secret names is not audited.
 - To rotate, create the new token, update the CI secret, then revoke the old one.

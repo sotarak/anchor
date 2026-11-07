@@ -54,7 +54,8 @@ change together, in one `wrangler secret bulk` request.
 7. Confirm the offline backup of the new key, then destroy the old key's backups only after you
    no longer need to restore a database backup taken before step 4.
 
-A misconfiguration fails closed with `500 internal` and a `config_error` log: a previous key
-without its id, a previous id equal to the current id, or project keys under an id that is not
-configured. A previous key that does not match fails the rewrap with `secret_decrypt_failed` and
+A misconfiguration fails closed with `500 internal`. A previous key without its id, or a previous
+id equal to the current id, logs `config_error`. Project keys under a root key id that is not
+configured log `secret_decrypt_failed` (with the `projectId` and `kekVersion`) on every read of
+that project. A previous key that does not match fails the rewrap with `secret_decrypt_failed` and
 writes nothing.

@@ -12,6 +12,7 @@ This repository also contains third-party material, distributed under its own li
   (https://github.com/cloudflare/skills), (c) Cloudflare, Apache License 2.0.
   See .claude/THIRD_PARTY_LICENSES/cloudflare-skills-Apache-2.0.txt.
 - Dashboard design token values and component recipes adapted from the Novu dashboard
-  (novuhq/novu, https://github.com/novuhq/novu), MIT License.
+  (novuhq/novu, https://github.com/novuhq/novu, apps/dashboard), Copyright (c) 2019 Noti-fire
+  Apps Ltd., MIT License. See .claude/THIRD_PARTY_LICENSES/novu-MIT.txt.
 
 .claude/VENDORED.md lists the exact upstream commits and local modifications.

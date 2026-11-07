@@ -17,9 +17,9 @@ rotation work, and it lets CI read secrets with a plain bearer token.
 
 | Attacker | Outcome |
 |----------|---------|
-| Gets a copy of the D1 database (export, backup, leaked dump) | Sees metadata (users, project and secret names, audit events) but **no secret values**: those are AES-256-GCM ciphertexts under keys wrapped by a root key that is not in the database |
-| Can write to D1 but not run the Worker | Cannot move a ciphertext to another secret, version, environment or project: the AAD binds it to its row and decryption fails |
-| Steals a service token | Reads (or writes, for `read-write`) only the environments and folders in its scopes, until it expires or is revoked; every use is audited with the token's id |
+| Gets a copy of the D1 database (export, backup, leaked dump) | Sees metadata (users, project and secret names, audit events) and the PBKDF2 password hashes, which allow offline password guessing, but **no secret values**: those are AES-256-GCM ciphertexts under keys wrapped by a root key that is not in the database |
+| Can write to D1 but not run the Worker | Can grant themselves access (insert a session or token hash, change a role or a scope) and then read everything through the API, or point a secret back at an older version. The AAD only stops a ciphertext being moved to another secret, version, environment or project. **Protect D1 write access like access to the Worker** |
+| Steals a service token | Reads (or writes, for `read-write`) only the environments and folders in its scopes, until it expires or is revoked; every value read and every write is audited with the token's id (listing names is not) |
 | Steals a session | Acts as that user until the session expires (7 days for the dashboard, 30 days for the CLI) or is revoked from the **Account** page |
 | A malicious project member | Limited to the member's role and allowed environments; cannot read the audit log unless a project admin |
 | Controls your Cloudflare account, or the Worker and its secrets | **Reads everything.** Anchor cannot protect against the platform it runs on |
@@ -66,7 +66,8 @@ access to `prod:/db`, and a forbidden target is a `403` whether it exists or not
 
 - Append-only: a database trigger rejects every `UPDATE` and any `DELETE` of a row younger than
   365 days.
-- Logged: logins (successful and failed), secret reads that return values, writes, deletes,
+- Logged: logins (successful and failed), every value read (listing names without values is not
+  logged), writes, deletes,
   rollbacks, permission and membership changes, token creation and revocation, key rotations.
 - Every event has the actor (user or service token), IP address, user agent, time and target.
   Events never contain secret values or tokens.

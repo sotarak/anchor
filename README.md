@@ -61,6 +61,9 @@ curl -fsSL https://sotarak.github.io/anchor/install.sh | sh   # standalone binar
   viewer) limited to chosen environments, and service tokens scoped to environments and folders.
 - **Audit log.** Logins, reads and changes, never values. Append-only, kept for 365 days.
 - **Dashboard and CLI.** A web dashboard served by the same Worker, and a CLI for developers and CI.
+- **AI agents over MCP.** Claude Code, Codex and other MCP clients connect with OAuth and your
+  approval; sensitive values stay hidden unless you allow it. See the
+  [MCP guide](https://sotarak.github.io/anchor/guides/mcp/).
 
 ## Architecture
 

@@ -361,6 +361,13 @@ describe("open-source repository", () => {
     expect(read("apps/server/src/version.ts")).toContain('SERVER_VERSION = "0.4.0"');
   });
 
+  it("the MCP guide shows Claude Code and Codex setup and the reveal permission", () => {
+    const mcp = read("apps/docs/src/content/docs/guides/mcp.md");
+    expect(mcp).toContain("claude mcp add --transport http anchor");
+    expect(mcp).toContain("codex mcp add anchor --url");
+    expect(mcp).toContain("secrets:reveal");
+  });
+
   it("the CI guide pins the 0.4.0 CLI", () => {
     const ci = read("apps/docs/src/content/docs/guides/ci.md");
     expect(ci).not.toContain("0.3.0");

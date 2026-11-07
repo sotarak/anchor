@@ -99,6 +99,25 @@ Prefix: `/projects/:project/environments/:env`.
 Reading values (`reveal=true`, one secret, or a past version) writes an audit event first; if that
 fails, the read fails with `500`.
 
+### OAuth and MCP (0.4.0)
+
+These live at the instance origin, not under `/api/v1`, and answer CORS for any origin. See
+[Connect AI agents over MCP](/anchor/guides/mcp/).
+
+| Route | Purpose |
+|---|---|
+| `GET /.well-known/oauth-protected-resource`, `…/oauth-protected-resource/mcp` | RFC 9728 metadata: `resource` is `<origin>/mcp` |
+| `GET /.well-known/oauth-authorization-server` | RFC 8414 metadata: code flow with PKCE `S256`, public clients only |
+| `POST /oauth/register` | RFC 7591 registration: `{ redirect_uris, client_name? }` → `201 { client_id, … }`. Redirect URIs are `https:`, or `http:` on `localhost`, `127.0.0.1` or `[::1]` (any port); at most 10 pending clients per IP and 500 overall |
+| `GET /oauth/authorize` | The dashboard's approval page |
+| `POST /oauth/token` | Form-encoded `authorization_code` (with `code_verifier`) or `refresh_token` grant → `{ access_token, token_type, expires_in: 3600, refresh_token, scope }`. Codes last 5 minutes and work once; refresh tokens rotate and a reused one revokes the grant. Errors are RFC 6749 `{ error, error_description }` |
+| `POST /oauth/revoke` | RFC 7009: revokes the token's grant; always `200` |
+| `POST /mcp` | MCP Streamable HTTP (stateless, JSON responses) with `Authorization: Bearer anc_oat_…`; `401` with `WWW-Authenticate` otherwise. `GET` is `405` |
+
+The dashboard calls `POST /api/v1/oauth/authorize/check` and `/decision` (dashboard session only),
+`GET /api/v1/oauth/grants` and `DELETE /api/v1/oauth/grants/:id` (your connected apps). OAuth
+access tokens work only on `/mcp`; on `/api/v1` they get `401`.
+
 #### Value types and the sensitive flag
 
 Every secret version has a `type` (`string`, `json`, `pem`, `number`, `boolean` or `list`) and a

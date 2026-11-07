@@ -24,7 +24,7 @@ jobs:
       prerelease: ${{ steps.check.outputs.prerelease }}
       npm_tag: ${{ steps.check.outputs.npm_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Tag, workspace versions and changelog agree
         id: check
         env:
@@ -85,7 +85,7 @@ jobs:
             }
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -125,7 +125,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: dist
@@ -176,7 +176,7 @@ jobs:
       VERSION: ${{ needs.verify.outputs.version }}
       NPM_TAG: ${{ needs.verify.outputs.npm_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -229,7 +229,7 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
       - if: steps.token.outputs.skip != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Generate the formula
         if: steps.token.outputs.skip != 'true'
         env:
@@ -240,7 +240,7 @@ jobs:
           node scripts/homebrew-formula.mjs "$VERSION" dist/SHA256SUMS > "$RUNNER_TEMP/anchor.rb"
           ruby -c "$RUNNER_TEMP/anchor.rb"
       - if: steps.token.outputs.skip != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: sotarak/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}

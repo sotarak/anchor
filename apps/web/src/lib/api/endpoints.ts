@@ -14,6 +14,7 @@ import type {
   ProjectKeyDto,
   ProjectRole,
   SecretDto,
+  SecretValueType,
   SecretVersionDto,
   ServiceTokenDto,
   SessionDto,
@@ -132,7 +133,13 @@ export const api = {
       p: string,
       env: string,
       key: string,
-      body: { value: string; comment: string; path: string },
+      body: {
+        value: string;
+        comment: string;
+        path: string;
+        type: SecretValueType;
+        sensitive: boolean;
+      },
     ) =>
       (
         await apiFetch<{ secret: SecretDto }>(`${envUrl(p, env)}/secrets/${e(key)}`, {

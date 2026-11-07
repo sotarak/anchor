@@ -25,6 +25,11 @@ disabled, and the server rejects the request anyway.
   - The table lists the secrets of the current folder in columns: Key, Value (masked), Comment,
     Version and Updated. A long comment is cut to one line; hover it to read it in full. Reveal and
     copy appear on hover. Create and edit open a side sheet.
+  - The side sheet has a **Type** (`string`, `json`, `pem`, `number`, `boolean`, `list`) and a
+    **Sensitive** checkbox (checked by default). The value is checked against its type before it is
+    saved, and the reason (for example `not valid JSON`) shows under **Value**. A secret whose type
+    is not `string` carries a type tag next to its key. Values of non-sensitive secrets are plain
+    config: the table shows them as stored, without a reveal button.
   - Folders: browse with the path breadcrumb, **Create folder**, **Delete folder**.
   - Imports: **Add import** shows another folder's secrets here; imported rows carry an
     **Imported from** label. See [References and imports](/anchor/guides/references-imports/).

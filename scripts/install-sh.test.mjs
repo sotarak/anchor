@@ -111,10 +111,12 @@ test("pins ANCHOR_VERSION with or without a leading v", () => {
 
 test("rejects a malformed ANCHOR_VERSION", () => {
   const fx = fixture();
-  const r = runInstall(fx, { ANCHOR_VERSION: "0.2" });
-  assert.equal(r.code, 1);
-  assert.match(r.stderr, /0\.2/);
-  assert.equal(existsSync(join(fx.bin, "anchor")), false);
+  for (const version of ["0.2", "1", "0.2.0.1", "0..2", "0.2.0-"]) {
+    const r = runInstall(fx, { ANCHOR_VERSION: version });
+    assert.equal(r.code, 1, version);
+    assert.ok(r.stderr.includes(`must look like 0.2.0 or v0.2.0, got: ${version}`), r.stderr);
+    assert.equal(existsSync(join(fx.bin, "anchor")), false);
+  }
 });
 
 test("fails closed on a checksum mismatch and keeps the existing binary", () => {

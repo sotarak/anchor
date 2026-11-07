@@ -59,6 +59,8 @@ else
   minor=${rest%%.*}
   patch=${rest#*.}
   valid=1
+  # Exactly three dot-separated numbers: "0.2" or "1" would otherwise parse as 0.2.2 or 1.1.1.
+  case $core in *.*.*.* | *..*) valid=0 ;; *.*.*) ;; *) valid=0 ;; esac
   is_digits "$major" && is_digits "$minor" && is_digits "$patch" || valid=0
   case $version in *[!0-9A-Za-z.-]*) valid=0 ;; esac
   case $version in *-*) [ -n "${version#*-}" ] || valid=0 ;; esac

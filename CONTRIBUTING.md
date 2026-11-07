@@ -124,8 +124,12 @@ changelog agree, builds the binaries, then publishes the release right away (no 
 - `Formula/anchor.rb` in [`sotarak/homebrew-tap`](https://github.com/sotarak/homebrew-tap).
 
 A pre-release version (`X.Y.Z-rc.1`) becomes a GitHub pre-release, goes to the npm dist-tag `next`,
-and does not touch Homebrew. Running the workflow by hand makes a `cli-dev-<n>` draft and publishes
-nothing else.
+and does not touch Homebrew. Running the workflow by hand, even from a tag, makes a `cli-dev-<n>`
+draft and publishes nothing else.
+
+If a job fails (for example the first npm publish), fix the cause and re-run the workflow: the
+existing GitHub Release is kept as it is, a version already on npm is skipped, and the formula is
+rebuilt from the release's `SHA256SUMS`.
 
 One-time setup (maintainer):
 

@@ -22,7 +22,7 @@ dashboard and CLI.
 ### Changed
 
 - Tag releases are published right away instead of as drafts, and also publish to npm and
-  Homebrew.
+  Homebrew. Release tags are `v<version>` only; `cli-v<version>` tags no longer start a release.
 
 ## [0.1.0] - 2026-11-07
 

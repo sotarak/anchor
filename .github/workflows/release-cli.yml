@@ -5,10 +5,12 @@ name: Release
 # It then publishes @anchor-secrets/cli to npm (trusted publishing; npm binds the publisher to this
 # file name, so do not rename it) and updates Formula/anchor.rb in sotarak/homebrew-tap.
 # A pre-release version (`0.2.0-rc.1`) is a GitHub pre-release, goes to the npm dist-tag `next`
-# and leaves Homebrew alone. `cli-v*` tags still work. Manual runs only make a `cli-dev-<n>` draft.
+# and leaves Homebrew alone. Only a tag push publishes: manual runs (even from a tag) only make a
+# `cli-dev-<n>` draft. Tags are `v*` only, because the install script, the Action and the Homebrew
+# formula download from `releases/download/v<version>/`.
 on:
   push:
-    tags: ["v*", "cli-v*"]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -38,8 +40,7 @@ jobs:
             fi
           done
           if [ "$REF_TYPE" = "tag" ]; then
-            tag_version="${REF_NAME#cli-}"
-            tag_version="${tag_version#v}"
+            tag_version="${REF_NAME#v}"
             if [ "$tag_version" != "$version" ]; then
               echo "::error::tag $REF_NAME does not match package version $version"
               exit 1
@@ -136,7 +137,7 @@ jobs:
         env:
           VERSION: ${{ needs.verify.outputs.version }}
         run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
+          if [ "${{ github.event_name }}" = "push" ]; then
             node scripts/changelog.mjs "$VERSION" > notes.md
           else
             echo "Draft build of the anchor CLI ($VERSION, run ${{ github.run_number }})." > notes.md
@@ -146,19 +147,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.verify.outputs.version }}
           PRERELEASE: ${{ needs.verify.outputs.prerelease }}
-          REF_TYPE: ${{ github.ref_type }}
-          TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('cli-dev-{0}', github.run_number) }}
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.event_name == 'push' && github.ref_name || format('cli-dev-{0}', github.run_number) }}
         run: |
-          # Tags publish right away; manual runs stay drafts.
+          # A re-run ("Re-run all jobs") finds the release from the first attempt. Keep it and its
+          # assets as they are (the Homebrew formula is built from its SHA256SUMS) and let the
+          # npm and homebrew jobs run again.
+          if gh release view "$TAG" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            echo "::notice::release $TAG already exists; keeping it"
+            exit 0
+          fi
+          # Tag pushes publish right away; manual runs stay drafts.
           flags=()
-          if [ "$REF_TYPE" != "tag" ]; then flags+=(--draft); fi
+          if [ "$EVENT" != "push" ]; then flags+=(--draft); fi
           if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
           gh release create "$TAG" dist/anchor-* dist/SHA256SUMS \
             --repo "${{ github.repository }}" "${flags[@]}" --title "Anchor v$VERSION" \
             --target "${{ github.sha }}" --notes-file notes.md
 
   npm:
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push'
     needs: [verify, release]
     runs-on: ubuntu-latest
     permissions:
@@ -203,7 +211,7 @@ jobs:
         run: npm publish "$RUNNER_TEMP"/pkg/*.tgz --access public --tag "$NPM_TAG"
 
   homebrew:
-    if: github.ref_type == 'tag' && needs.verify.outputs.prerelease == 'false'
+    if: github.event_name == 'push' && needs.verify.outputs.prerelease == 'false'
     needs: [verify, release]
     runs-on: ubuntu-latest
     permissions:

@@ -188,7 +188,9 @@ createAnchorClient({ cache: { store } });
 ```
 
 A store receives plaintext secret values: encrypt them, and never share one store between
-services that should not read each other's secrets. Cache keys contain a SHA-256 fingerprint of
+services that should not read each other's secrets. A store that throws never fails a read: the
+client asks Anchor instead, or keeps the fetched values without storing them, and reports
+`store_failed`. Cache keys contain a SHA-256 fingerprint of
 the token, never the token itself.
 
 ## When Anchor is down
@@ -217,6 +219,7 @@ createAnchorClient({
     if (event.type === "refresh_failed") {
       logger.error(`Anchor unreachable, serving values ${event.staleForMs} ms past their ttl`);
     }
+    if (event.type === "store_failed") logger.error(`Cache store ${event.operation} failed`);
   },
 });
 ```

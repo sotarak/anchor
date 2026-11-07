@@ -53,14 +53,14 @@ createAnchorClient({
   timeoutMs: 10_000, // per attempt
   retry: { attempts: 3, baseDelayMs: 250, maxDelayMs: 5_000 }, // or false
   cache: { ttlMs: 60_000, maxStaleMs: Infinity }, // or false; store: a custom CacheStore
-  onEvent: (event) => {}, // "retry" and "refresh_failed"
+  onEvent: (event) => {}, // "retry", "refresh_failed" and "store_failed"
   fetch, // replaces the global fetch
 });
 ```
 
 - **Cache:** in memory, per client, keyed by a fingerprint of the token (never the token).
   Concurrent reads of one folder share a request. A custom `CacheStore` receives plaintext
-  values: encrypt them.
+  values: encrypt them. A store that throws never fails a read (`store_failed` is emitted).
 - **Failures:** network errors, timeouts and HTTP 429/502/503/504 are retried with jittered
   backoff, honoring `Retry-After`. When a refresh fails, the last good values are served (up to
   `maxStaleMs` past the ttl), `refresh_failed` is emitted, and Anchor is not asked again for one

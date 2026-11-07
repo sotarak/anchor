@@ -217,3 +217,31 @@ describe("keys and stores", () => {
     expect(map.size).toBe(1);
   });
 });
+
+describe("a failing store", () => {
+  const broken = (fail: "get" | "set"): CacheStore => {
+    const map = new Map<string, CacheEntry>();
+    return {
+      get: async (k) => {
+        if (fail === "get") throw new Error("redis down");
+        return map.get(k);
+      },
+      set: async (k, e) => {
+        if (fail === "set") throw new Error("redis down");
+        map.set(k, e);
+      },
+    };
+  };
+
+  it("treats a get failure as a miss and still fetches", async () => {
+    const c = setup({ store: broken("get") });
+    expect((await c.load()).secrets[0]?.value).toBe("v1");
+    expect(events).toMatchObject([{ type: "store_failed", operation: "get" }]);
+  });
+
+  it("returns the fetched values when set fails", async () => {
+    const c = setup({ store: broken("set") });
+    expect((await c.load()).secrets[0]?.value).toBe("v1");
+    expect(events).toMatchObject([{ type: "store_failed", operation: "set" }]);
+  });
+});

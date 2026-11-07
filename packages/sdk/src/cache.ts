@@ -79,7 +79,7 @@ export class SecretCache {
     opts: { fresh?: boolean; signal?: AbortSignal; strict?: boolean } = {},
   ): Promise<CacheEntry> {
     if (opts.signal?.aborted) throw abortedError();
-    const entry = await this.policy.store.get(key);
+    const entry = await this.read(key);
     if (entry && !opts.fresh && this.servable(key, entry)) return entry;
     let pending = this.inflight.get(key);
     if (!pending) {
@@ -90,6 +90,24 @@ export class SecretCache {
     const outcome = await untilAborted(pending, opts.signal);
     if (opts.strict && outcome.error) throw outcome.error;
     return outcome.entry;
+  }
+
+  /** A store that fails is a miss: Anchor stays reachable when Redis (or a file) is not. */
+  private async read(key: string): Promise<CacheEntry | undefined> {
+    try {
+      return await this.policy.store.get(key);
+    } catch (error) {
+      this.emit({ type: "store_failed", operation: "get", error });
+      return undefined;
+    }
+  }
+
+  private async write(key: string, entry: CacheEntry): Promise<void> {
+    try {
+      await this.policy.store.set(key, entry);
+    } catch (error) {
+      this.emit({ type: "store_failed", operation: "set", error });
+    }
   }
 
   private servable(key: string, entry: CacheEntry): boolean {
@@ -110,7 +128,7 @@ export class SecretCache {
   ): Promise<Outcome> {
     try {
       const entry: CacheEntry = { secrets: await fetch(), fetchedAt: this.now() };
-      await this.policy.store.set(key, entry);
+      await this.write(key, entry);
       this.failedAt.delete(key);
       return { entry };
     } catch (error) {

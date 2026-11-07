@@ -48,7 +48,9 @@ export type RetryOptions = {
 /** What the client reports through `onEvent`. Never carries a token or a value. */
 export type AnchorEvent =
   | { type: "retry"; attempt: number; delayMs: number; error: AnchorError }
-  | { type: "refresh_failed"; error: AnchorError; staleForMs: number };
+  | { type: "refresh_failed"; error: AnchorError; staleForMs: number }
+  /** A custom `CacheStore` threw; the read went to Anchor, or the fetched values were not kept. */
+  | { type: "store_failed"; operation: "get" | "set"; error: unknown };
 
 export type ListQuery = {
   /** Project slug. */

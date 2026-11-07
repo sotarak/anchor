@@ -10,3 +10,8 @@ export function toBytes(v: unknown): Uint8Array {
 export function isUniqueViolation(err: unknown): boolean {
   return err instanceof Error && /UNIQUE constraint failed/.test(err.message);
 }
+
+/** The secret_versions_reject_retired_kek trigger (migration 0004) refused the insert. */
+export function isRetiredKekWrite(err: unknown): boolean {
+  return err instanceof Error && /retired_kek/.test(err.message);
+}

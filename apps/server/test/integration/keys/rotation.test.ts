@@ -8,7 +8,9 @@ import {
   type ReencryptMessage,
   startOrResumeRotation,
 } from "#src/keys/rotation";
-import { getProjectBySlug } from "#src/projects/repo";
+import { ApiError } from "#src/lib/errors";
+import { getProjectBySlug, listEnvironments, type ProjectRow } from "#src/projects/repo";
+import { putSecret, type SecretContext } from "#src/secrets/service";
 import {
   auditRows,
   createMember,
@@ -183,6 +185,72 @@ describe("KEK rotation", () => {
     expect(await processRotationBatch(db, keyring, msg, Date.now())).toBe("done");
     expect((await keyStatus()).rotations[0]?.status).toBe("completed");
     expect(await auditRows("kek.rotation_finished")).toHaveLength(1);
+  });
+
+  /** A write that loaded the project before the rotation began: it still encrypts under KEK v1. */
+  async function staleWriter(stale: ProjectRow) {
+    const [environment] = await listEnvironments(db, stale.id);
+    if (!environment) throw new Error("no environment");
+    const ctx: SecretContext = {
+      db,
+      keyring,
+      project: stale,
+      environment,
+      actorId: null,
+      now: Date.now(),
+    };
+    return (key: string, value: string) => putSecret(ctx, { path: "/", key, value, comment: "" });
+  }
+
+  it("a stale write landing just before the finish keeps v1 retiring and is re-encrypted next", async () => {
+    const expected = await seed(3);
+    const stale = await getProjectBySlug(db, "app");
+    const write = await staleWriter(stale);
+    await rotate();
+    const msg = lastMessage();
+    let batches = 0;
+    // Between the batch's remaining-count and its finish, the stale writer lands a v1 version.
+    const racingDb = new Proxy(db, {
+      get(target, prop) {
+        if (prop === "batch") {
+          return async (statements: D1PreparedStatement[]) => {
+            batches += 1;
+            if (batches === 2) await write("LATE", "late-value");
+            return target.batch(statements);
+          };
+        }
+        const value = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    expect(await processRotationBatch(racingDb, keyring, msg, Date.now())).toBe("more");
+    const mid = await keyStatus();
+    expect(mid.rotations[0]?.status).toBe("running");
+    expect(mid.keys.find((k) => k.version === 1)?.status).toBe("retiring");
+    expect(await auditRows("kek.rotation_finished")).toHaveLength(0);
+
+    expect(await processRotationBatch(db, keyring, msg, Date.now())).toBe("done");
+    expect(await keyVersionsInUse()).toEqual([{ k: 2, n: 4 }]);
+    expect((await keyStatus()).keys.find((k) => k.version === 1)?.status).toBe("retired");
+    expect(await readAll()).toEqual({ ...expected, LATE: "late-value" });
+  });
+
+  it("a stale write after the rotation finished is refused (409), never stored under the retired KEK", async () => {
+    await seed(2);
+    const stale = await getProjectBySlug(db, "app");
+    const write = await staleWriter(stale);
+    await rotate();
+    expect(await processRotationBatch(db, keyring, lastMessage(), Date.now())).toBe("done");
+    for (const attempt of [() => write("NEW_KEY", "x"), () => write("K000", "changed")]) {
+      const err = await attempt().catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).status).toBe(409);
+    }
+    expect(await keyVersionsInUse()).toEqual([{ k: 2, n: 2 }]);
+    // The refused create left no secret row behind.
+    expect(
+      await db.prepare("SELECT COUNT(*) AS n FROM secrets WHERE key = 'NEW_KEY'").first(),
+    ).toEqual({ n: 0 });
   });
 
   it("write during rotation lands on v2 and is not re-processed", async () => {

@@ -2,7 +2,7 @@ import type { SecretDto } from "@anchor/shared";
 import { AEAD_ALG, open, seal } from "../crypto/aead";
 import { type RootKeyring, secretAad } from "../crypto/keyring";
 import { ensureFolders } from "../folders/repo";
-import { isUniqueViolation } from "../lib/d1";
+import { isRetiredKekWrite, isUniqueViolation } from "../lib/d1";
 import { utf8Decode, utf8Encode } from "../lib/encoding";
 import { ApiError, IntegrityError } from "../lib/errors";
 import { newId } from "../lib/random";
@@ -112,7 +112,10 @@ async function batchOrConflict(db: D1Database, statements: D1PreparedStatement[]
   try {
     await db.batch(statements);
   } catch (err) {
-    if (isUniqueViolation(err)) throw new ApiError(409, "conflict", CONFLICT);
+    // A version insert under a KEK a rotation retired meanwhile: the batch rolled back, retry.
+    if (isUniqueViolation(err) || isRetiredKekWrite(err)) {
+      throw new ApiError(409, "conflict", CONFLICT);
+    }
     throw err;
   }
 }

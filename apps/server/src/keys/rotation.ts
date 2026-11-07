@@ -95,13 +95,20 @@ async function enqueue(queue: Queue<ReencryptMessage>, r: RotationRow): Promise<
   }
 }
 
+/** No version of the project is left under a KEK other than `?2` (project id `?1`). */
+const NOTHING_PENDING = `NOT EXISTS (
+  SELECT 1 FROM secret_versions v JOIN secrets s ON s.id = v.secret_id
+  WHERE s.project_id = ?1 AND v.key_version != ?2)`;
+
 /**
- * Marks every KEK older than `toVersion` retired and the rotation completed, once. The audit event
- * is in the same batch, inserted only while the rotation is still running: the first delivery
- * commits all three or none, and a duplicate delivery inserts and changes nothing.
+ * Marks every KEK older than `toVersion` retired and the rotation completed, once, and only if no
+ * version still uses an older KEK: a write that loaded the project before the rotation began can
+ * land one between the last count and this batch. Then nothing changes, and the caller carries on
+ * re-encrypting. The audit event is in the same batch under the same guard, so the finish and its
+ * event commit together; a duplicate delivery changes nothing. Returns whether it finished.
  */
-async function finishRotation(db: D1Database, r: RotationRow, now: number): Promise<void> {
-  await db.batch([
+async function finishRotation(db: D1Database, r: RotationRow, now: number): Promise<boolean> {
+  const [, , finished] = await db.batch([
     systemAuditStatement(
       db,
       {
@@ -114,21 +121,31 @@ async function finishRotation(db: D1Database, r: RotationRow, now: number): Prom
           total: r.total,
         },
       },
+      // Plain placeholders: they follow the insert's own 13 parameters.
       {
-        sql: "EXISTS (SELECT 1 FROM key_rotations WHERE id = ? AND status = 'running')",
-        params: [r.id],
+        sql: `EXISTS (SELECT 1 FROM key_rotations WHERE id = ? AND status = 'running')
+          AND NOT EXISTS (SELECT 1 FROM secret_versions v JOIN secrets s ON s.id = v.secret_id
+            WHERE s.project_id = ? AND v.key_version != ?)`,
+        params: [r.id, r.project_id, r.to_version],
       },
     ),
     db
-      .prepare("UPDATE project_keys SET status = 'retired' WHERE project_id = ? AND version < ?")
+      .prepare(
+        `UPDATE project_keys SET status = 'retired' WHERE project_id = ?1 AND version < ?2
+         AND ${NOTHING_PENDING}`,
+      )
       .bind(r.project_id, r.to_version),
     db
       .prepare(
-        `UPDATE key_rotations SET status = 'completed', done = total, finished_at = ?, updated_at = ?
-         WHERE id = ? AND status = 'running'`,
+        `UPDATE key_rotations SET status = 'completed', done = total, finished_at = ?4, updated_at = ?4
+         WHERE id = ?3 AND status = 'running' AND ${NOTHING_PENDING}`,
       )
-      .bind(now, now, r.id),
+      .bind(r.project_id, r.to_version, r.id, now),
   ]);
+  if (finished?.meta.changes === 1) return true;
+  // Not finished here: a duplicate delivery already did, or a late version is pending.
+  const current = await getRotation(db, r.id);
+  return current?.status !== "running";
 }
 
 /**
@@ -195,8 +212,7 @@ export async function startOrResumeRotation(
 
   const created = await getRotation(db, id);
   if (!created) throw new Error("rotation row missing after insert");
-  if (created.total === 0) {
-    await finishRotation(db, created, now);
+  if (created.total === 0 && (await finishRotation(db, created, now))) {
     const done = await getRotation(db, id);
     return { rotation: toRotationDto(done ?? created), resumed: false };
   }
@@ -312,10 +328,7 @@ export async function processRotationBatch(
     .bind(project.id, rotation.to_version)
     .first<{ n: number }>();
   const left = remaining?.n ?? 0;
-  if (left === 0) {
-    await finishRotation(db, rotation, now);
-    return "done";
-  }
+  if (left === 0 && (await finishRotation(db, rotation, now))) return "done";
   await db
     .prepare(
       "UPDATE key_rotations SET done = MAX(0, total - ?), updated_at = ? WHERE id = ? AND status = 'running'",

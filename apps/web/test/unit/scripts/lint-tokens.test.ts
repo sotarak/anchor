@@ -47,4 +47,10 @@ describe("lint-tokens", () => {
     });
     expect(r.code).toBe(0);
   });
+
+  it("flags cursor-default", () => {
+    const r = lint({ "menu.tsx": 'export const A = () => <div className="cursor-default" />;' });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("menu.tsx:1: cursor-default");
+  });
 });

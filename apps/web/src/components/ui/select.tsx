@@ -72,7 +72,7 @@ export function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2 rounded-md py-1.5 pr-8 pl-2 text-label-sm text-text-sub outline-none",
+        "relative flex select-none items-center gap-2 rounded-md py-1.5 pr-8 pl-2 text-label-sm text-text-sub outline-none",
         "focus:bg-neutral-alpha-100 focus:text-text-strong data-[disabled]:text-text-disabled",
         className,
       )}

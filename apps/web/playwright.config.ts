@@ -30,6 +30,12 @@ export default defineConfig({
       dependencies: ["smoke"],
       use: { ...devices["Desktop Chrome"] },
     },
+    {
+      name: "cursor",
+      testMatch: /cursor\.spec\.ts$/,
+      dependencies: ["smoke"],
+      use: { ...devices["Desktop Chrome"] },
+    },
   ],
   webServer: {
     // CI builds the dashboard in an earlier step; locally the smoke always tests a fresh build.

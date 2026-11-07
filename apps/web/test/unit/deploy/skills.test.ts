@@ -42,7 +42,7 @@ function frontmatter(rel: string): { fields: Record<string, string>; metadataKey
 
 describe("agent skills (npx skills add sotarak/anchor)", () => {
   it("ships exactly the user-facing skills", () => {
-    expect(skillDirs().sort()).toEqual(["anchor-cli"]);
+    expect(skillDirs().sort()).toEqual(["anchor-cli", "anchor-migrate"]);
   });
 
   it("every skill has a valid name and a when-to-use description", () => {

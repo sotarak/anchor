@@ -104,6 +104,27 @@ export type LoginResponse = { user: UserDto; token?: string; expiresAt: number }
 
 export type SetupStatusDto = { needsSetup: boolean };
 
+/** `POST /auth/cli/start`: what the CLI shows and polls with (browser login, 0.4.0). */
+export type CliLoginStartDto = {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  verificationUriComplete: string;
+  expiresAt: number;
+  /** Seconds between polls of `POST /auth/cli/token`. */
+  interval: number;
+};
+
+/** A pending CLI login as the dashboard shows it before approval. */
+export type CliLoginRequestDto = {
+  userCode: string;
+  clientName: string | null;
+  userAgent: string | null;
+  ip: string | null;
+  createdAt: number;
+  expiresAt: number;
+};
+
 export type SessionDto = {
   /** First 16 hex chars of the stored session id hash, never the hash itself. */
   id: string;

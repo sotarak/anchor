@@ -8,7 +8,7 @@ export function newId(): string {
   return crypto.randomUUID();
 }
 
-export type TokenKind = "anc_s" | "anc_st" | "anc_inv" | "anc_rst";
+export type TokenKind = "anc_s" | "anc_st" | "anc_inv" | "anc_rst" | "anc_dc";
 
 /** Bearer secret: "<kind>_" + base64url(32 random bytes). Only its SHA-256 hex is ever stored. */
 export function newToken(kind: TokenKind): string {

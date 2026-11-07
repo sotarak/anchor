@@ -27,3 +27,13 @@ export const resetPasswordBodySchema = z.object({
   token: linkTokenSchema,
   password: passwordSchema,
 });
+
+/** `POST /auth/cli/start`: the CLI names itself (`<user>@<host>`); shown as untrusted text. */
+export const cliLoginStartBodySchema = z.object({
+  clientName: z.string().max(100).optional(),
+});
+
+/** `POST /auth/cli/token`: the secret device code the CLI polls with. */
+export const cliLoginTokenBodySchema = z.object({
+  deviceCode: z.string().min(1).max(200),
+});

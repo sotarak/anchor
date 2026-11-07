@@ -1,7 +1,7 @@
 import type { SessionDto } from "@anchor/shared";
 import { screen, waitFor, within } from "@testing-library/react";
 import { delay, HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiError, fixtures, renderApp, server, signedInAs, signedOut } from "#test/support";
 
 const DAY = 86_400_000;
@@ -35,6 +35,11 @@ function sessionsAre(list: () => SessionDto[]) {
 
 const sessionsTable = () =>
   within(screen.getByRole("region", { name: "Sessions" })).getByRole("table");
+
+// The Connected apps section loads on the same page; its own tests live beside this file.
+beforeEach(() => {
+  server.use(http.get("/api/v1/oauth/grants", () => HttpResponse.json({ grants: [] })));
+});
 
 describe("/account", () => {
   it("shows the profile read-only", async () => {

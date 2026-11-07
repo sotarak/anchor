@@ -61,6 +61,20 @@ disabled, and the server rejects the request anyway.
 
 - Change your password.
 - See your active sessions (dashboard and CLI) and revoke any of them.
+- **Connected apps**: the AI agents and apps you approved over OAuth (see
+  [Connect AI agents over MCP](/anchor/guides/mcp/)), with their permissions (Read, Write,
+  Reveal), when you approved them and when they were last used. **Revoke** cuts an app off at its
+  next request.
+
+## Approving an AI agent
+
+When an MCP client such as Claude Code or Codex connects, your browser opens `/oauth/authorize`
+(sign in first if asked). The page names the app and the host it returns to, and lists what it
+will be able to do: see your projects, secrets and non-sensitive values, and create, change and
+delete secrets. If the app asked to read sensitive values, an **Also allow reading sensitive
+values** checkbox appears, unticked; leave it unticked unless the agent needs secret values in its
+context. **Only approve if you just connected an AI agent or app to Anchor.** Either button sends
+you back to the app. Only a dashboard session can approve.
 
 ## Approving a CLI login
 

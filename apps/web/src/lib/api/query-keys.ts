@@ -30,4 +30,6 @@ export const qk = {
   audit: (filters: AuditFilters) => ["audit", filters] as const,
   projectAudit: (p: string, filters: AuditFilters) => ["projects", p, "audit", filters] as const,
   sessions: ["sessions"] as const,
+  oauthGrants: ["oauth-grants"] as const,
+  oauthCheck: (query: string) => ["oauth-check", query] as const,
 };

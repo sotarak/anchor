@@ -10,6 +10,9 @@ import type {
   KeyRotationDto,
   LoginResponse,
   MemberDto,
+  OAuthAuthorizeCheckDto,
+  OAuthAuthorizeRequest,
+  OAuthGrantDto,
   OverviewDto,
   ProjectDto,
   ProjectKeyDto,
@@ -65,6 +68,21 @@ export const api = {
       apiFetch<void>(`/auth/cli/requests/${e(code)}/approve`, { method: "POST" }),
     deny: (code: string) =>
       apiFetch<void>(`/auth/cli/requests/${e(code)}/deny`, { method: "POST" }),
+  },
+  oauth: {
+    /** 200 with the consent details, or with `redirectTo` when the client must get an error. */
+    check: (req: OAuthAuthorizeRequest) =>
+      apiFetch<OAuthAuthorizeCheckDto | { redirectTo: string }>("/oauth/authorize/check", {
+        method: "POST",
+        body: req,
+      }),
+    decide: (req: OAuthAuthorizeRequest, decision: { approve: boolean; allowReveal: boolean }) =>
+      apiFetch<{ redirectTo: string }>("/oauth/authorize/decision", {
+        method: "POST",
+        body: { ...req, ...decision },
+      }),
+    grants: async () => (await apiFetch<{ grants: OAuthGrantDto[] }>("/oauth/grants")).grants,
+    revokeGrant: (id: string) => apiFetch<void>(`/oauth/grants/${e(id)}`, { method: "DELETE" }),
   },
   invites: {
     list: async () => (await apiFetch<{ invites: InviteDto[] }>("/invites")).invites,

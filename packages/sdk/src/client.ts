@@ -1,5 +1,12 @@
 import { cacheKey, SecretCache } from "./cache.js";
-import { type Config, cachePolicy, DEFAULT_TTL_MS, emitSafely, resolveConfig } from "./config.js";
+import {
+  type Config,
+  cachePolicy,
+  DEFAULT_TTL_MS,
+  emitSafely,
+  resolveConfig,
+  validateOptions,
+} from "./config.js";
 import { decodeAll, toSecret, type WireSecret } from "./decode.js";
 import { AnchorError } from "./errors.js";
 import { openFolder } from "./folder.js";
@@ -61,6 +68,7 @@ export type ClientCore = {
 };
 
 export function createClientCore(options: ClientOptions): ClientCore {
+  validateOptions(options);
   const emit = (event: AnchorEvent) => emitSafely(options.onEvent, event);
   const policy = cachePolicy(options.cache);
   const cache = policy ? new SecretCache(policy, emit) : undefined;

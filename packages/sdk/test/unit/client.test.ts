@@ -399,3 +399,59 @@ describe("caching", () => {
     await expect(pending).rejects.toMatchObject({ code: "aborted" });
   });
 });
+
+describe("option validation", () => {
+  const busy = () => json({ error: { code: "unavailable", message: "Busy" } }, 503);
+
+  it("an option passed as undefined keeps its default", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = fakeFetch(busy());
+      const pending = client(f.fetch, {
+        retry: { attempts: undefined, baseDelayMs: undefined },
+        cache: { ttlMs: undefined },
+        timeoutMs: undefined,
+      })
+        .listSecrets(QUERY)
+        .catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(await pending).toBeInstanceOf(AnchorError);
+      expect(f.calls).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    ["retry.attempts", { retry: { attempts: Number.NaN } }],
+    ["retry.attempts", { retry: { attempts: 0 } }],
+    ["retry.attempts", { retry: { attempts: 1.5 } }],
+    ["retry.baseDelayMs", { retry: { baseDelayMs: Number.NaN } }],
+    ["retry.maxDelayMs", { retry: { maxDelayMs: -1 } }],
+    ["cache.ttlMs", { cache: { ttlMs: Number.NaN } }],
+    ["cache.maxStaleMs", { cache: { maxStaleMs: -5 } }],
+    ["timeoutMs", { timeoutMs: Number.NaN }],
+    ["timeoutMs", { timeoutMs: 0 }],
+  ])("rejects an invalid %s without sending a request", (name, extra) => {
+    const f = fakeFetch(json({ secrets: [] }));
+    let error: unknown;
+    try {
+      client(f.fetch, extra);
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(AnchorError);
+    expect((error as AnchorError).code).toBe("config");
+    expect((error as AnchorError).message).toContain(name);
+    expect(f.calls).toHaveLength(0);
+  });
+
+  it("accepts maxStaleMs: Infinity and retry: false", () => {
+    expect(() =>
+      client(fakeFetch(json({ secrets: [] })).fetch, {
+        cache: { maxStaleMs: Number.POSITIVE_INFINITY },
+        retry: false,
+      }),
+    ).not.toThrow();
+  });
+});

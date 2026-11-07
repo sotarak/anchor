@@ -1,7 +1,7 @@
 import { type CachePolicy, memoryStore } from "./cache.js";
 import { AnchorError } from "./errors.js";
 import { DEFAULT_RETRY, type RetryPolicy } from "./retry.js";
-import type { AnchorEvent, CacheOptions, ClientOptions } from "./types.js";
+import type { AnchorEvent, CacheOptions, ClientOptions, RetryOptions } from "./types.js";
 
 export const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -56,10 +56,62 @@ export function resolveConfig(opts: ClientOptions): Config {
     origin,
     token,
     fetch: f,
-    timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-    retry: opts.retry === false ? false : { ...DEFAULT_RETRY, ...opts.retry },
+    timeoutMs: timeoutOption(opts.timeoutMs),
+    retry: retryPolicy(opts.retry),
     onEvent: opts.onEvent,
   };
+}
+
+type NumberRule = { min: number; integer?: boolean; infinite?: boolean };
+
+/**
+ * A numeric option: `undefined` keeps the default; anything else must be a number within the
+ * rule, or the client refuses to start. A `NaN` from an unset environment variable would
+ * otherwise mean endless retries or a cache that never refreshes.
+ */
+function numberOption(name: string, value: number | undefined, fallback: number, rule: NumberRule) {
+  if (value === undefined) return fallback;
+  const valid =
+    typeof value === "number" &&
+    !Number.isNaN(value) &&
+    (rule.infinite || Number.isFinite(value)) &&
+    value >= rule.min &&
+    (!rule.integer || Number.isInteger(value));
+  if (!valid) {
+    const kind = rule.integer ? "an integer" : "a number";
+    throw new AnchorError(
+      0,
+      "config",
+      `Anchor option ${name} must be ${kind} of at least ${rule.min}`,
+    );
+  }
+  return value;
+}
+
+const timeoutOption = (value: number | undefined) =>
+  numberOption("timeoutMs", value, DEFAULT_TIMEOUT_MS, { min: 1 });
+
+/** The retry settings with defaults filled in, or `false` when retries are off. */
+export function retryPolicy(retry: RetryOptions | false | undefined): RetryPolicy | false {
+  if (retry === false) return false;
+  return {
+    attempts: numberOption("retry.attempts", retry?.attempts, DEFAULT_RETRY.attempts, {
+      min: 1,
+      integer: true,
+    }),
+    baseDelayMs: numberOption("retry.baseDelayMs", retry?.baseDelayMs, DEFAULT_RETRY.baseDelayMs, {
+      min: 0,
+    }),
+    maxDelayMs: numberOption("retry.maxDelayMs", retry?.maxDelayMs, DEFAULT_RETRY.maxDelayMs, {
+      min: 0,
+    }),
+  };
+}
+
+/** Checks every numeric option once, when the client is created. */
+export function validateOptions(opts: ClientOptions): void {
+  timeoutOption(opts.timeoutMs);
+  retryPolicy(opts.retry);
 }
 
 /** Calls the event hook; a hook that throws never breaks a request. */
@@ -80,8 +132,11 @@ export const DEFAULT_TTL_MS = 60_000;
 export function cachePolicy(cache: CacheOptions | false | undefined): CachePolicy | false {
   if (cache === false) return false;
   return {
-    ttlMs: cache?.ttlMs ?? DEFAULT_TTL_MS,
-    maxStaleMs: cache?.maxStaleMs ?? Number.POSITIVE_INFINITY,
+    ttlMs: numberOption("cache.ttlMs", cache?.ttlMs, DEFAULT_TTL_MS, { min: 0 }),
+    maxStaleMs: numberOption("cache.maxStaleMs", cache?.maxStaleMs, Number.POSITIVE_INFINITY, {
+      min: 0,
+      infinite: true,
+    }),
     store: cache?.store ?? memoryStore(),
   };
 }

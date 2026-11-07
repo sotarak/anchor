@@ -220,6 +220,14 @@ describe("open-source repository", () => {
     );
   });
 
+  const MEDIA = ["secrets", "overview", "history", "service-tokens", "audit"]
+    .map((n) => `docs/media/${n}.png`)
+    .concat("docs/media/cli.gif");
+  it.each(MEDIA)("%s exists and is under 1 MB", (f) => {
+    expect(existsSync(path(f))).toBe(true);
+    expect(statSync(path(f)).size).toBeLessThan(1_000_000);
+  });
+
   it("README links the docs site", () => {
     expect(read("README.md")).toContain("https://sotarak.github.io/anchor/");
   });

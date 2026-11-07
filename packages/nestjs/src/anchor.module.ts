@@ -1,9 +1,4 @@
-import {
-  type AnchorValue,
-  type ClientOptions,
-  createAnchorClient,
-  type ListQuery,
-} from "@anchor-secrets/sdk";
+import { type ClientOptions, createAnchorClient, type ListQuery } from "@anchor-secrets/sdk";
 import {
   type DynamicModule,
   type FactoryProvider,
@@ -12,7 +7,7 @@ import {
   type Provider,
 } from "@nestjs/common";
 import { AnchorService } from "./anchor.service.js";
-import { ANCHOR_OPTIONS, ANCHOR_SECRETS } from "./tokens.js";
+import { ANCHOR_OPTIONS } from "./tokens.js";
 
 export type AnchorModuleOptions = ClientOptions &
   ListQuery & {
@@ -32,6 +27,7 @@ export type AnchorModuleAsyncOptions = {
 /**
  * Loads one folder of secrets while the application initializes. Nest awaits the async provider,
  * so the app does not finish starting without its secrets: a failure rejects with `AnchorError`.
+ * After that, values refresh in the background per the cache ttl.
  */
 // biome-ignore lint/complexity/noStaticOnlyClass: a Nest dynamic module is a class with static factories.
 export class AnchorModule {
@@ -59,21 +55,13 @@ export class AnchorModule {
       providers: [
         ...optionProviders,
         {
-          provide: ANCHOR_SECRETS,
-          useFactory: async (
-            o: AnchorModuleOptions,
-          ): Promise<Readonly<Record<string, AnchorValue>>> =>
-            Object.freeze(await createAnchorClient(o).loadSecrets(o)),
+          provide: AnchorService,
+          useFactory: async (o: AnchorModuleOptions) =>
+            new AnchorService(await createAnchorClient(o).folder(o)),
           inject: [ANCHOR_OPTIONS],
         },
-        {
-          provide: AnchorService,
-          useFactory: (secrets: Readonly<Record<string, AnchorValue>>) =>
-            new AnchorService(secrets),
-          inject: [ANCHOR_SECRETS],
-        },
       ],
-      exports: [ANCHOR_OPTIONS, ANCHOR_SECRETS, AnchorService],
+      exports: [ANCHOR_OPTIONS, AnchorService],
     };
   }
 }

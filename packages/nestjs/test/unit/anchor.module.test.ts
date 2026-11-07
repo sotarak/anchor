@@ -2,8 +2,9 @@ import "reflect-metadata";
 import { AnchorError } from "@anchor-secrets/sdk";
 import { Module } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
-import { describe, expect, it, vi } from "vitest";
-import { ANCHOR_OPTIONS, ANCHOR_SECRETS, AnchorModule, AnchorService } from "../../src/index";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as nestExports from "../../src/index";
+import { ANCHOR_OPTIONS, type AnchorEvent, AnchorModule, AnchorService } from "../../src/index";
 
 const BASE = {
   apiUrl: "https://anchor.example.com",
@@ -59,7 +60,7 @@ describe("AnchorModule.forRoot", () => {
     expect(anchor.has("PORT")).toBe(true);
     expect(anchor.has("MISSING")).toBe(false);
     expect(anchor.keys().sort()).toEqual(["NAME", "PORT"]);
-    expect(moduleRef.get(ANCHOR_SECRETS)).toEqual({ PORT: 9000, NAME: "zepo-engine" });
+    expect(anchor.toObject()).toEqual({ PORT: 9000, NAME: "zepo-engine" });
     moduleRef.get(AnchorService);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
@@ -179,5 +180,84 @@ describe("AnchorModule.forRootAsync", () => {
       .compile()
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AnchorError);
+  });
+});
+
+describe("refreshing", () => {
+  afterEach(() => vi.useRealTimers());
+
+  const versions = () => {
+    let n = 0;
+    return vi.fn(async () => {
+      n++;
+      return new Response(JSON.stringify({ secrets: [secret("NAME", "string", `v${n}`)] }), {
+        status: 200,
+      });
+    });
+  };
+
+  it("refreshes values in the background after ttl", async () => {
+    vi.useFakeTimers();
+    const fetch = versions();
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        AnchorModule.forRoot({
+          ...BASE,
+          fetch: fetch as unknown as typeof globalThis.fetch,
+          cache: { ttlMs: 1_000 },
+        }),
+      ],
+    }).compile();
+    const anchor = moduleRef.get(AnchorService);
+    expect(anchor.get("NAME")).toBe("v1");
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(anchor.get("NAME")).toBe("v1");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(anchor.get("NAME")).toBe("v2");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("refresh() fetches now", async () => {
+    const fetch = versions();
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        AnchorModule.forRoot({ ...BASE, fetch: fetch as unknown as typeof globalThis.fetch }),
+      ],
+    }).compile();
+    const anchor = moduleRef.get(AnchorService);
+    await anchor.refresh();
+    expect(anchor.get("NAME")).toBe("v2");
+  });
+
+  it("passes retry and onEvent through to the SDK", async () => {
+    const events: AnchorEvent[] = [];
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { code: "unavailable", message: "Busy" } }), {
+          status: 503,
+        }),
+      )
+      .mockResolvedValue(
+        new Response(JSON.stringify({ secrets: [secret("NAME", "string", "ok")] }), {
+          status: 200,
+        }),
+      );
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        AnchorModule.forRoot({
+          ...BASE,
+          fetch: fetch as unknown as typeof globalThis.fetch,
+          retry: { baseDelayMs: 1 },
+          onEvent: (e) => events.push(e),
+        }),
+      ],
+    }).compile();
+    expect(moduleRef.get(AnchorService).get("NAME")).toBe("ok");
+    expect(events.map((e) => e.type)).toEqual(["retry"]);
+  });
+
+  it("no longer exports ANCHOR_SECRETS", () => {
+    expect("ANCHOR_SECRETS" in nestExports).toBe(false);
   });
 });

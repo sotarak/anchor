@@ -506,6 +506,8 @@ Options:
   --no-expand                 inject stored values without expanding references
   --watch                     restart the command when its secrets change
   --watch-interval <seconds>  how often to check, in seconds (default 30, minimum 5)
+  --allow-reserved            inject secrets with reserved names such as NODE_OPTIONS or PATH
+  --pass-token                pass ANCHOR_TOKEN on to the command
   -h, --help                  display help for command
 
 Global Options:

@@ -8,12 +8,21 @@ import {
   useState,
 } from "react";
 import { RiAddLine, RiBracesLine, RiCloseLine, RiUploadLine } from "react-icons/ri";
+import { toast } from "sonner";
+import { errorMessage } from "@/components/data/table-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FieldHint } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { booleanFrom, formatJson, listItemsFrom, listTextFrom, pemLabel } from "@/lib/typed-value";
+import {
+  booleanFrom,
+  formatJson,
+  isListText,
+  listItemsFrom,
+  listTextFrom,
+  pemLabel,
+} from "@/lib/typed-value";
 
 export type TypedValueEditorProps = {
   /** Carried by the first focusable control, so a `<label htmlFor>` points at it. */
@@ -146,8 +155,9 @@ function JsonEditor({ id, value, onChange, onBlur, invalid }: TypedValueEditorPr
 }
 
 /**
- * One input per item. The stored text is rewritten only when the person changes an item, so a
- * revealed value saved untouched keeps its exact spelling.
+ * One input per item. Text that is already a JSON array of strings is left as is until the person
+ * changes an item, so a revealed value saved untouched keeps its exact spelling. Other text (lines
+ * carried over from another type) is stored as the rows it shows, once, when the editor mounts.
  */
 function ListEditor({
   id,
@@ -157,10 +167,17 @@ function ListEditor({
   invalid,
   label = "Value",
 }: TypedValueEditorProps) {
-  const [items, setItems] = useState<string[]>(() => {
-    const read = listItemsFrom(value);
-    return read.length > 0 ? read : [""];
-  });
+  const [initial] = useState(() => ({
+    items: listItemsFrom(value),
+    restore: value !== "" && !isListText(value),
+  }));
+  const [items, setItems] = useState<string[]>(() =>
+    initial.items.length > 0 ? initial.items : [""],
+  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, on mount
+  useEffect(() => {
+    if (initial.restore) onChange(listTextFrom(initial.items));
+  }, []);
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
 
@@ -281,7 +298,13 @@ function PemEditor({ id, value, onChange, onBlur, invalid }: TypedValueEditorPro
           onChange={async (e) => {
             const picked = e.target.files?.[0];
             e.target.value = "";
-            if (picked) onChange(await picked.text());
+            if (!picked) return;
+            try {
+              onChange(await picked.text());
+              onBlur?.(); // Check the loaded text at once.
+            } catch (err) {
+              toast.error(errorMessage(err));
+            }
           }}
         />
       </div>

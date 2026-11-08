@@ -13,14 +13,18 @@ export const TYPE_META: Record<SecretValueType, { name: string; help: string }> 
 const isStringArray = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((item) => typeof item === "string");
 
+/** True when `text` is already a JSON array of strings, the stored form of a list. */
+export function isListText(text: string): boolean {
+  try {
+    return isStringArray(JSON.parse(text));
+  } catch {
+    return false;
+  }
+}
+
 /** A list's items: a JSON array of strings as is, otherwise one item per non-blank line. */
 export function listItemsFrom(text: string): string[] {
-  try {
-    const parsed: unknown = JSON.parse(text);
-    if (isStringArray(parsed)) return parsed;
-  } catch {
-    // Not JSON: read it as lines.
-  }
+  if (isListText(text)) return JSON.parse(text) as string[];
   return text.split(/\r?\n/).filter((line) => line.trim() !== "");
 }
 

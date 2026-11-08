@@ -589,6 +589,22 @@ describe("/projects/$project/environments/$env", () => {
     expect(within(sheet).getByRole("textbox", { name: "Item 1" })).toHaveValue("a");
     expect(within(sheet).getByRole("textbox", { name: "Item 2" })).toHaveValue("b");
     expect(bodies).toEqual([]);
+    await user.click(within(sheet).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({ value: '["a","b"]', type: "list" });
+  });
+
+  it("loading a file that is not PEM shows the reason at once", async () => {
+    setup();
+    const bodies = recordPuts();
+    const { user, sheet } = await openAdd();
+    await chooseType(user, sheet, /^PEM/);
+    await user.upload(
+      within(sheet).getByLabelText("PEM file"),
+      new File([new Uint8Array([0x30, 0x82, 0x01])], "cert.cer"),
+    );
+    expect(await within(sheet).findByText("not a PEM block")).toBeInTheDocument();
+    expect(bodies).toEqual([]);
   });
 
   it("Sensitive is a switch, on by default", async () => {

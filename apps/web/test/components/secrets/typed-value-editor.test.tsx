@@ -123,6 +123,23 @@ describe("TypedValueEditor", () => {
     expect(onChange).toHaveBeenLastCalledWith('["a2","b"]');
   });
 
+  it("list opened on plain text stores its lines as a JSON array once", () => {
+    const { onChange, value } = setup("list", "a\r\n\nb");
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(value()).toBe('["a","b"]');
+  });
+
+  it("list opened on JSON that is not a string array stores it as one item", () => {
+    const { value } = setup("list", "[1, 2]");
+    expect(screen.getByRole("textbox", { name: "Item 1" })).toHaveValue("[1, 2]");
+    expect(value()).toBe('["[1, 2]"]');
+  });
+
+  it("list opened empty emits nothing", () => {
+    const { onChange } = setup("list", "");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it("pem Load from file reads the file and shows the detected block", async () => {
     const { user, onChange } = setup("pem");
     const pem = "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n";

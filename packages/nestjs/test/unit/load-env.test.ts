@@ -7,7 +7,7 @@ const BASE = {
   project: "zepo",
   environment: "prod",
 };
-const KEYS = ["ANCHOR_T_PORT", "ANCHOR_T_DEBUG", "ANCHOR_T_LIMITS", "ANCHOR_T_NAME"];
+const KEYS = ["NEST_T_PORT", "NEST_T_DEBUG", "NEST_T_LIMITS", "NEST_T_NAME"];
 
 const secret = (key: string, type: string, value: string) => ({
   key,
@@ -26,10 +26,10 @@ const fetch = (() =>
       new Response(
         JSON.stringify({
           secrets: [
-            secret("ANCHOR_T_PORT", "number", "9000"),
-            secret("ANCHOR_T_DEBUG", "boolean", "true"),
-            secret("ANCHOR_T_LIMITS", "json", '{"rps":10}'),
-            secret("ANCHOR_T_NAME", "string", "zepo-engine"),
+            secret("NEST_T_PORT", "number", "9000"),
+            secret("NEST_T_DEBUG", "boolean", "true"),
+            secret("NEST_T_LIMITS", "json", '{"rps":10}'),
+            secret("NEST_T_NAME", "string", "zepo-engine"),
           ],
         }),
         { status: 200, headers: { "content-type": "application/json" } },
@@ -47,25 +47,25 @@ describe("loadAnchorEnv", () => {
 
   it("writes the stored strings into process.env", async () => {
     const result = await loadAnchorEnv({ ...BASE, fetch: fetch() });
-    expect(result).toEqual({ loaded: 4 });
-    expect(process.env.ANCHOR_T_PORT).toBe("9000");
-    expect(process.env.ANCHOR_T_DEBUG).toBe("true");
-    expect(process.env.ANCHOR_T_LIMITS).toBe('{"rps":10}');
-    expect(process.env.ANCHOR_T_NAME).toBe("zepo-engine");
+    expect(result).toEqual({ loaded: 4, skipped: [] });
+    expect(process.env.NEST_T_PORT).toBe("9000");
+    expect(process.env.NEST_T_DEBUG).toBe("true");
+    expect(process.env.NEST_T_LIMITS).toBe('{"rps":10}');
+    expect(process.env.NEST_T_NAME).toBe("zepo-engine");
   });
 
   it("keeps an existing variable", async () => {
-    process.env.ANCHOR_T_PORT = "3000";
+    process.env.NEST_T_PORT = "3000";
     const result = await loadAnchorEnv({ ...BASE, fetch: fetch() });
-    expect(process.env.ANCHOR_T_PORT).toBe("3000");
-    expect(result).toEqual({ loaded: 3 });
+    expect(process.env.NEST_T_PORT).toBe("3000");
+    expect(result).toEqual({ loaded: 3, skipped: [] });
   });
 
   it("replaces an existing variable with override: true", async () => {
-    process.env.ANCHOR_T_PORT = "3000";
+    process.env.NEST_T_PORT = "3000";
     const result = await loadAnchorEnv({ ...BASE, override: true, fetch: fetch() });
-    expect(process.env.ANCHOR_T_PORT).toBe("9000");
-    expect(result).toEqual({ loaded: 4 });
+    expect(process.env.NEST_T_PORT).toBe("9000");
+    expect(result).toEqual({ loaded: 4, skipped: [] });
   });
 
   it("never logs", async () => {
@@ -80,6 +80,56 @@ describe("loadAnchorEnv", () => {
     ];
     await loadAnchorEnv({ ...BASE, fetch: fetch() });
     for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+  });
+
+  describe("reserved names", () => {
+    const withReserved = (() =>
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              secrets: [
+                secret("NODE_OPTIONS", "string", "--require=/tmp/x.js"),
+                secret("NEST_T_NAME", "string", "zepo-engine"),
+              ],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      )) as unknown as () => typeof globalThis.fetch;
+    let saved: string | undefined;
+    beforeEach(() => {
+      saved = process.env.NODE_OPTIONS;
+    });
+    afterEach(() => {
+      if (saved === undefined) delete process.env.NODE_OPTIONS;
+      else process.env.NODE_OPTIONS = saved;
+    });
+
+    it("skips them and reports their names as a process warning", async () => {
+      const warn = vi.spyOn(process, "emitWarning").mockImplementation(() => {});
+      const result = await loadAnchorEnv({ ...BASE, override: true, fetch: withReserved() });
+      expect(result).toEqual({ loaded: 1, skipped: ["NODE_OPTIONS"] });
+      expect(process.env.NODE_OPTIONS).toBe(saved);
+      expect(process.env.NEST_T_NAME).toBe("zepo-engine");
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        "Anchor skipped reserved names: NODE_OPTIONS (set allowReservedKeys to load them)",
+        "AnchorWarning",
+      );
+    });
+
+    it("loads them with allowReservedKeys: true", async () => {
+      const warn = vi.spyOn(process, "emitWarning").mockImplementation(() => {});
+      const result = await loadAnchorEnv({
+        ...BASE,
+        override: true,
+        allowReservedKeys: true,
+        fetch: withReserved(),
+      });
+      expect(result).toEqual({ loaded: 2, skipped: [] });
+      expect(process.env.NODE_OPTIONS).toBe("--require=/tmp/x.js");
+      expect(warn).not.toHaveBeenCalled();
+    });
   });
 
   it("writes nothing when loading fails", async () => {

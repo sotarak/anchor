@@ -344,6 +344,8 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     .option("--no-expand", "inject stored values without expanding references")
     .option("--watch", "restart the command when its secrets change")
     .option("--watch-interval <seconds>", "how often to check, in seconds (default 30, minimum 5)")
+    .option("--allow-reserved", "inject secrets with reserved names such as NODE_OPTIONS or PATH")
+    .option("--pass-token", "pass ANCHOR_TOKEN on to the command")
     .usage("[options] -- <command> [args...]")
     .addHelpText(
       "after",
@@ -358,12 +360,21 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
         (
           ctx,
           command: string[],
-          opts: { override: boolean; expand?: boolean; watch?: boolean; watchInterval?: string },
+          opts: {
+            override: boolean;
+            expand?: boolean;
+            watch?: boolean;
+            watchInterval?: string;
+            allowReserved?: boolean;
+            passToken?: boolean;
+          },
         ) => {
           const intervalMs = watchIntervalMs(opts.watch === true, opts.watchInterval);
           return runCommand(ctx, command, {
             override: opts.override,
             expand: opts.expand !== false,
+            allowReserved: opts.allowReserved === true,
+            passToken: opts.passToken === true,
             watch: intervalMs === undefined ? undefined : { intervalMs },
           });
         },
@@ -379,6 +390,7 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     .option("--output <file>", "write to a file instead of stdout")
     .option("--expand", "expand ${KEY} references in values (default)")
     .option("--no-expand", "write stored values without expanding references")
+    .option("--allow-reserved", "write secrets with reserved names such as PATH in dotenv files")
     .addHelpText(
       "after",
       examples(
@@ -387,12 +399,22 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
       ),
     )
     .action(
-      act((ctx, opts: { format: ExportFormat; output?: string; expand?: boolean }) =>
-        exportCommand(ctx, {
-          format: opts.format,
-          output: opts.output,
-          expand: opts.expand !== false,
-        }),
+      act(
+        (
+          ctx,
+          opts: {
+            format: ExportFormat;
+            output?: string;
+            expand?: boolean;
+            allowReserved?: boolean;
+          },
+        ) =>
+          exportCommand(ctx, {
+            format: opts.format,
+            output: opts.output,
+            expand: opts.expand !== false,
+            allowReserved: opts.allowReserved === true,
+          }),
       ),
     );
 

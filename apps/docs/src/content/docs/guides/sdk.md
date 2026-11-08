@@ -130,7 +130,15 @@ void bootstrap();
 `loadAnchorEnv` writes each value as the string Anchor stores, so `ConfigService.get` returns
 strings (let your validation schema convert them). A variable that is already set wins, so a
 local override still works; pass `override: true` to let Anchor win. It writes nothing unless the
-whole folder loads, and logs nothing. `process.env` is written once: these values do not refresh.
+whole folder loads, and never logs a value. `process.env` is written once: these values do not
+refresh.
+
+Since 0.5.3 it skips secrets with reserved names, the ones that change how Node or its child
+processes load code or where they connect (`NODE_OPTIONS`, `PATH`, `LD_PRELOAD`, `*_PROXY`,
+`ANCHOR_*`, ...; `isReservedEnvKey` from `@anchor-secrets/sdk` tells you which). It reports the
+names (never values) once as a process warning,
+`Anchor skipped reserved names: <names> (set allowReservedKeys to load them)`, and returns them as
+`skipped`. Pass `allowReservedKeys: true` to load them anyway.
 
 ## Any Node service
 
@@ -169,10 +177,17 @@ createAnchorClient({
   cache: { ttlMs: 60_000, maxStaleMs: Infinity }, // or false
   onEvent: (event) => {},
   fetch, // replaces the global fetch, for proxies and tests
+  allowInsecureHttp: false, // true allows http:// to hosts other than localhost
 });
 ```
 
 Options win over the environment variables.
+
+The API URL must use `https://`; `http://` works only for `localhost`, `127.0.0.1` and `[::1]`
+(0.5.3). Anything else throws code `config` before the token is sent. Set `allowInsecureHttp: true`
+only on a network you trust: the token and every value then travel in clear text. The client never
+follows a redirect; an API URL that answers with one throws code `bad_response`
+(`... answered with a redirect (HTTP 301); use the final address as apiUrl`).
 
 ## Caching
 
@@ -249,7 +264,8 @@ Every failure is an `AnchorError` with a `status` (0 when there was no response)
 
 | `code` | Meaning |
 |---|---|
-| `config` | `ANCHOR_API_URL` or `ANCHOR_TOKEN` is missing; nothing was sent |
+| `config` | `ANCHOR_API_URL` or `ANCHOR_TOKEN` is missing, or the URL is not `https://`; nothing was sent |
+| `bad_response` | Anchor answered with a redirect or with something that is not JSON |
 | `network`, `timeout` | Anchor could not be reached, or did not answer within `timeoutMs` |
 | `aborted` | The caller's `AbortSignal` cancelled the call |
 | `stale` | A folder's values are older than `ttlMs + maxStaleMs` and refreshing them failed |

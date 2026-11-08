@@ -38,8 +38,9 @@ to. Ask a project admin to widen your environments, or the token's scopes.
 
 ## `429 rate_limited` at login
 
-5 failed logins in a row lock the account for 15 minutes. Wait, or ask an instance admin for a
-password-reset link.
+5 failed logins for one email from one address (an IPv6 /64 counts as one) lock that pair for 15 minutes, and 50 failed logins from one address lock the address for 15 minutes. The
+lock is on the pair, so the same account still works from another network. Wait, or ask an instance
+admin for a password-reset link (a reset clears the locks on that email).
 
 ## The dashboard loads a blank page or the console reports a CSP violation
 

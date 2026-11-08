@@ -29,6 +29,13 @@ async function errorFromResponse(res: Response): Promise<AnchorError> {
   return new AnchorError(res.status, "http_error", `Anchor answered HTTP ${res.status}`, options);
 }
 
+/** A 3xx other than 304, or the opaque redirect a browser or workerd returns for one. */
+function isRedirect(res: Response): boolean {
+  return (
+    res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400 && res.status !== 304)
+  );
+}
+
 export type JsonResponse = { status: number; etag: string | undefined; body: unknown };
 
 /**
@@ -57,7 +64,20 @@ export async function fetchJson(
       accept: "application/json",
     };
     if (ifNoneMatch) headers["if-none-match"] = ifNoneMatch;
-    const res = await cfg.fetch(url, { method: "GET", headers, signal: controller.signal });
+    // A redirect is never followed: fetch would resend the bearer token to wherever it points.
+    const res = await cfg.fetch(url, {
+      method: "GET",
+      headers,
+      signal: controller.signal,
+      redirect: "manual",
+    });
+    if (isRedirect(res)) {
+      throw new AnchorError(
+        res.status,
+        "bad_response",
+        `Anchor at ${cfg.origin} answered with a redirect (HTTP ${res.status}); use the final address as apiUrl`,
+      );
+    }
     const etag = res.headers.get("etag") ?? undefined;
     if (res.status === 304) return { status: 304, etag, body: undefined };
     if (!res.ok) throw await errorFromResponse(res);

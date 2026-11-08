@@ -22,6 +22,6 @@ an hour, so a limit of 20 per minute per IP leaves plenty of room. Anchor also c
 registered but were never approved at 10 per IP address and 500 instance-wide, and deletes them
 after 24 hours.
 
-Anchor does lock an account after 5 failed logins in a row, for 15 minutes. That protects the
-password, not the database: requests for unknown emails, and requests during the lockout, are
-still audited.
+Anchor limits logins itself (0.5.3): 5 failed logins for one email from one address (an IPv6 /64 counts as one) lock that pair for 15 minutes, and 50 failed logins from one address lock the address for 15 minutes. That
+protects passwords, not the database: requests for unknown emails, and requests during a lock, are
+still audited, so a rule in front of `/api/v1/auth/*` is still worth having.

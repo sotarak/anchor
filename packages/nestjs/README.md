@@ -93,8 +93,11 @@ void bootstrap();
 ```
 
 Values are written as the strings Anchor stores. Variables that are already set win unless you
-pass `override: true`. Nothing is written unless the whole folder loads, and nothing is logged.
-These values are written once and do not refresh.
+pass `override: true`. Nothing is written unless the whole folder loads, and no value is ever
+logged. These values are written once and do not refresh.
+
+Reserved names (`NODE_OPTIONS`, `PATH`, `LD_PRELOAD`, proxies, `ANCHOR_*`, ...) are skipped and
+reported once as a process warning naming them; pass `allowReservedKeys: true` to load them.
 
 ## License
 

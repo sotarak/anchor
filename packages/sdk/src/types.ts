@@ -34,6 +34,11 @@ export type ClientOptions = {
   cache?: CacheOptions | false;
   /** Receives retries and failed refreshes. Exceptions it throws are ignored. */
   onEvent?: (event: AnchorEvent) => void;
+  /**
+   * Allow `http://` to hosts other than localhost, 127.0.0.1 and [::1]; default `false`. Plain
+   * http sends the token and every secret in clear text to anyone on the path.
+   */
+  allowInsecureHttp?: boolean;
 };
 
 export type RetryOptions = {

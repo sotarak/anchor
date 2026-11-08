@@ -7,9 +7,12 @@ export type Entry = { key: string; value: string; type: SecretValueType };
 const BARE = /^[A-Za-z0-9_./:@+,-]*$/;
 
 /**
- * One KEY=... line per entry, quoted so that the `dotenv` parser reads the value back exactly:
- * bare, then '...' (literal), then "..." (\n and \r escapes), then `...`. A value that fits
- * none of them fails instead of being written corrupted.
+ * One KEY=... line per entry, quoted so that the `dotenv` parser reads the value back exactly
+ * AND a shell or docker-compose that sources the file runs and expands nothing: bare, then
+ * '...' (literal everywhere), then "..." (\n and \r escapes) only for values without `"`, `$`,
+ * a backtick or a backslash (a trailing `\` would escape the closing quote in sh and run the
+ * next line as commands; `\\` means one backslash to sh and two to dotenv). A value that fits
+ * none of them fails instead of being written unsafely or corrupted. (0.5.2 also wrote `...`, which a shell executes: removed in 0.5.3.)
  */
 export function formatDotenv(entries: Entry[]): string {
   return entries.map(({ key, value }) => `${key}=${quoteDotenv(key, value)}\n`).join("");
@@ -18,11 +21,12 @@ export function formatDotenv(entries: Entry[]): string {
 function quoteDotenv(key: string, value: string): string {
   const multiline = /[\r\n]/.test(value);
   if (BARE.test(value)) return value;
-  if (!multiline && !value.includes("'")) return `'${value}'`;
-  if (!value.includes('"') && !/\\[nr]/.test(value)) {
+  // dotenv reads `\'` inside single quotes as an escaped quote, so a trailing backslash would
+  // swallow the closing quote and the lines after it.
+  if (!multiline && !value.includes("'") && !value.endsWith("\\")) return `'${value}'`;
+  if (!/["$`\\]/.test(value)) {
     return `"${value.replace(/\r/g, "\\r").replace(/\n/g, "\\n")}"`;
   }
-  if (!multiline && !value.includes("`")) return `\`${value}\``;
   throw new CliError(
     EXIT.ERROR,
     `Value of ${key} cannot be represented in dotenv format`,

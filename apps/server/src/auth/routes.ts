@@ -24,9 +24,14 @@ import {
   reserveLoginAttempt,
   setPassword,
   toUserDto,
-  updateLoginState,
 } from "../users/repo";
 import { LOCKOUT_MS, MAX_FAILED_LOGINS } from "./lockout";
+import {
+  clearLoginLocksForEmail,
+  loginAttemptKeys,
+  loginSucceeded,
+  reserveLoginKeys,
+} from "./login-attempts";
 import { readPresentedToken, requirePrincipal, requireUser } from "./middleware";
 import {
   clearSessionCookie,
@@ -110,17 +115,18 @@ authRoutes.post("/auth/login", async (c) => {
       actor: { type: "anonymous", id: null, label: body.email },
       metadata: { reason },
     });
+  // Counted per (address, email) and per address before anything else, so unknown emails count
+  // and lock exactly like known ones; a correct password clears the pair and refunds the address.
+  const clientIp = c.get("clientIp");
+  if (!(await reserveLoginKeys(c.env.DB, loginAttemptKeys(clientIp, body.email), now))) {
+    await failed("locked");
+    throw new ApiError(429, "rate_limited", "Too many failed attempts, try again later");
+  }
   const user = await findUserByEmail(c.env.DB, body.email);
   if (!user) {
     await verifyAgainstDummy(body.password);
     await failed("invalid_credentials");
     throw new ApiError(401, "invalid_credentials", INVALID_CREDENTIALS);
-  }
-  // Count the attempt as a failure up front (atomically); a correct password resets it below.
-  const limits = { maxFailures: MAX_FAILED_LOGINS, lockoutMs: LOCKOUT_MS };
-  if (!(await reserveLoginAttempt(c.env.DB, user.id, now, limits))) {
-    await failed("locked");
-    throw new ApiError(429, "rate_limited", "Too many failed attempts, try again later");
   }
   if (!(await verifyPassword(body.password, user.password_hash))) {
     await failed("invalid_credentials");
@@ -131,7 +137,7 @@ authRoutes.post("/auth/login", async (c) => {
     await failed("disabled");
     throw new ApiError(403, "forbidden", "Account disabled");
   }
-  await updateLoginState(c.env.DB, user.id, { failedLogins: 0, lockedUntil: null });
+  await loginSucceeded(c.env.DB, clientIp, body.email, now);
   const { token, expiresAt } = await createSession(
     c.env.DB,
     user.id,
@@ -182,6 +188,7 @@ authRoutes.post("/auth/password-reset", async (c) => {
   await revokeUserSessions(c.env.DB, userId);
   await revokeUserGrants(c.env.DB, userId, now);
   const user = await findUserById(c.env.DB, userId);
+  if (user) await clearLoginLocksForEmail(c.env.DB, user.email);
   await recordAudit(c, {
     action: "auth.password_reset",
     actor: { type: "user", id: userId, label: user?.email ?? null },

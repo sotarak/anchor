@@ -1,4 +1,4 @@
-import type { SecretDto } from "@anchor/shared";
+import { isReservedEnvKey, type SecretDto } from "@anchor/shared";
 import type { ApiClient } from "../api/client";
 import { positionals } from "../argv";
 import { authedApi } from "../auth";
@@ -12,19 +12,44 @@ import {
 import { CliError, EXIT, withExpandHint } from "../errors";
 import { exitCodeFromChild } from "../process/run-child";
 
-/** Parent env plus secrets. By default Anchor values win; with override=false existing vars win. */
+export type ChildEnvOptions = {
+  /** Anchor values replace variables the parent already has. */
+  override: boolean;
+  /** Inject secrets with reserved names (NODE_OPTIONS, PATH, ...); off by default. */
+  allowReserved: boolean;
+  /** Keep the parent's ANCHOR_TOKEN; off by default, so the command's own tools never see it. */
+  passToken: boolean;
+};
+
+/**
+ * Parent env plus secrets. By default Anchor values win; with override=false existing vars win.
+ * Secrets with reserved names are left out (and listed in `skipped`, sorted) unless allowed: a
+ * folder writer must not be able to change how the command loads code. The parent's
+ * ANCHOR_TOKEN is dropped unless passToken.
+ */
 export function buildChildEnv(
   parent: Record<string, string | undefined>,
   secrets: SecretDto[],
-  override: boolean,
-): Record<string, string> {
+  opts: ChildEnvOptions,
+): { env: Record<string, string>; skipped: string[] } {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(parent)) if (v !== undefined) env[k] = v;
+  if (!opts.passToken) delete env.ANCHOR_TOKEN;
+  const skipped = new Set<string>();
   for (const s of secrets) {
     if (s.value === undefined) continue;
-    if (override || !(s.key in env)) env[s.key] = s.value;
+    if (!opts.allowReserved && isReservedEnvKey(s.key)) {
+      skipped.add(s.key);
+      continue;
+    }
+    if (opts.override || !(s.key in env)) env[s.key] = s.value;
   }
-  return env;
+  return { env, skipped: [...skipped].sort() };
+}
+
+/** The warning for skipped reserved names: key names only, never values. */
+function skippedWarning(skipped: string[]): string {
+  return `Skipped reserved names: ${skipped.join(", ")} (pass --allow-reserved to inject them)`;
 }
 
 const RUN_USAGE = "Usage: anchor run [options] -- <command> [args...]";
@@ -77,7 +102,7 @@ export function assertRunSeparator(argv: string[]): void {
 export async function runCommand(
   ctx: CommandContext,
   argv: string[],
-  opts: { override: boolean; expand: boolean; watch?: { intervalMs: number } },
+  opts: ChildEnvOptions & { expand: boolean; watch?: { intervalMs: number } },
 ): Promise<number> {
   const [cmd, ...args] = argv;
   if (!cmd) {
@@ -95,7 +120,8 @@ export async function runCommand(
       includeImports: true,
     }),
   );
-  const env = buildChildEnv(ctx.deps.io.env, secrets, opts.override);
+  const { env, skipped } = buildChildEnv(ctx.deps.io.env, secrets, opts);
+  if (skipped.length > 0) ctx.out.warn(skippedWarning(skipped));
   ctx.out.debug(`injecting ${secrets.length} secrets into ${cmd}`);
   return exitCodeFromChild(await ctx.deps.runChild(cmd, args, env));
 }
@@ -114,7 +140,7 @@ async function watchCommand(
   project: string,
   cmd: string,
   args: string[],
-  opts: { override: boolean; expand: boolean },
+  opts: ChildEnvOptions & { expand: boolean },
   intervalMs: number,
 ): Promise<number> {
   const sleep = ctx.deps.sleep ?? timerSleep;
@@ -130,7 +156,16 @@ async function watchCommand(
   if (!first.changed)
     throw new CliError(EXIT.ERROR, "Anchor answered 304 to a request without a tag");
   let etag = first.etag;
-  let env = buildChildEnv(ctx.deps.io.env, first.secrets, opts.override);
+  // Warn when the set of skipped names changes, not on every poll.
+  let warned = "";
+  const build = (secrets: SecretDto[]) => {
+    const { env, skipped } = buildChildEnv(ctx.deps.io.env, secrets, opts);
+    const key = skipped.join(",");
+    if (key !== warned && skipped.length > 0) ctx.out.warn(skippedWarning(skipped));
+    warned = key;
+    return env;
+  };
+  let env = build(first.secrets);
   let count = first.secrets.length;
 
   const start = () => {
@@ -162,7 +197,7 @@ async function watchCommand(
       failing = false;
       if (res.changed) {
         etag = res.etag;
-        const candidate = buildChildEnv(ctx.deps.io.env, res.secrets, opts.override);
+        const candidate = build(res.secrets);
         if (!sameEnv(candidate, env)) {
           next = candidate;
           count = res.secrets.length;

@@ -7,6 +7,65 @@ dashboard and CLI.
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-11-09
+
+A security release. No change to encryption, stored data or the API: a 0.5.2 CLI keeps working
+against a 0.5.3 server and the reverse. Read the upgrade notes: a few clients now refuse what they
+used to accept.
+
+### Security
+
+- **`anchor run` no longer injects secrets with reserved names**, the ones that change how a
+  program loads code or where it connects (`PATH`, `NODE_OPTIONS`, `LD_*`/`DYLD_*`, `PYTHONPATH`,
+  `JAVA_TOOL_OPTIONS`, `GIT_SSH*`, `*_PROXY`, `ANCHOR_*` and similar, matched case-insensitively).
+  It warns with their names and runs without them; `--allow-reserved` opts back in. The same
+  rule applies to `anchor export --format dotenv` and to `loadAnchorEnv` in
+  `@anchor-secrets/nestjs` (`allowReservedKeys: true`). The SDK exports `isReservedEnvKey`.
+- **`anchor export --format dotenv` never writes a line a shell would run or expand.** A value
+  that cannot be quoted safely fails with the existing hint to use JSON or YAML.
+- **Login is limited per address and email instead of per account**: 5 failures for one email
+  from one address (an IPv6 /64 counts as one) or 50 from one address lock that pair or address
+  for 15 minutes. Nobody can lock the owner out from elsewhere any more, and the `429` no longer
+  tells which emails have accounts. A password reset clears the locks on its email.
+- **CLI browser login asks for the code.** `/cli/login` ignores `?code=` and the person types the
+  code from their terminal; `anchor login` opens `/cli/login` and prints
+  `Open <url> and enter the code XXXX-XXXX`.
+- **The SDK refuses plain `http://`** except to localhost, 127.0.0.1 and [::1], as the CLI already
+  did; `allowInsecureHttp: true` overrides it.
+- **The CLI and the SDK never follow HTTP redirects**, which would resend the bearer token to
+  another address. A redirect is an error that names the origin.
+- **`anchor run` removes `ANCHOR_TOKEN` from the command's environment** unless `--pass-token`.
+- **Security headers on every Worker response** (`nosniff`, `no-referrer`, `DENY` framing, a
+  `default-src 'none'` CSP and HSTS) and HSTS on the dashboard.
+- **Release workflows pin every action to a commit SHA**, and the npm publish job installs
+  dependencies without running their scripts.
+
+### Changed
+
+- `anchor run` and `anchor export` take `--allow-reserved`; `anchor run` takes `--pass-token`.
+- `loadAnchorEnv` returns `{ loaded, skipped }` and accepts `allowReservedKeys`.
+- `ClientOptions` in `@anchor-secrets/sdk` accepts `allowInsecureHttp`.
+- Docs: the security model lists the accepted risks (approving a code someone sent you, open MCP
+  client registration, folder writers and child processes, plain http by opt-in).
+
+### Upgrade notes
+
+- **Reserved names:** a folder that stores `NODE_OPTIONS`, `*_PROXY`, `PATH`, `ANCHOR_*` and the
+  like now gets a warning and those variables are not set. Add `--allow-reserved` (CLI) or
+  `allowReservedKeys: true` (NestJS) where you really mean it.
+- **Dotenv export:** a value with a `'` or a newline together with `$`, a backtick, `"` or `\`, or a trailing `\` now
+  fails;
+  export JSON or YAML instead.
+- **`ANCHOR_TOKEN` under `anchor run`:** a command that itself calls `anchor` or the SDK with the
+  parent's token needs `--pass-token`.
+- **SDK over http:** a service that reaches Anchor at `http://` on a host other than localhost
+  needs `allowInsecureHttp: true` (or, better, https).
+- **Redirects:** an API URL that redirects (an old hostname, an auth proxy) now fails with a clear
+  error; use the final address.
+- **CLI login:** older CLIs still open `/cli/login?code=…`; the page shows the empty code form and
+  the code is in their terminal.
+- **Database:** migration `0009_login_attempts` adds one table; the normal upgrade applies it.
+
 ## [0.5.2] - 2026-11-08
 
 ### Added
@@ -330,7 +389,8 @@ Cloudflare Workers, D1 and Queues.
   - A documentation site at https://sotarak.github.io/anchor/ (guides, operations runbooks,
     security model, API reference).
 
-[Unreleased]: https://github.com/sotarak/anchor/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/sotarak/anchor/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/sotarak/anchor/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/sotarak/anchor/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/sotarak/anchor/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/sotarak/anchor/compare/v0.4.0...v0.5.0

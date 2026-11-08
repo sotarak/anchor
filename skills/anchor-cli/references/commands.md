@@ -40,8 +40,13 @@ Without them the CLI uses `.anchor.json` in the directory or a parent.
 | `anchor run -- <cmd> [args]` | Runs `<cmd>` with the folder's secrets as environment variables; `${KEY}` references expanded; exit code passed through; nothing written to disk |
 | `anchor run --env prod --path /api -- node server.js` | Another environment or folder |
 | `anchor run --no-override -- <cmd>` | Variables already set in the shell win |
+| `anchor run --allow-reserved -- <cmd>` | Also inject reserved names (`PATH`, `NODE_OPTIONS`, `LD_*`, proxies, `ANCHOR_*`, ...), which are skipped with a warning by default |
+| `anchor run --pass-token -- <cmd>` | Keep `ANCHOR_TOKEN` in the command's environment (removed by default) |
 | `anchor export --output .env.local` | Writes dotenv (mode 0600). Only to a gitignored file |
 | `anchor export --format json\|yaml` | Other formats; typed values keep their type in JSON/YAML |
+
+`--format dotenv` refuses a value a shell would run or expand (a `'` or a newline together with `$`, a backtick, `"` or `\`, or a trailing `\`) and points to `--format json`/`yaml`; it leaves reserved names out unless
+`--allow-reserved`.
 
 ## Writing
 

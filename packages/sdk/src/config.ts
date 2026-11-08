@@ -5,6 +5,11 @@ import type { AnchorEvent, CacheOptions, ClientOptions, RetryOptions } from "./t
 
 export const DEFAULT_TIMEOUT_MS = 10_000;
 
+/** Hosts where plain http never leaves the machine; the CLI applies the same rule. */
+const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const INSECURE_URL =
+  "Anchor API URL must use https:// (http:// only for localhost, 127.0.0.1 and [::1]); set allowInsecureHttp to override";
+
 export type Config = {
   base: string;
   origin: string;
@@ -29,9 +34,9 @@ export function resolveConfig(opts: ClientOptions): Config {
       "Anchor API URL is not set: pass apiUrl or set ANCHOR_API_URL",
     );
   }
-  let origin: string;
+  let url: URL;
   try {
-    origin = new URL(apiUrl).origin;
+    url = new URL(apiUrl);
   } catch {
     throw new AnchorError(
       0,
@@ -39,6 +44,11 @@ export function resolveConfig(opts: ClientOptions): Config {
       "Anchor API URL is not a valid URL (apiUrl or ANCHOR_API_URL)",
     );
   }
+  const plainHttpAllowed = opts.allowInsecureHttp === true || LOOPBACK.has(url.hostname);
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && plainHttpAllowed)) {
+    throw new AnchorError(0, "config", INSECURE_URL);
+  }
+  const origin = url.origin;
   const token = opts.token || fromEnv("ANCHOR_TOKEN");
   if (!token) {
     throw new AnchorError(0, "config", "Anchor token is not set: pass token or set ANCHOR_TOKEN");

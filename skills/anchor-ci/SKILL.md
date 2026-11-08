@@ -81,6 +81,11 @@ npx -y @anchor-secrets/cli@0.4.0 run --env prod --path /api -- npm run deploy   
 - `anchor run -- <cmd>` starts the command only after every secret was fetched; an expired,
   revoked or under-scoped token exits 3 or 4 and the command never runs. Prefer it to
   `anchor export`; if a tool needs a file, `anchor export --output .env` writes mode 0600.
+- `anchor run` removes `ANCHOR_TOKEN` from the command's environment; add `--pass-token` only when
+  the command itself calls `anchor` or the SDK. Secrets named `PATH`, `NODE_OPTIONS`, `LD_*`,
+  `*_PROXY`, `ANCHOR_*` and similar are skipped with a warning; `--allow-reserved` injects them.
+- Pin third-party actions, `sotarak/anchor/setup-action` included, to a full commit SHA with the
+  tag as a comment.
 - On a server, load the token from a mode-600 file in the job, e.g.
   `ANCHOR_TOKEN=$(cat ~/.anchor-token) ANCHOR_API_URL=https://anchor.example.com anchor run --env prod -- ./backup.sh`.
 

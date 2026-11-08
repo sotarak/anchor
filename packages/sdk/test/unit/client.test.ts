@@ -576,3 +576,100 @@ describe("cancellation with caching on", () => {
     expect((await c.loadSecrets(QUERY)).A).toBe("a");
   });
 });
+
+describe("transport security", () => {
+  const HTTP_REFUSED =
+    "Anchor API URL must use https:// (http:// only for localhost, 127.0.0.1 and [::1]); set allowInsecureHttp to override";
+
+  async function configError(apiUrl: string, extra: object = {}) {
+    const f = fakeFetch(json({ secrets: [] }));
+    const err = await createAnchorClient({ apiUrl, token: TOKEN, fetch: f.fetch, ...extra })
+      .listSecrets(QUERY)
+      .then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+    return { err, calls: f.calls };
+  }
+
+  it("refuses plain http to a non-loopback host before sending the token", async () => {
+    const { err, calls } = await configError("http://anchor.internal");
+    expect(err).toBeInstanceOf(AnchorError);
+    expect((err as AnchorError).code).toBe("config");
+    expect((err as AnchorError).message).toBe(HTTP_REFUSED);
+    expect(calls).toHaveLength(0);
+  });
+
+  it.each(["ftp://x", "file:///etc/passwd", "ws://anchor.example.com"])(
+    "refuses %s",
+    async (apiUrl) => {
+      const { err, calls } = await configError(apiUrl);
+      expect((err as AnchorError).code).toBe("config");
+      expect((err as AnchorError).message).toBe(HTTP_REFUSED);
+      expect(calls).toHaveLength(0);
+    },
+  );
+
+  it.each(["http://localhost:8787", "http://127.0.0.1", "http://[::1]:8787", "https://x"])(
+    "accepts %s",
+    async (apiUrl) => {
+      const { err, calls } = await configError(apiUrl);
+      expect(err).toBeUndefined();
+      expect(calls).toHaveLength(1);
+    },
+  );
+
+  it("does not treat a look-alike host as loopback", async () => {
+    for (const apiUrl of ["http://localhost.evil.example", "http://127.0.0.1.nip.io"]) {
+      const { err } = await configError(apiUrl);
+      expect((err as AnchorError).code, apiUrl).toBe("config");
+    }
+  });
+
+  it("allowInsecureHttp: true accepts plain http", async () => {
+    const { err, calls } = await configError("http://anchor.internal", { allowInsecureHttp: true });
+    expect(err).toBeUndefined();
+    expect(calls).toHaveLength(1);
+  });
+
+  it("allowInsecureHttp still refuses a non-http scheme", async () => {
+    const { err } = await configError("ftp://x", { allowInsecureHttp: true });
+    expect((err as AnchorError).code).toBe("config");
+  });
+
+  it("never follows a redirect and does not retry it", async () => {
+    const f = fakeFetch(
+      new Response(null, { status: 302, headers: { location: "https://evil.example/steal" } }),
+    );
+    const err = await client(f.fetch)
+      .listSecrets(QUERY)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AnchorError);
+    expect((err as AnchorError).code).toBe("bad_response");
+    expect((err as AnchorError).message).toBe(
+      `Anchor at ${API} answered with a redirect (HTTP 302); use the final address as apiUrl`,
+    );
+    expect((err as AnchorError).message).not.toContain(TOKEN);
+    expect(f.calls).toHaveLength(1);
+    expect(f.calls[0]?.init.redirect).toBe("manual");
+  });
+
+  it("treats an opaque redirect (what browsers and workerd return) as a redirect", async () => {
+    const opaque = { type: "opaqueredirect", status: 0, ok: false, headers: new Headers() };
+    const f = fakeFetch(() => Promise.resolve(opaque as unknown as Response));
+    const err = await client(f.fetch)
+      .listSecrets(QUERY)
+      .catch((e: unknown) => e);
+    expect((err as AnchorError).code).toBe("bad_response");
+    expect((err as AnchorError).message).toMatch(/answered with a redirect \(HTTP 0\)/);
+    expect(f.calls).toHaveLength(1);
+  });
+
+  it("every request asks fetch not to follow redirects", async () => {
+    const f = fakeFetch(json({ secrets: [] }));
+    await client(f.fetch, { cache: false }).listSecrets(QUERY);
+    await client(f.fetch, { cache: false }).loadSecrets(QUERY);
+    expect(f.calls.length).toBeGreaterThan(1);
+    for (const c of f.calls) expect(c.init.redirect).toBe("manual");
+  });
+});

@@ -1,6 +1,6 @@
 import { normalizeUserCode } from "@anchor/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { RiCheckboxCircleFill, RiForbidFill } from "react-icons/ri";
 import { AuthLayout } from "@/components/auth-layout";
@@ -16,25 +16,23 @@ import { qk } from "@/lib/api/query-keys";
 import { requireUser } from "@/lib/auth";
 import { formatRelative } from "@/lib/format";
 
+// A `?code=` in the link (old CLIs still send one) is ignored on purpose: the person types the
+// code their terminal shows, so a phishing link cannot carry an attacker's code to approve.
 export const Route = createFileRoute("/cli/login")({
-  validateSearch: (search: Record<string, unknown>): { code?: string } => {
-    const code = typeof search.code === "string" ? normalizeUserCode(search.code) : null;
-    return code ? { code } : {};
-  },
   beforeLoad: requireUser,
   component: CliLoginPage,
 });
 
 const DONE = "You can close this tab and return to your terminal.";
 const GONE = "This login request expired or was already used.";
+const HELPER = "Type the code from your terminal yourself. Never enter a code someone sent you.";
 
 function CliLoginPage() {
-  const { code } = Route.useSearch();
-  return code ? <Request code={code} /> : <EnterCode />;
+  const [code, setCode] = useState<string | null>(null);
+  return code ? <Request code={code} /> : <EnterCode onSubmit={setCode} />;
 }
 
-function EnterCode() {
-  const navigate = useNavigate();
+function EnterCode({ onSubmit }: { onSubmit: (code: string) => void }) {
   const [raw, setRaw] = useState("");
   const [error, setError] = useState<string>();
 
@@ -46,7 +44,7 @@ function EnterCode() {
       return;
     }
     setError(undefined);
-    void navigate({ to: "/cli/login", search: { code } });
+    onSubmit(code);
   }
 
   return (
@@ -55,7 +53,7 @@ function EnterCode() {
       description="Enter the code shown in your terminal after running anchor login."
     >
       <form noValidate onSubmit={submit} className="flex flex-col gap-4">
-        <Field htmlFor="code" label="Code" error={error}>
+        <Field htmlFor="code" label="Code" hint={HELPER} error={error}>
           <Input
             id="code"
             autoComplete="off"
@@ -88,7 +86,7 @@ function Request({ code }: { code: string }) {
     queryFn: () => api.cliLogin.get(code),
     retry: false,
   });
-  // No variables: the code comes from the URL, so nothing extra sits in the MutationCache.
+  // No variables: the code is a prop, so nothing extra sits in the MutationCache.
   const approve = useMutation({ mutationFn: () => api.cliLogin.approve(code) });
   const deny = useMutation({ mutationFn: () => api.cliLogin.deny(code) });
   const decisionError = approve.error ?? deny.error;

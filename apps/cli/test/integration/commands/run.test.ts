@@ -31,15 +31,48 @@ function fakeRunChild(result: Awaited<ReturnType<RunChild>> = { code: 0, signal:
 }
 
 describe("buildChildEnv", () => {
+  const base = { override: true, allowReserved: false, passToken: false };
+
   it("override true replaces FOO; --no-override keeps the parent FOO; new keys are always added", () => {
     const parent = { FOO: "parent", PATH: "/bin", GONE: undefined };
     const secrets = [secret("FOO", "anchor"), secret("NEW", "x")];
-    expect(buildChildEnv(parent, secrets, true)).toEqual({ FOO: "anchor", PATH: "/bin", NEW: "x" });
-    expect(buildChildEnv(parent, secrets, false)).toEqual({
+    expect(buildChildEnv(parent, secrets, base)).toEqual({
+      env: { FOO: "anchor", PATH: "/bin", NEW: "x" },
+      skipped: [],
+    });
+    expect(buildChildEnv(parent, secrets, { ...base, override: false }).env).toEqual({
       FOO: "parent",
       PATH: "/bin",
       NEW: "x",
     });
+  });
+
+  it("skips reserved secrets and keeps the parent's value", () => {
+    const secrets = [
+      secret("PATH", "/evil"),
+      secret("NODE_OPTIONS", "--require=/tmp/x.js"),
+      secret("node_options", "--require=/tmp/y.js"),
+      secret("A", "1"),
+    ];
+    const r = buildChildEnv({ PATH: "/bin" }, secrets, base);
+    expect(r.env).toEqual({ PATH: "/bin", A: "1" });
+    expect(r.skipped).toEqual(["NODE_OPTIONS", "PATH", "node_options"]);
+  });
+
+  it("allowReserved injects them", () => {
+    const r = buildChildEnv({ PATH: "/bin" }, [secret("PATH", "/evil")], {
+      ...base,
+      allowReserved: true,
+    });
+    expect(r).toEqual({ env: { PATH: "/evil" }, skipped: [] });
+  });
+
+  it("drops the parent's ANCHOR_TOKEN unless passToken", () => {
+    const parent = { ANCHOR_TOKEN: "anc_st_parent", HOME: "/h" };
+    expect(buildChildEnv(parent, [], base).env).toEqual({ HOME: "/h" });
+    expect(buildChildEnv(parent, [], { ...base, passToken: true }).env.ANCHOR_TOKEN).toBe(
+      "anc_st_parent",
+    );
   });
 });
 
@@ -78,6 +111,38 @@ describe("anchor run", () => {
     );
     expect(r.code).toBe(0);
     expect(child.calls[0]?.env).toMatchObject({ MODELS: '["a","b"]', PORT: "8080" });
+  });
+
+  it("skips reserved names with a warning that never shows the value", async () => {
+    const cli = await loggedIn({ env: { ANCHOR_TOKEN: "anc_st_parent-token" } });
+    const child = fakeRunChild();
+    const r = await cli.run(
+      ["run", ...P, "--", "node", "app.js"],
+      { listSecrets: async () => [secret("LD_PRELOAD", CANARY), secret("A", "1")] },
+      { runChild: child.runChild },
+    );
+    expect(r.code).toBe(0);
+    expect(child.calls[0]?.env.LD_PRELOAD).toBeUndefined();
+    expect(child.calls[0]?.env.ANCHOR_TOKEN).toBeUndefined();
+    expect(child.calls[0]?.env.A).toBe("1");
+    expect(r.err).toContain(
+      "Skipped reserved names: LD_PRELOAD (pass --allow-reserved to inject them)",
+    );
+    expect(r.out + r.err).not.toContain(CANARY);
+  });
+
+  it("--allow-reserved and --pass-token opt back in", async () => {
+    const cli = await loggedIn({ env: { ANCHOR_TOKEN: "anc_st_parent-token" } });
+    const child = fakeRunChild();
+    const r = await cli.run(
+      ["run", "--allow-reserved", "--pass-token", ...P, "--", "node", "app.js"],
+      { listSecrets: async () => [secret("LD_PRELOAD", CANARY)] },
+      { runChild: child.runChild },
+    );
+    expect(r.code).toBe(0);
+    expect(child.calls[0]?.env.LD_PRELOAD).toBe(CANARY);
+    expect(child.calls[0]?.env.ANCHOR_TOKEN).toBe("anc_st_parent-token");
+    expect(r.err).not.toContain("Skipped reserved names");
   });
 
   it("--no-override keeps existing variables", async () => {
@@ -298,6 +363,24 @@ describe("anchor run --watch", () => {
     expect(r.err).not.toContain("A=");
     expect(rig.log.filter((l) => l.startsWith("sleep"))[0]).toBe("sleep 30000");
     expect(rig.overlaps()).toBe(0);
+  });
+
+  it("a reserved name that appears mid-run is skipped on restart and warned about once", async () => {
+    const cli = await loggedIn();
+    const rig = watchRig();
+    const withReserved: ConditionalSecrets = {
+      changed: true,
+      secrets: [secret("A", "2"), secret("NODE_OPTIONS", CANARY)],
+      etag: '"t2"',
+    };
+    const api = polls(rig, changed("1"), [withReserved, { changed: false }, withReserved]);
+    const r = await cli.run(W, api, { startChild: rig.startChild, sleep: rig.sleep });
+    expect(r.code).toBe(0);
+    expect(rig.children.map((c) => c.env.A)).toEqual(["1", "2"]);
+    expect(rig.children[1]?.env.NODE_OPTIONS).toBeUndefined();
+    const line = "Skipped reserved names: NODE_OPTIONS (pass --allow-reserved to inject them)";
+    expect(r.err.split(line)).toHaveLength(2);
+    expect(r.err).not.toContain(CANARY);
   });
 
   it("a 304 keeps the child", async () => {

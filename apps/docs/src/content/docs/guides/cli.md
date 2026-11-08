@@ -98,9 +98,11 @@ your user config. `anchor init` writes `.anchor.json`, which is meant to be comm
 
 `anchor login` logs in through the browser, like `gh auth login`:
 
-1. It prints `Open https://<server>/cli/login?code=WDJB-MJHT and confirm the code WDJB-MJHT` and,
-   in a terminal, opens that page (`--no-browser` only prints it).
-2. On the page, signed in to the dashboard, check that the code matches and click **Approve**.
+1. It prints `Open https://<server>/cli/login and enter the code WDJB-MJHT` and, in a terminal,
+   opens that page (`--no-browser` only prints it).
+2. On the page, signed in to the dashboard, type the code from your terminal, check the device
+   details and click **Approve**. The link never carries the code: never enter a code someone
+   sent you, since approving signs their terminal in as you.
 3. The CLI, which polls every 5 seconds, stores the session. The request expires after 10 minutes.
 
 It works over SSH and in containers: open the URL on any device. Only a dashboard session can
@@ -140,8 +142,8 @@ described in [Versions and rollback](/anchor/guides/versions/).
 | `anchor imports list` | List the folders `--path` imports, in the order they apply |
 | `anchor imports add <env>:<path>` | Make `--path` show the secrets of another folder (no-op if it already does) |
 | `anchor imports remove <env>:<path>` | Stop importing a folder |
-| `anchor run [--no-override] [--no-expand] [--watch [--watch-interval <s>]] -- <command> [args...]` | Run a command with secrets in its environment |
-| `anchor export [--format dotenv\|json\|yaml] [--output <file>] [--no-expand]` | Write secrets to a file or a pipe |
+| `anchor run [--no-override] [--no-expand] [--allow-reserved] [--pass-token] [--watch [--watch-interval <s>]] -- <command> [args...]` | Run a command with secrets in its environment |
+| `anchor export [--format dotenv\|json\|yaml] [--output <file>] [--no-expand] [--allow-reserved]` | Write secrets to a file or a pipe |
 | `anchor tokens create --name <name> [--scope <env[:path]>]... [--permission read\|read-write] [--expires-in <days\|never>]` | Create a service token (`never`: valid until revoked) |
 | `anchor tokens list` | List the project's service tokens |
 | `anchor tokens revoke <id>` | Revoke a service token |
@@ -250,11 +252,22 @@ anchor imports remove prod:/shared --env prod --path /api
   `--no-override` keeps existing ones. The command must follow `--` (exit 2 otherwise, so a
   child's `--env prod` is never read as Anchor's); everything after `--` is passed unchanged. On
   Windows, `.cmd` shims such as `npm` are resolved through `PATHEXT`.
+- `anchor run` never injects a secret whose name changes how programs load code or where they
+  connect: `PATH`, `NODE_OPTIONS`, `LD_*`/`DYLD_*`, `PYTHONPATH`, `JAVA_TOOL_OPTIONS`, `GIT_SSH*`,
+  `*_PROXY`, `ANCHOR_*` and similar (case-insensitive; the full list is `isReservedEnvKey` in the
+  SDK). It prints `Skipped reserved names: <names> (pass --allow-reserved to inject them)` and runs
+  the command without them; `--allow-reserved` injects them anyway. Otherwise anyone who can write
+  to the folder could run code wherever `anchor run` runs.
+- `anchor run` removes an inherited `ANCHOR_TOKEN` from the command's environment, so a build
+  script cannot read the CI token. Pass `--pass-token` when the command itself calls `anchor` or
+  the SDK with it.
 - `anchor export` refuses to print to a terminal. With `--output` it writes the file with mode 0600
   (also when it replaces an existing file), asks before overwriting (`--yes` in scripts), and warns
-  when the file is not gitignored. `--format dotenv` fails with a hint when a value cannot be written
-  so that a dotenv parser reads it back exactly (a value that contains both `"` and a newline); use
-  `--format json` or `--format yaml` for such values.
+  when the file is not gitignored. `--format dotenv` writes only lines that a dotenv parser reads
+  back exactly **and** that a shell or docker-compose sourcing the file never runs or expands. A
+  value it cannot write that way (one with a `'` together with `$`, a backtick, `"` or a newline)
+  fails with a hint: use `--format json` or `--format yaml` for such values. Reserved names (as for
+  `anchor run`) are left out of dotenv files with a warning; `--allow-reserved` writes them.
 - `--format json` and `--format yaml` write typed values: a `number` as a number, a `boolean` as
   `true`/`false`, a `list` as an array and a `json` value as its JSON. `dotenv` and `anchor run`
   always use the stored text (`PORT=8080`, `MODELS=["a","b"]`).
@@ -440,7 +453,9 @@ as `error: <message>` and `hint: <next step>`.
 
 Each request times out after 15 seconds. `GET` and `PUT` (secret writes are idempotent) are retried
 at most twice, after 250 ms and 1 s, on network errors and on HTTP 429, 502, 503 and 504. `POST` and
-`DELETE` are never retried.
+`DELETE` are never retried. Redirects are never followed (the token would go with them): an API
+URL that answers with one fails with `<origin> answered with a redirect (HTTP 302); use the final
+address as the API URL`.
 
 ### Proxy
 

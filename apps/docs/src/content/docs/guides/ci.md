@@ -34,9 +34,9 @@ jobs:
       ANCHOR_TOKEN: ${{ secrets.ANCHOR_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-      - uses: sotarak/anchor/setup-action@v0.5.2
+      - uses: sotarak/anchor/setup-action@v0.5.3
         with:
-          version: 0.5.2
+          version: 0.5.3
       - run: anchor run --project my-app --env prod -- npm run deploy
 ```
 
@@ -44,17 +44,26 @@ The action downloads the release binary for the runner (Linux, macOS or Windows)
 against the release's `SHA256SUMS`, and puts `anchor` on `PATH`. `version` defaults to `latest`;
 pin it for reproducible builds. The installed version is available as the step output `version`.
 
+A tag such as `@vX.Y.Z` can be moved by whoever controls the repository. For a job that holds
+production tokens, pin the action to the release's full commit SHA instead
+(`uses: sotarak/anchor/setup-action@<40-character sha> # vX.Y.Z`), as Anchor's own workflows do,
+and let Dependabot's `github-actions` updates bump it.
+
 On other CI systems, or when Node.js is already on the runner, either of these works too:
 
 ```sh
-curl -fsSL https://sotarak.github.io/anchor/install.sh | ANCHOR_VERSION=0.5.2 sh   # ~/.local/bin
-npx -y @anchor-secrets/cli@0.5.2 run --project my-app --env prod -- npm run deploy
+curl -fsSL https://sotarak.github.io/anchor/install.sh | ANCHOR_VERSION=0.5.3 sh   # ~/.local/bin
+npx -y @anchor-secrets/cli@0.5.3 run --project my-app --env prod -- npm run deploy
 ```
 
 - **Set `ANCHOR_API_URL` next to `ANCHOR_TOKEN`.** The CLI only sends `ANCHOR_TOKEN` to an API URL
   from `--api-url`, `ANCHOR_API_URL` or the user config, never to the URL in a committed
   `.anchor.json`: a pull request cannot redirect your token to another host. Without it the CLI
   exits 2.
+- `anchor run` removes `ANCHOR_TOKEN` from the command's environment, so the build or
+  deploy script never sees the CI token. Pass `--pass-token` when the command runs `anchor` or
+  the SDK itself. Secrets with reserved names (`PATH`, `NODE_OPTIONS`, `LD_PRELOAD`, proxies,
+  `ANCHOR_*`, ...) are skipped with a warning; `--allow-reserved` injects them.
 - `anchor run` starts the command only after every secret was fetched. A failed fetch (expired or
   revoked token, missing scope) exits 3 or 4 and the command never runs with a partial
   environment.

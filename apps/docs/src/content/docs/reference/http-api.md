@@ -39,7 +39,7 @@ Every error has the same body:
 | `not_found` | 404 | No such resource (or not visible to you) |
 | `conflict` | 409 | Already exists, or a concurrent write won; retry |
 | `payload_too_large` | 413 | A secret value over 65,536 bytes |
-| `rate_limited` | 429 | Too many failed logins; the account is locked for 15 minutes |
+| `rate_limited` | 429 | Too many failed logins from this address (for this email, or in total); locked for 15 minutes |
 | `internal` | 500 | Server error, including a misconfigured root key (`config_error` in the logs) |
 
 Messages never contain secret values.

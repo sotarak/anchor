@@ -45,7 +45,10 @@ rotation work, and it lets CI read secrets with a plain bearer token.
 ## Authentication
 
 - Passwords: PBKDF2-SHA-256, 100,000 iterations (the workerd maximum), per-user salt.
-- 5 failed logins in a row lock the account for 15 minutes.
+- Login is limited per address and email, not per account (0.5.3): 5 failed logins for one email from one address (an IPv6 /64 counts as one) lock that pair for 15 minutes, and 50 failed logins from one address lock the address for 15 minutes.
+  Someone guessing elsewhere cannot lock the owner out, and the answer (including the `429`) is
+  the same whether the email exists or not. A successful login clears its pair; a password reset
+  clears every lock on that email.
 - Sessions, service tokens, invite links and password-reset links are high-entropy random tokens
   with a type prefix (`anc_s_`, `anc_st_`, `anc_inv_`, `anc_rst_`). Only their SHA-256 hash is
   stored. Invite links last 72 hours, reset links 1 hour.
@@ -57,7 +60,9 @@ rotation work, and it lets CI read secrets with a plain bearer token.
   it is no longer used. Revocation takes effect on the next request.
 - `anchor login` (0.4.0) uses a browser flow modeled on the OAuth device authorization grant. The
   CLI keeps a 256-bit device code (prefix `anc_dc_`, only its SHA-256 hash is stored) and polls;
-  the person approves the short code shown in the terminal on the dashboard's `/cli/login` page.
+  the person types the short code shown in the terminal on the dashboard's `/cli/login` page and
+  approves it. Since 0.5.3 the link carries no code (`?code=` is ignored), so a link someone sends
+  cannot fill in their code for you.
   Only a dashboard (`web`) session sent as the cookie can approve or deny: a CLI session, even
   pasted into the cookie, and a service token are refused, so a stolen CLI token cannot mint more
   sessions. Requests expire after 10 minutes, a device code yields at most one session, and
@@ -113,11 +118,24 @@ access to `prod:/db`, and a forbidden target is a `403` whether it exists or not
 ## Known gaps
 
 - **No end-to-end encryption.** See the trust model above.
-- **No built-in IP rate limiting.** Add a Cloudflare rule in front of the auth endpoints; see
-  [Rate limiting](/anchor/operations/rate-limiting/).
+- **Only login is rate limited.** Add a Cloudflare rule in front of the other anonymous endpoints;
+  see [Rate limiting](/anchor/operations/rate-limiting/).
 - **Break-glass recovery leaves no audit event.** It is a direct D1 update; see
   [Break-glass recovery](/anchor/operations/break-glass/).
 - **First-run setup is open until the owner exists.** `/setup` asks for no token; the first account
   created there owns the instance. Create it right after deploying.
 - **No SSO or MFA yet.** Accounts are email and password.
+- **Approving a code someone else sent you signs them in.** CLI logins and agent approvals are
+  phishable the way `gh auth login` is: the page shows the device, IP and age; type and approve only
+  a code from your own terminal.
+- **Any MCP client can register itself.** Dynamic client registration is open (capped per IP and
+  instance); the consent page names the app and where it returns, and nothing is granted until a
+  signed-in person approves it.
+- **Folder writers control what reaches a child process.** The server stores any key name. The CLI
+  (`anchor run`, dotenv export) and `loadAnchorEnv` skip reserved names (`PATH`, `NODE_OPTIONS`,
+  `LD_PRELOAD`, proxies, `ANCHOR_*`, ...) unless told otherwise (0.5.3); any other variable your
+  program trusts is still theirs to set.
+- **Plain http is opt-in.** The CLI and the SDK refuse `http://` except to localhost, 127.0.0.1 and
+  [::1]; the SDK's `allowInsecureHttp: true` lifts that, and with it the token travels in clear
+  text. Neither client follows redirects.
 - **Pre-1.0.** Only the latest release gets security fixes.

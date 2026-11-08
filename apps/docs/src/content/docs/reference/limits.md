@@ -43,7 +43,7 @@ over a limit fails with `400 bad_request`, or `413 payload_too_large` for an ove
 | CLI session | 30 days |
 | Invite link | 72 hours |
 | Password-reset link | 1 hour |
-| Failed logins before lockout | 5, then locked for 15 minutes |
+| Failed logins before lockout | 5 per email and address, 50 per address; each then locked for 15 minutes |
 
 ## Audit and background work
 

@@ -58,8 +58,12 @@ createAnchorClient({
   cache: { ttlMs: 60_000, maxStaleMs: Infinity }, // or false; store: a custom CacheStore
   onEvent: (event) => {}, // "retry", "refresh_failed" and "store_failed"
   fetch, // replaces the global fetch
+  allowInsecureHttp: false, // true allows http:// to hosts other than localhost
 });
 ```
+
+- **Transport:** `https://` only, except `http://` to localhost, 127.0.0.1 and [::1], unless
+  `allowInsecureHttp: true`. Redirects are never followed (code `bad_response`).
 
 - **Cache:** in memory, per client, keyed by a fingerprint of the token (never the token).
   Concurrent reads of one folder share a request. A custom `CacheStore` receives plaintext
@@ -73,8 +77,8 @@ createAnchorClient({
 ## Errors
 
 Every failure is an `AnchorError` with `status` (0 when there was no response), `code` and
-`retryable`: `config` (URL or token missing, before any request), `network`, `timeout`,
-`aborted`, `stale`, or the server's error code such as `unauthenticated`, `forbidden` or `not_found`.
+`retryable`: `config` (URL or token missing, or not https, before any request), `network`,
+`timeout`, `aborted`, `stale`, `bad_response` (a redirect or a body that is not JSON), or the server's error code such as `unauthenticated`, `forbidden` or `not_found`.
 Messages and events never contain tokens or values.
 
 Every request that returns values is recorded in the project's audit log under the token's

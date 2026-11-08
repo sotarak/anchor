@@ -85,8 +85,9 @@ you back to the app. Only a dashboard session can approve.
 
 ## Approving a CLI login
 
-`anchor login` opens `/cli/login?code=XXXX-XXXX` in your browser (sign in first if asked). The page
-shows the code in large type, the device name the CLI sent, the IP address and how long ago the
+`anchor login` opens `/cli/login` in your browser (sign in first if asked) and prints a code. Type
+the code from your terminal yourself (never one someone sent you) and press **Continue**. The page
+then shows the code in large type, the device name the CLI sent, the IP address and how long ago the
 request was made. **Only approve if you just ran anchor login and this code matches your
 terminal.** **Approve** gives that terminal a CLI session as you (30 days, revocable from your
 sessions list); **Deny** makes the CLI stop with "Login was denied in the browser". Either way the page then says

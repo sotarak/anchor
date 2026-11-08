@@ -371,7 +371,7 @@ describe("open-source repository", () => {
     expect(upgrading).toContain("run_worker_first");
   });
 
-  it("every manifest is 0.5.2 and the changelog has a 0.5.2 entry", () => {
+  it("every manifest is 0.5.3 and the changelog has a 0.5.3 entry", () => {
     for (const f of [
       "package.json",
       "apps/cli/package.json",
@@ -382,17 +382,19 @@ describe("open-source repository", () => {
       "packages/sdk/package.json",
       "packages/nestjs/package.json",
     ]) {
-      expect(JSON.parse(read(f)).version, f).toBe("0.5.2");
+      expect(JSON.parse(read(f)).version, f).toBe("0.5.3");
     }
     // The MCP server reports this as its version.
-    expect(read("apps/server/src/version.ts")).toContain('SERVER_VERSION = "0.5.2"');
+    expect(read("apps/server/src/version.ts")).toContain('SERVER_VERSION = "0.5.3"');
     // Exits non-zero (and throws here) when the section is missing.
-    const notes = execFileSync(process.execPath, ["scripts/changelog.mjs", "0.5.2"], {
+    const notes = execFileSync(process.execPath, ["scripts/changelog.mjs", "0.5.3"], {
       cwd: path(""),
       encoding: "utf8",
     });
-    expect(notes).toContain("anchor imports");
-    expect(notes).toContain("Copy value");
+    expect(notes).toContain("### Security");
+    expect(notes).toContain("--allow-reserved");
+    expect(notes).toContain("### Upgrade notes");
+    expect(notes).toContain("0009_login_attempts");
   });
 
   it("SDK docs describe read-triggered refresh and conditional requests", () => {
@@ -527,23 +529,27 @@ describe("open-source repository", () => {
     expect(read("README.md")).toContain("https://sotarak.github.io/anchor/guides/agent-skills/");
   });
 
-  it("the CI guide pins the 0.5.2 CLI", () => {
+  it("the CI guide pins the 0.5.3 CLI", () => {
     const ci = read("apps/docs/src/content/docs/guides/ci.md");
     expect(ci).not.toContain("0.5.1");
-    expect(ci.match(/0\.5\.2/g)?.length).toBe(4);
+    expect(ci).not.toContain("0.5.2");
+    expect(ci.match(/0\.5\.3/g)?.length).toBe(4);
   });
 
-  it("workflows use actions/checkout@v7 and actions/upload-pages-artifact@v5", () => {
+  it("workflows use actions/checkout v7 and actions/upload-pages-artifact v5 (pinned by SHA)", () => {
+    let seen = 0;
     for (const f of ["ci", "dco", "docs", "release-cli"]) {
       const wf = read(`.github/workflows/${f}.yml`);
       for (const [, action, version] of wf.matchAll(
-        /uses: actions\/(checkout|upload-pages-artifact)@(v\d+)/g,
+        /uses: actions\/(checkout|upload-pages-artifact)@[0-9a-f]{40} # (v\d+)\.\d+\.\d+/g,
       )) {
+        seen++;
         expect(`${f}: ${action}@${version}`).toBe(
           `${f}: ${action}@${action === "checkout" ? "v7" : "v5"}`,
         );
       }
     }
+    expect(seen).toBeGreaterThan(5);
   });
 
   it("README links the docs site", () => {

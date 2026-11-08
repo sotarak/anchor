@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { CliLoginStartDto, LoginResponse, ServiceTokenDto, UserDto } from "@anchor/shared";
 import { describe, expect, it } from "vitest";
 import type { ApiClient } from "#src/api/client";
+import { ApiRequestError } from "#src/api/http";
 import {
   apiError,
   createTestIo,
@@ -746,6 +747,24 @@ describe("anchor login (browser)", () => {
     expect(io.err()).toContain(
       "This server does not support browser login; use anchor login --with-password",
     );
+  });
+
+  it("a server that is not Anchor says so instead of blaming browser login", async () => {
+    const { io, xdg } = await env();
+    const message = `${API} did not answer as an Anchor server (HTTP 404)`;
+    const r = run(
+      io,
+      ["login", "--api-url", API],
+      browserApi([], async () => {
+        throw new ApiRequestError(404, "internal", message);
+      }),
+      deps().extra,
+    );
+    expect(await r.code).toBe(1);
+    expect(io.err()).toContain(`error: ${message}`);
+    expect(io.err()).toContain("hint: Check the server URL");
+    expect(io.err()).not.toContain("does not support browser login");
+    await expect(readFile(join(xdg, "anchor", "config.json"), "utf8")).rejects.toThrow();
   });
 
   it("--with-password, --email or --password-stdin select the password flow", async () => {

@@ -72,5 +72,9 @@ export function toCliError(
   if (e.code === "unauthenticated" && ctx.authSource === "ANCHOR_TOKEN") {
     return new CliError(EXIT.AUTH, "ANCHOR_TOKEN was rejected (expired, revoked or invalid)");
   }
-  return new CliError(exitCodeForApiError(e), e.message, undefined, e.code);
+  const hint = e.status === 404 && e.code === "internal" ? NOT_ANCHOR_HINT : undefined;
+  return new CliError(exitCodeForApiError(e), e.message, hint, e.code);
 }
+
+const NOT_ANCHOR_HINT =
+  "Check the server URL; run 'anchor login --api-url <url>' to change your default";

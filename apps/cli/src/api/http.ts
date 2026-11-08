@@ -134,20 +134,24 @@ export async function request<T>(
     try {
       data = await readJson(res);
     } catch {
-      throw new ApiRequestError(
-        res.status,
-        "internal",
-        `Unexpected response from server (HTTP ${res.status})`,
-      );
+      throw unexpectedResponse(url, res.status);
     }
     if (res.ok) return { status: res.status, data: data as T, etag };
     if (isErrorBody(data)) {
       throw new ApiRequestError(res.status, data.error.code, data.error.message);
     }
-    throw new ApiRequestError(
-      res.status,
-      "internal",
-      `Unexpected response from server (HTTP ${res.status})`,
-    );
+    throw unexpectedResponse(url, res.status);
   }
+}
+
+/**
+ * A response without an Anchor error body. A 404 of that kind almost always means the URL points
+ * at something other than an Anchor server (an old workers.dev host, a typo), so it says which.
+ */
+function unexpectedResponse(url: URL, status: number): ApiRequestError {
+  const message =
+    status === 404
+      ? `${url.origin} did not answer as an Anchor server (HTTP 404)`
+      : `Unexpected response from server (HTTP ${status})`;
+  return new ApiRequestError(status, "internal", message);
 }

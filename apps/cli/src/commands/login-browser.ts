@@ -42,8 +42,9 @@ export async function loginWithBrowser(
   try {
     started = await api.cliLoginStart({ clientName: clientName() });
   } catch (e) {
-    // A 0.3.x server has no such route.
-    if (e instanceof ApiRequestError && e.status === 404)
+    // A 0.3.x server has no such route (an Anchor not_found). A 404 without an Anchor error body
+    // is not an Anchor server at all, and toCliError says so.
+    if (e instanceof ApiRequestError && e.status === 404 && e.code !== "internal")
       throw new CliError(EXIT.ERROR, NO_BROWSER_LOGIN);
     if (e instanceof ApiRequestError && e.status === 429)
       throw new CliError(EXIT.ERROR, e.message, TOO_MANY_HINT, e.code);

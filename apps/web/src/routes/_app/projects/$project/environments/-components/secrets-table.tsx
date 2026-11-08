@@ -8,7 +8,7 @@ import {
   RiPencilLine,
 } from "react-icons/ri";
 import { toast } from "sonner";
-import { TableSkeletonRows } from "@/components/data/table-states";
+import { errorMessage, TableSkeletonRows } from "@/components/data/table-states";
 import { FolderRows } from "@/components/folders/folder-rows";
 import { ReferenceValue } from "@/components/references/reference-value";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { Tag } from "@/components/ui/tag";
 import { Tooltip } from "@/components/ui/tooltip";
+import { api } from "@/lib/api/endpoints";
 import { formatDate, formatRelative } from "@/lib/format";
 
 const source = (f: { environment: string; path: string }) => `${f.environment}:${f.path}`;
@@ -70,6 +71,31 @@ export function SecretsTable({
     try {
       await navigator.clipboard.writeText(key);
       toast.success("Key copied");
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
+  /**
+   * Copies the stored value, like the value cell's copy button. A sensitive value is read on
+   * click (audited, through the import for an imported row) and only ever reaches the clipboard.
+   */
+  const copyValue = async (s: SecretDto) => {
+    let value: string;
+    try {
+      value = !s.sensitive
+        ? (s.value ?? "")
+        : ((
+            await api.secrets.get(project, env, s.key, path, {
+              includeImports: s.importedFrom ? true : undefined,
+            })
+          ).value ?? "");
+    } catch (e) {
+      toast.error(errorMessage(e));
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success("Value copied");
     } catch {
       toast.error("Copy failed");
     }
@@ -138,14 +164,14 @@ export function SecretsTable({
                   {/* Its own column keeps every row one line; the full text is in the tooltip. */}
                   {s.comment ? (
                     <Tooltip content={s.comment}>
-                      <span className="block max-w-72 truncate text-text-soft">{s.comment}</span>
+                      <span className="block max-w-56 truncate text-text-soft">{s.comment}</span>
                     </Tooltip>
                   ) : (
                     <span className="text-text-soft">–</span>
                   )}
                 </TableCell>
-                <TableCell className="text-paragraph-sm">{`v${s.version}`}</TableCell>
-                <TableCell className="text-paragraph-sm">
+                <TableCell className="whitespace-nowrap text-paragraph-sm">{`v${s.version}`}</TableCell>
+                <TableCell className="whitespace-nowrap text-paragraph-sm">
                   <Tooltip content={formatRelative(s.updatedAt)}>
                     <span>{formatDate(s.updatedAt)}</span>
                   </Tooltip>
@@ -174,6 +200,10 @@ export function SecretsTable({
                       <DropdownMenuItem onSelect={() => void copyKey(s.key)}>
                         <RiFileCopyLine aria-hidden />
                         Copy key
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => void copyValue(s)}>
+                        <RiFileCopyLine aria-hidden />
+                        Copy value
                       </DropdownMenuItem>
                       {canWrite && !s.importedFrom ? (
                         <>

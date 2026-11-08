@@ -4,6 +4,8 @@ import { OWNER } from "./owner";
 const PASSWORD = "pw-e2e-5f1";
 const RAW = "postgres://u:${PASSWORD}@h/db";
 const RESOLVED = `postgres://u:${PASSWORD}@h/db`;
+const LONG_COMMENT =
+  "Primary database connection string used by the API workers and the nightly reporting jobs in every region";
 
 async function addSecret(page: Page, key: string, value: string) {
   await page.getByRole("button", { name: "Add secret" }).first().click();
@@ -69,8 +71,21 @@ test("folder → reference → resolved preview → history → rollback", async
   // Save a second version: the value starts as "Value unchanged" until replaced.
   await edit.getByRole("button", { name: "Replace value" }).click();
   await edit.getByLabel("Value").fill("postgres://u:${PASSWORD}@h2/db");
+  await edit.getByLabel("Comment").fill(LONG_COMMENT);
   await edit.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByRole("row", { name: /DB_URL/ })).toContainText("v2");
+
+  // A long comment truncates instead of squeezing Updated onto two lines.
+  for (const width of [1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const updated = page
+      .getByRole("row", { name: /DB_URL/ })
+      .locator("td")
+      .nth(4)
+      .locator("span");
+    const box = await updated.first().boundingBox();
+    expect(box?.height, `Updated wraps at ${width}px`).toBeLessThan(30);
+  }
 
   // History, then roll back to v1: a new v3 becomes current.
   await rowMenu(page, "DB_URL", "History");

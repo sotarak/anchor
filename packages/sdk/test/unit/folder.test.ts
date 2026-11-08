@@ -216,3 +216,85 @@ describe("AnchorFolder", () => {
     expect(folder.get("A")).toBe("v1");
   });
 });
+
+describe("folder hardening", () => {
+  it("nested json and list values are frozen; loadSecrets still returns mutable copies", async () => {
+    const s = server();
+    s.serve(
+      () =>
+        new Response(
+          JSON.stringify({
+            secrets: [
+              {
+                key: "CFG",
+                path: "/",
+                type: "json",
+                sensitive: true,
+                version: 1,
+                value: '{"a":{"b":1}}',
+              },
+              { key: "L", path: "/", type: "list", sensitive: true, version: 1, value: '["x"]' },
+            ],
+          }),
+          { status: 200 },
+        ),
+    );
+    const c = client(s);
+    const folder = await c.folder(QUERY);
+    const cfg = folder.get<{ a: { b: number } }>("CFG");
+    expect(Object.isFrozen(cfg?.a)).toBe(true);
+    expect(Object.isFrozen(folder.get("L"))).toBe(true);
+    expect(() => {
+      (cfg as { a: { b: number } }).a.b = 2;
+    }).toThrow(TypeError);
+    expect(folder.get<{ a: { b: number } }>("CFG")?.a.b).toBe(1);
+    const loaded = (await c.loadSecrets(QUERY)).CFG as { a: { b: number } };
+    expect(Object.isFrozen(loaded.a)).toBe(false);
+  });
+
+  it("a folder opened from a warm shared store refreshes ttl after that entry was fetched", async () => {
+    const s = server();
+    const entries = new Map<string, import("../../src/types").CacheEntry>();
+    const store = {
+      get: (k: string) => entries.get(k),
+      set: (k: string, e: import("../../src/types").CacheEntry) => {
+        entries.set(k, e);
+      },
+    };
+    await client(s, { cache: { store } }).loadSecrets(QUERY); // warms the shared store at t0
+    expect(s.calls()).toBe(1);
+    await vi.advanceTimersByTimeAsync(TTL * 0.9);
+    const folder = await client(s, { cache: { store } }).folder(QUERY);
+    expect(s.calls()).toBe(1);
+    await vi.advanceTimersByTimeAsync(TTL * 0.1);
+    folder.get("A");
+    await flush();
+    expect(s.calls()).toBe(2);
+  });
+
+  it("an older entry never replaces a newer snapshot", async () => {
+    const { openFolder } = await import("../../src/folder");
+    const secret = (value: string) => ({
+      key: "A",
+      path: "/",
+      type: "string" as const,
+      sensitive: true,
+      version: 1,
+      value,
+    });
+    const entries = [
+      { secrets: [secret("new")], fetchedAt: 200 },
+      { secrets: [secret("old")], fetchedAt: 100 },
+    ];
+    const core = {
+      ttlMs: 0,
+      maxStaleMs: Number.POSITIVE_INFINITY,
+      emit: () => {},
+      loadEntry: async () => entries.shift() ?? { secrets: [secret("old")], fetchedAt: 100 },
+    };
+    const folder = await openFolder(core, QUERY);
+    expect(folder.get("A")).toBe("new");
+    await flush();
+    expect(folder.get("A")).toBe("new");
+  });
+});

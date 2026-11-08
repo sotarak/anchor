@@ -15,6 +15,8 @@ function delayFor(error: AnchorError, attempt: number, policy: RetryPolicy): num
 /** Resolves after `ms`, or rejects with an `aborted` error as soon as `signal` aborts. */
 function wait(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
+    // Already aborted, for example by the onEvent hook that announced this retry.
+    if (signal?.aborted) return reject(abortedError());
     const onAbort = () => {
       clearTimeout(timer);
       reject(abortedError());

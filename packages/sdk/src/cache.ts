@@ -12,6 +12,10 @@ import type {
 export type { CacheEntry, CacheOptions, CacheStore } from "./types.js";
 export type CachePolicy = Required<CacheOptions>;
 
+/** What a fetch got from Anchor: new secrets and their tag, or a 304 for the tag it sent. */
+export type Fetched = { secrets: AnchorSecret[]; etag?: string } | "unchanged";
+type FetchFn = (signal: AbortSignal, etag: string | undefined) => Promise<Fetched>;
+
 /** A fetch's result: the entry to serve, and the error when it is a stale fallback. */
 type Outcome = { entry: CacheEntry; error?: AnchorError };
 
@@ -84,7 +88,7 @@ export class SecretCache {
    */
   async load(
     key: string,
-    fetch: (signal: AbortSignal) => Promise<AnchorSecret[]>,
+    fetch: FetchFn,
     opts: { fresh?: boolean; signal?: AbortSignal; strict?: boolean } = {},
   ): Promise<CacheEntry> {
     if (opts.signal?.aborted) throw abortedError();
@@ -112,15 +116,11 @@ export class SecretCache {
     return outcome.entry;
   }
 
-  private start(
-    key: string,
-    fetch: (signal: AbortSignal) => Promise<AnchorSecret[]>,
-    stale: CacheEntry | undefined,
-  ): Flight {
+  private start(key: string, fetch: FetchFn, stale: CacheEntry | undefined): Flight {
     const controller = new AbortController();
     const promise: Promise<Outcome> = this.fetch(
       key,
-      () => fetch(controller.signal),
+      () => fetch(controller.signal, stale?.etag),
       stale,
       controller.signal,
     ).finally(() => {
@@ -162,12 +162,24 @@ export class SecretCache {
 
   private async fetch(
     key: string,
-    fetch: () => Promise<AnchorSecret[]>,
+    fetch: () => Promise<Fetched>,
     stale: CacheEntry | undefined,
     signal: AbortSignal,
   ): Promise<Outcome> {
     try {
-      const entry: CacheEntry = { secrets: await fetch(), fetchedAt: this.now() };
+      const fetched = await fetch();
+      // A 304 confirms the stale entry: same secrets (same array), renewed fetchedAt.
+      if (fetched === "unchanged" && !stale) {
+        throw new AnchorError(
+          304,
+          "bad_response",
+          "Anchor answered 304 to a request without a tag",
+        );
+      }
+      const entry: CacheEntry =
+        fetched === "unchanged"
+          ? { secrets: (stale as CacheEntry).secrets, fetchedAt: this.now(), etag: stale?.etag }
+          : { secrets: fetched.secrets, fetchedAt: this.now(), etag: fetched.etag };
       this.latest.set(key, entry);
       await this.write(key, entry);
       this.failedAt.delete(key);

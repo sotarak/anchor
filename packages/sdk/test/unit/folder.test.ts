@@ -173,6 +173,21 @@ describe("AnchorFolder", () => {
     expect(folder.toObject()).not.toBe(first);
   });
 
+  it("a 304 refresh does not re-decode", async () => {
+    const s = server();
+    s.serve(() => {
+      const r = body("v1");
+      return new Response(r.body, { status: 200, headers: { etag: '"t1"' } });
+    });
+    const folder = await client(s).folder(QUERY);
+    const first = folder.toObject();
+    s.serve(() => new Response(null, { status: 304, headers: { etag: '"t1"' } }));
+    await folder.refresh();
+    expect(s.calls()).toBe(2);
+    // A re-decode would build a new frozen object.
+    expect(folder.toObject()).toBe(first);
+  });
+
   it("folder() rejects when the first load fails", async () => {
     const s = server();
     s.serve(

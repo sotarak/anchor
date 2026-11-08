@@ -38,8 +38,9 @@ export async function openFolder(
     failed = false;
     // A slow store can answer with an entry older than the one already shown: keep the newer.
     if (entry.fetchedAt < snapshot.entry.fetchedAt) return;
-    // Decode once per fetch: a cache hit returns the very entry this snapshot came from.
-    if (entry !== snapshot.entry) snapshot = snapshotOf(entry);
+    // Decode once per change: a cache hit returns this very entry, a 304 the same secrets array.
+    if (entry.secrets === snapshot.entry.secrets) snapshot = { entry, values: snapshot.values };
+    else snapshot = snapshotOf(entry);
   };
 
   const refreshInBackground = () => {

@@ -332,6 +332,61 @@ describe("caching", () => {
     expect(f.calls).toHaveLength(2);
   });
 
+  it("sends If-None-Match with the cached tag and reuses the secrets on 304", async () => {
+    vi.useFakeTimers();
+    try {
+      const tagged = new Response(JSON.stringify({ secrets: [secret("A", "string", "a")] }), {
+        status: 200,
+        headers: { "content-type": "application/json", etag: '"t1"' },
+      });
+      const f = fakeFetch(tagged, new Response(null, { status: 304, headers: { etag: '"t1"' } }));
+      const c = client(f.fetch);
+      expect(await c.loadSecrets(QUERY)).toEqual({ A: "a" });
+      expect(new Headers(f.calls[0]?.init.headers).get("if-none-match")).toBeNull();
+      await vi.advanceTimersByTimeAsync(60_001);
+      expect(await c.loadSecrets(QUERY)).toEqual({ A: "a" });
+      expect(f.calls).toHaveLength(2);
+      expect(new Headers(f.calls[1]?.init.headers).get("if-none-match")).toBe('"t1"');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("no If-None-Match without a stored tag", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = fakeFetch(ok());
+      const c = client(f.fetch);
+      await c.listSecrets(QUERY);
+      await vi.advanceTimersByTimeAsync(60_001);
+      await c.listSecrets(QUERY);
+      expect(f.calls).toHaveLength(2);
+      expect(new Headers(f.calls[1]?.init.headers).get("if-none-match")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("cache: false never sends If-None-Match", async () => {
+    const tagged = () =>
+      new Response(JSON.stringify({ secrets: [] }), { status: 200, headers: { etag: '"t1"' } });
+    const f = fakeFetch(tagged(), tagged());
+    const c = client(f.fetch, { cache: false });
+    await c.listSecrets(QUERY);
+    await c.listSecrets(QUERY);
+    expect(f.calls).toHaveLength(2);
+    for (const call of f.calls) {
+      expect(new Headers(call.init.headers).get("if-none-match")).toBeNull();
+    }
+  });
+
+  it("a 304 with caching off is a bad_response", async () => {
+    const f = fakeFetch(new Response(null, { status: 304 }));
+    await expect(client(f.fetch, { cache: false }).listSecrets(QUERY)).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+
   it("fresh: true requests even within ttl", async () => {
     const f = fakeFetch(ok());
     const c = client(f.fetch);

@@ -1,4 +1,4 @@
-import { cacheKey, SecretCache } from "./cache.js";
+import { cacheKey, type Fetched, SecretCache } from "./cache.js";
 import {
   type Config,
   cachePolicy,
@@ -38,7 +38,8 @@ async function fetchFolder(
   q: Required<ListQuery>,
   emit: (event: AnchorEvent) => void,
   signal?: AbortSignal,
-): Promise<AnchorSecret[]> {
+  etag?: string,
+): Promise<Fetched> {
   const params = new URLSearchParams({
     path: q.path,
     reveal: "true",
@@ -46,14 +47,16 @@ async function fetchFolder(
     includeImports: String(q.includeImports),
   });
   const url = `${cfg.base}/api/v1/projects/${encodeURIComponent(q.project)}/environments/${encodeURIComponent(q.environment)}/secrets?${params}`;
-  const body = (await withRetry(() => fetchJson(cfg, url, signal), cfg.retry, {
+  const res = await withRetry(() => fetchJson(cfg, url, signal, etag), cfg.retry, {
     signal,
     emit,
-  })) as { secrets?: unknown } | null;
+  });
+  if (res.status === 304) return "unchanged";
+  const body = res.body as { secrets?: unknown } | null;
   if (!body || !Array.isArray(body.secrets)) {
-    throw new AnchorError(200, "bad_response", "Anchor returned an unexpected response");
+    throw new AnchorError(res.status, "bad_response", "Anchor returned an unexpected response");
   }
-  return (body.secrets as WireSecret[]).map(toSecret);
+  return { secrets: (body.secrets as WireSecret[]).map(toSecret), etag: res.etag };
 }
 
 const copy = (s: AnchorSecret): AnchorSecret =>
@@ -84,12 +87,21 @@ export function createClientCore(options: ClientOptions): ClientCore {
       const cfg = resolveConfig(options);
       const query = normalize(q);
       if (!cache) {
-        return { secrets: await fetchFolder(cfg, query, emit, o.signal), fetchedAt: Date.now() };
+        // No tag is ever sent without a cache, so a 304 here is the server's mistake.
+        const fetched = await fetchFolder(cfg, query, emit, o.signal);
+        if (fetched === "unchanged") {
+          throw new AnchorError(
+            304,
+            "bad_response",
+            "Anchor answered 304 to a request without a tag",
+          );
+        }
+        return { secrets: fetched.secrets, fetchedAt: Date.now() };
       }
       // The cache gives a shared fetch its own signal, aborted when its last caller gives up.
       return cache.load(
         cacheKey(cfg.origin, cfg.token, query),
-        (signal) => fetchFolder(cfg, query, emit, signal),
+        (signal, etag) => fetchFolder(cfg, query, emit, signal, etag),
         o,
       );
     },

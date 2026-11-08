@@ -29,11 +29,19 @@ async function errorFromResponse(res: Response): Promise<AnchorError> {
   return new AnchorError(res.status, "http_error", `Anchor answered HTTP ${res.status}`, options);
 }
 
+export type JsonResponse = { status: number; etag: string | undefined; body: unknown };
+
 /**
- * One GET: the parsed body of a 2xx, or an `AnchorError` whose `retryable` says whether another
- * attempt may succeed. Aborts after `cfg.timeoutMs`, or as soon as `signal` aborts.
+ * One GET: the parsed body of a 2xx (none for a 304 answering `ifNoneMatch`), or an
+ * `AnchorError` whose `retryable` says whether another attempt may succeed. Aborts after
+ * `cfg.timeoutMs`, or as soon as `signal` aborts.
  */
-export async function fetchJson(cfg: Config, url: string, signal?: AbortSignal): Promise<unknown> {
+export async function fetchJson(
+  cfg: Config,
+  url: string,
+  signal?: AbortSignal,
+  ifNoneMatch?: string,
+): Promise<JsonResponse> {
   if (signal?.aborted) throw abortedError();
   const controller = new AbortController();
   let timedOut = false;
@@ -44,14 +52,17 @@ export async function fetchJson(cfg: Config, url: string, signal?: AbortSignal):
   const onAbort = () => controller.abort();
   signal?.addEventListener("abort", onAbort, { once: true });
   try {
-    const res = await cfg.fetch(url, {
-      method: "GET",
-      headers: { authorization: `Bearer ${cfg.token}`, accept: "application/json" },
-      signal: controller.signal,
-    });
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${cfg.token}`,
+      accept: "application/json",
+    };
+    if (ifNoneMatch) headers["if-none-match"] = ifNoneMatch;
+    const res = await cfg.fetch(url, { method: "GET", headers, signal: controller.signal });
+    const etag = res.headers.get("etag") ?? undefined;
+    if (res.status === 304) return { status: 304, etag, body: undefined };
     if (!res.ok) throw await errorFromResponse(res);
     try {
-      return await res.json();
+      return { status: res.status, etag, body: await res.json() };
     } catch (cause) {
       if (controller.signal.aborted) throw cause;
       throw new AnchorError(

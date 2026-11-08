@@ -210,7 +210,7 @@ describe("events", () => {
       },
     });
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(await pending).toEqual({ secrets: [] });
+    expect((await pending).body).toEqual({ secrets: [] });
   });
 });
 

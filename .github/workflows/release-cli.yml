@@ -206,7 +206,7 @@ jobs:
         if: steps.published.outputs.skip != 'true'
         run: |
           pnpm --filter ./apps/cli pack --pack-destination "$RUNNER_TEMP/pkg"
-          npm install -g --prefix "$RUNNER_TEMP/prefix" "$RUNNER_TEMP"/pkg/*.tgz
+          npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/prefix" "$RUNNER_TEMP"/pkg/*.tgz
           test "$("$RUNNER_TEMP/prefix/bin/anchor" --version)" = "$VERSION"
           test "$("$RUNNER_TEMP/prefix/bin/anchor-secrets" --version)" = "$VERSION"
       - name: Publish
@@ -236,7 +236,7 @@ jobs:
           smoke=$(mktemp -d)
           cd "$smoke"
           npm init -y > /dev/null
-          npm install --no-audit --no-fund "$RUNNER_TEMP"/sdk/*.tgz "$RUNNER_TEMP"/nestjs/*.tgz \
+          npm install --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP"/sdk/*.tgz "$RUNNER_TEMP"/nestjs/*.tgz \
             @nestjs/common @nestjs/core reflect-metadata rxjs
           node -e "require('reflect-metadata'); require('@anchor-secrets/nestjs'); import('@anchor-secrets/sdk').then((m) => { if (typeof m.createAnchorClient !== 'function') process.exit(1); })"
       - name: Publish @anchor-secrets/sdk

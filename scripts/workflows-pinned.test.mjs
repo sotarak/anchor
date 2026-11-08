@@ -52,4 +52,11 @@ test("the npm publish job installs without running lifecycle scripts", () => {
   const job = next === -1 ? rest : rest.slice(0, next + 1);
   const installs = job.match(/pnpm install[^\n]*/g) ?? [];
   assert.deepEqual(installs, ["pnpm install --frozen-lockfile --ignore-scripts"]);
+  // The smoke tests install packages resolved fresh from the registry: their scripts would run
+  // next to the OIDC token too.
+  const npmInstalls = job.match(/(?<!p)npm install[^\n]*/g) ?? [];
+  assert.ok(npmInstalls.length >= 2, "the npm job smoke-tests with npm install");
+  for (const line of npmInstalls) {
+    assert.match(line, /--ignore-scripts/, line);
+  }
 });

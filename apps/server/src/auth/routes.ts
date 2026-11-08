@@ -28,8 +28,8 @@ import {
 import { LOCKOUT_MS, MAX_FAILED_LOGINS } from "./lockout";
 import {
   clearLoginLocksForEmail,
-  clearLoginPair,
   loginAttemptKeys,
+  loginSucceeded,
   reserveLoginKeys,
 } from "./login-attempts";
 import { readPresentedToken, requirePrincipal, requireUser } from "./middleware";
@@ -116,7 +116,7 @@ authRoutes.post("/auth/login", async (c) => {
       metadata: { reason },
     });
   // Counted per (address, email) and per address before anything else, so unknown emails count
-  // and lock exactly like known ones; a correct password clears the pair below.
+  // and lock exactly like known ones; a correct password clears the pair and refunds the address.
   const clientIp = c.get("clientIp");
   if (!(await reserveLoginKeys(c.env.DB, loginAttemptKeys(clientIp, body.email), now))) {
     await failed("locked");
@@ -137,7 +137,7 @@ authRoutes.post("/auth/login", async (c) => {
     await failed("disabled");
     throw new ApiError(403, "forbidden", "Account disabled");
   }
-  await clearLoginPair(c.env.DB, clientIp, body.email);
+  await loginSucceeded(c.env.DB, clientIp, body.email, now);
   const { token, expiresAt } = await createSession(
     c.env.DB,
     user.id,

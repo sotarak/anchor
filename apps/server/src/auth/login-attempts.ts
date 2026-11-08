@@ -56,14 +56,34 @@ export async function reserveLoginKeys(
   return results.every((r) => r.results.length === 1);
 }
 
-/** A successful login clears its own pair; the address counter keeps counting. */
-export async function clearLoginPair(
+/**
+ * A successful login clears its own pair and gives its attempt back to the address counter, so
+ * the address cap counts failures only (many people behind one NAT can all log in). `now` must be
+ * the value passed to `reserveLoginKeys`: a lock that this very attempt set (its `locked_until`
+ * is exactly `now + LOGIN_WINDOW_MS`) is lifted again.
+ */
+export async function loginSucceeded(
   db: D1Database,
   clientIp: string | null,
   email: string,
+  now: number,
 ): Promise<void> {
-  const [pair] = loginAttemptKeys(clientIp, email);
-  if (pair) await db.prepare("DELETE FROM login_attempts WHERE key = ?").bind(pair.key).run();
+  const [pair, address] = loginAttemptKeys(clientIp, email);
+  const stmts = [];
+  if (pair) stmts.push(db.prepare("DELETE FROM login_attempts WHERE key = ?").bind(pair.key));
+  if (address) {
+    stmts.push(
+      db
+        .prepare(
+          `UPDATE login_attempts SET
+             failures = CASE WHEN locked_until = ?3 THEN ?2 - 1 ELSE MAX(failures - 1, 0) END,
+             locked_until = CASE WHEN locked_until = ?3 THEN NULL ELSE locked_until END
+           WHERE key = ?1 AND (locked_until IS NULL OR locked_until = ?3)`,
+        )
+        .bind(address.key, address.max, now + LOGIN_WINDOW_MS),
+    );
+  }
+  if (stmts.length > 0) await db.batch(stmts);
 }
 
 /** A password reset lifts every lock on the email, from every address. */

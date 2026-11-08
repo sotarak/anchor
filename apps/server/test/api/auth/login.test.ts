@@ -132,6 +132,23 @@ describe("login limit per address and email", () => {
     expect((await loginFrom(B, { email: EMAIL, password: TEST_PASSWORD })).status).toBe(200);
   });
 
+  it("successful logins do not count toward the address cap (many people behind one NAT)", async () => {
+    for (let i = 0; i < 51; i++) {
+      expect(
+        (await loginFrom(A, { email: EMAIL, password: TEST_PASSWORD })).status,
+        `login ${i}`,
+      ).toBe(200);
+    }
+    expect((await wrong(A, "someone@example.io")).status).toBe(401);
+  });
+
+  it("a success that would have been the 50th attempt does not lock the address", async () => {
+    for (let i = 0; i < 49; i++) await wrong(A, `user${i}@example.io`);
+    expect((await loginFrom(A, { email: EMAIL, password: TEST_PASSWORD })).status).toBe(200);
+    expect((await wrong(A, "user49@example.io")).status).toBe(401);
+    expect((await wrong(A, "user50@example.io")).status).toBe(429);
+  });
+
   it("IPv6 addresses in one /64 share a counter", async () => {
     for (let i = 0; i < 5; i++) await wrong(i % 2 ? "2001:db8::1" : "2001:db8::2", EMAIL, i);
     expect(
@@ -162,8 +179,12 @@ describe("login limit per address and email", () => {
 
   it("a 429 is audited as login_failed with reason locked", async () => {
     for (let i = 0; i < 6; i++) await wrong(A, EMAIL, i);
-    const rows = await auditRows("auth.login_failed");
-    expect(JSON.parse(rows.at(-1)?.metadata ?? "null")).toEqual({ reason: "locked" });
+    // Rows in one millisecond tie on `at` and their ids are random: count reasons, not order.
+    const reasons = (await auditRows("auth.login_failed")).map(
+      (r) => (JSON.parse(r.metadata ?? "null") as { reason: string }).reason,
+    );
+    expect(reasons.filter((r) => r === "locked")).toHaveLength(1);
+    expect(reasons.filter((r) => r === "invalid_credentials")).toHaveLength(5);
   });
 });
 

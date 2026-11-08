@@ -25,6 +25,9 @@ describe("help text", () => {
     fetch: (async () => new Response()) as typeof fetch,
     spawner: fakeSpawner().spawner,
     runChild: async () => ({ code: 0, signal: null }),
+    startChild: () => {
+      throw new Error("not used in this test");
+    },
     createApi: fakeApi().factory,
   });
   const commands = [{ name: "anchor", cmd: program }, ...allCommands(program)];

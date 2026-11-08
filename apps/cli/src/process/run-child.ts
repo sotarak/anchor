@@ -1,10 +1,10 @@
 import { spawn } from "node:child_process";
 import { constants } from "node:os";
 import crossSpawn from "cross-spawn";
-import type { RunChild } from "../context";
+import type { ChildHandle, RunChild, StartChild } from "../context";
 import { CliError } from "../errors";
 
-export type { RunChild } from "../context";
+export type { ChildHandle, RunChild, StartChild } from "../context";
 
 const FORWARDED: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
 
@@ -29,35 +29,48 @@ export interface RunChildOptions {
 }
 
 /**
- * Runs the user's command with inherited stdio. While it runs, SIGTERM/SIGHUP (and SIGINT, see
+ * Starts the user's command with inherited stdio. While it runs, SIGTERM/SIGHUP (and SIGINT, see
  * RunChildOptions) sent to this process are forwarded to the child and do not terminate us, so
- * the child decides how to exit and we report its status.
+ * the child decides how to exit and we report its status. `kill` signals the child directly.
  */
+export function createNodeStartChild(
+  proc: SignalSource = process,
+  opts: RunChildOptions = { forwardSigint: true },
+): StartChild {
+  return (cmd, args, env): ChildHandle => {
+    const child = spawnFor(process.platform)(cmd, args, { stdio: "inherit", env, shell: false });
+    const forward = (signal: NodeJS.Signals) => {
+      if (signal === "SIGINT" && !opts.forwardSigint) return;
+      child.kill(signal);
+    };
+    const handlers = FORWARDED.map((sig) => [sig, () => forward(sig)] as const);
+    for (const [sig, h] of handlers) proc.on(sig, h);
+    const cleanup = () => {
+      for (const [sig, h] of handlers) proc.off(sig, h);
+    };
+    const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+      (resolve, reject) => {
+        child.on("error", (err: NodeJS.ErrnoException) => {
+          cleanup();
+          reject(err.code === "ENOENT" ? new CliError(127, `Command not found: ${cmd}`) : err);
+        });
+        child.on("exit", (code, signal) => {
+          cleanup();
+          resolve({ code, signal });
+        });
+      },
+    );
+    return { exited, kill: (signal) => void child.kill(signal) };
+  };
+}
+
+/** Runs the user's command to completion; see createNodeStartChild. */
 export function createNodeRunChild(
   proc: SignalSource = process,
   opts: RunChildOptions = { forwardSigint: true },
 ): RunChild {
-  return (cmd, args, env) =>
-    new Promise((resolve, reject) => {
-      const child = spawnFor(process.platform)(cmd, args, { stdio: "inherit", env, shell: false });
-      const forward = (signal: NodeJS.Signals) => {
-        if (signal === "SIGINT" && !opts.forwardSigint) return;
-        child.kill(signal);
-      };
-      const handlers = FORWARDED.map((sig) => [sig, () => forward(sig)] as const);
-      for (const [sig, h] of handlers) proc.on(sig, h);
-      const cleanup = () => {
-        for (const [sig, h] of handlers) proc.off(sig, h);
-      };
-      child.on("error", (err: NodeJS.ErrnoException) => {
-        cleanup();
-        reject(err.code === "ENOENT" ? new CliError(127, `Command not found: ${cmd}`) : err);
-      });
-      child.on("exit", (code, signal) => {
-        cleanup();
-        resolve({ code, signal });
-      });
-    });
+  const start = createNodeStartChild(proc, opts);
+  return (cmd, args, env) => start(cmd, args, env).exited;
 }
 
 /** The child's exit code, or 128 + N when it was killed by signal N (shell convention). */

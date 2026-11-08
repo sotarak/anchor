@@ -26,6 +26,9 @@ export function testContext(
       fetch: unused as unknown as typeof fetch,
       spawner: fakeSpawner().spawner,
       runChild: unused,
+      startChild: () => {
+        throw new Error("not used in this test");
+      },
       ...deps,
     },
     { ...defaultFlags, ...flags },

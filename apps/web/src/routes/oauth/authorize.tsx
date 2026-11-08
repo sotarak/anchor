@@ -24,11 +24,14 @@ const PARAMS = [
 ] as const;
 
 type Param = (typeof PARAMS)[number];
-/** As the router parsed them: a number, boolean or null only when JSON gives back the exact text. */
-type Search = Partial<Record<Param, string | number | boolean | null>>;
+/**
+ * As the router parsed them: anything but a string (a number, boolean, null, object or array)
+ * only when JSON gives back the exact text.
+ */
+type Search = Partial<Record<Param, unknown>>;
 
 /** The exact text of a parameter (src/lib/search-json parses only lossless values). */
-const text = (value: Search[Param]): string | undefined =>
+const text = (value: unknown): string | undefined =>
   value === undefined || typeof value === "string" ? value : JSON.stringify(value);
 
 export const Route = createFileRoute("/oauth/authorize")({
@@ -36,17 +39,7 @@ export const Route = createFileRoute("/oauth/authorize")({
   // stable; the page turns them back into text.
   validateSearch: (search: Record<string, unknown>): Search => {
     const out: Search = {};
-    for (const key of PARAMS) {
-      const value = search[key];
-      if (
-        value === null ||
-        typeof value === "string" ||
-        typeof value === "number" ||
-        typeof value === "boolean"
-      ) {
-        out[key] = value;
-      }
-    }
+    for (const key of PARAMS) if (search[key] !== undefined) out[key] = search[key];
     return out;
   },
   beforeLoad: requireUser,

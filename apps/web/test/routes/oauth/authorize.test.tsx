@@ -3,6 +3,7 @@ import { screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiError, fixtures, renderApp, server, signedInAs, signedOut } from "#test/support";
+import { Route } from "@/routes/oauth/authorize";
 
 const leave = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/leave-page", () => ({ leavePage: leave }));
@@ -95,7 +96,16 @@ describe("/oauth/authorize", () => {
     });
   });
 
-  it.each(["12345678901234567890", "true"])(
+  it("validateSearch keeps JSON objects and arrays the router parsed, so the page can restore their text", () => {
+    const validate = Route.options.validateSearch as (s: Record<string, unknown>) => unknown;
+    expect(validate({ state: { a: 1 }, scope: [1, 2], client_id: "c" })).toEqual({
+      state: { a: 1 },
+      scope: [1, 2],
+      client_id: "c",
+    });
+  });
+
+  it.each(["12345678901234567890", "true", "null", "1e3", '"quoted"', '{"a":1}', "[1,2]"])(
     "posts state %j exactly as the client sent it",
     async (state) => {
       signedInAs(fixtures.owner);

@@ -17,6 +17,15 @@ const WARNING =
   "Only approve if you just ran anchor login. Approving signs this terminal in as you.";
 const DONE = "You can close this tab and return to your terminal.";
 const GONE = "This login request expired or was already used.";
+const HELPER = "Type the code from your terminal yourself. Never enter a code someone sent you.";
+
+/** Opens /cli/login and types the code, the only way to reach a request since 0.5.3. */
+async function openWithCode(code = CODE, path = "/cli/login") {
+  const app = await renderApp(path);
+  await app.user.type(await screen.findByLabelText("Code"), code);
+  await app.user.click(screen.getByRole("button", { name: "Continue" }));
+  return app;
+}
 
 function pending(found = true) {
   const paths: string[] = [];
@@ -42,7 +51,7 @@ describe("/cli/login", () => {
   it("shows the request and the warning", async () => {
     signedInAs(fixtures.owner);
     pending();
-    await renderApp(`/cli/login?code=${CODE}`);
+    await openWithCode();
     expect(await screen.findByText(CODE)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Approve CLI login" })).toBeInTheDocument();
     expect(
@@ -67,7 +76,7 @@ describe("/cli/login", () => {
   it("approve", async () => {
     signedInAs(fixtures.owner);
     const { approve, paths } = pending();
-    const { user } = await renderApp(`/cli/login?code=${CODE}`);
+    const { user } = await openWithCode();
     await user.click(await screen.findByRole("button", { name: "Approve" }));
     expect(await screen.findByText(DONE)).toBeInTheDocument();
     expect(approve).toHaveBeenCalledTimes(1);
@@ -79,7 +88,7 @@ describe("/cli/login", () => {
   it("deny", async () => {
     signedInAs(fixtures.owner);
     const { deny, approve } = pending();
-    const { user } = await renderApp(`/cli/login?code=${CODE}`);
+    const { user } = await openWithCode();
     await user.click(await screen.findByRole("button", { name: "Deny" }));
     expect(await screen.findByText(DONE)).toBeInTheDocument();
     expect(deny).toHaveBeenCalledTimes(1);
@@ -89,17 +98,21 @@ describe("/cli/login", () => {
   it("expired", async () => {
     signedInAs(fixtures.owner);
     pending(false);
-    await renderApp(`/cli/login?code=${CODE}`);
+    await openWithCode();
     expect(await screen.findByText(GONE)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
   });
 
-  it("a loose code in the URL is normalized", async () => {
+  it("a code in the link is ignored: the person must type the one in their terminal", async () => {
     signedInAs(fixtures.owner);
-    const { get } = pending();
-    await renderApp("/cli/login?code=wdjbmjht");
-    expect(await screen.findByText(CODE)).toBeInTheDocument();
-    expect(get).toHaveBeenCalled();
+    const { get, approve } = pending();
+    await renderApp(`/cli/login?code=${CODE}`);
+    const input = await screen.findByLabelText("Code");
+    expect(input).toHaveValue("");
+    expect(screen.getByText(HELPER)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    expect(get).not.toHaveBeenCalled();
+    expect(approve).not.toHaveBeenCalled();
   });
 
   it("no code: typing it loosely works", async () => {
@@ -120,10 +133,10 @@ describe("/cli/login", () => {
     expect(screen.getByText("dev@laptop")).toBeInTheDocument();
   });
 
-  it("signed out goes to login and keeps the code", async () => {
+  it("signed out goes to login and comes back to the code form", async () => {
     signedOut();
-    const { router } = await renderApp(`/cli/login?code=${CODE}`);
+    const { router } = await renderApp("/cli/login");
     await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
-    expect(router.state.location.searchStr).toBe(`?redirect=%2Fcli%2Flogin%3Fcode%3D${CODE}`);
+    expect(router.state.location.searchStr).toBe("?redirect=%2Fcli%2Flogin");
   });
 });

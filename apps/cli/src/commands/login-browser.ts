@@ -55,8 +55,10 @@ export async function loginWithBrowser(
   // the code alphabet: nothing the server sends reaches the browser opener (or cmd.exe) as is.
   const userCode = normalizeUserCode(started.userCode);
   if (!userCode) throw new CliError(EXIT.ERROR, "The server returned an invalid login code");
-  const url = `${new URL(apiUrl).origin}/cli/login?code=${userCode}`;
-  ctx.out.notice(`Open ${url} and confirm the code ${userCode}`);
+  // The link carries no code: the person types the one shown here, so a phishing link that
+  // carries an attacker's code cannot be approved with one click.
+  const url = `${new URL(apiUrl).origin}/cli/login`;
+  ctx.out.notice(`Open ${url} and enter the code ${userCode}`);
   if (!opts.noBrowser && io.stdinIsTTY && io.stderrIsTTY) await ctx.deps.openUrl?.(url);
   ctx.out.notice("Waiting for approval…");
 

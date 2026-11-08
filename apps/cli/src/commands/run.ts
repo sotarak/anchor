@@ -2,7 +2,13 @@ import type { SecretDto } from "@anchor/shared";
 import type { ApiClient } from "../api/client";
 import { positionals } from "../argv";
 import { authedApi } from "../auth";
-import { type ChildHandle, type CommandContext, requireProject } from "../context";
+import {
+  type ChildHandle,
+  type CommandContext,
+  requireProject,
+  type Sleep,
+  timerSleep,
+} from "../context";
 import { CliError, EXIT, withExpandHint } from "../errors";
 import { exitCodeFromChild } from "../process/run-child";
 
@@ -111,7 +117,7 @@ async function watchCommand(
   opts: { override: boolean; expand: boolean },
   intervalMs: number,
 ): Promise<number> {
-  const sleep = ctx.deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const sleep = ctx.deps.sleep ?? timerSleep;
   const query = {
     path: ctx.config.path.value,
     reveal: true,
@@ -144,11 +150,10 @@ async function watchCommand(
   let failing = false;
 
   for (;;) {
-    const woke = await Promise.race([
-      child.handle.exited.then((r) => ({ exited: r })),
-      sleep(intervalMs).then(() => undefined),
-    ]);
-    if (woke) return exitCodeFromChild(woke.exited);
+    const exited = await exitedWithin(child.handle.exited, intervalMs, sleep);
+    if (exited) return exitCodeFromChild(exited);
+    // Someone is stopping anchor and the child is shutting down: wait for it, never restart it.
+    if (child.handle.stopRequested()) return exitCodeFromChild(await child.handle.exited);
 
     let next: Record<string, string> | undefined;
     try {
@@ -171,29 +176,40 @@ async function watchCommand(
       failing = true;
     }
     if (child.exit) return exitCodeFromChild(child.exit);
+    if (child.handle.stopRequested()) return exitCodeFromChild(await child.handle.exited);
     if (!next) continue;
 
     ctx.out.notice(`Secrets changed; restarting ${cmd}`);
-    await stop(child.handle, sleep);
+    const stopped = await stop(child.handle, sleep);
+    // A stop signal during the grace period ends the watch with that child's code.
+    if (child.handle.stopRequested()) return exitCodeFromChild(stopped);
     env = next;
     child = start();
   }
 }
 
+/**
+ * How the child exited, if it does within `ms`; undefined otherwise. The sleep's timer is
+ * cancelled either way, so a finished watch never waits on a leftover timer.
+ */
+async function exitedWithin(
+  exited: Promise<Exit>,
+  ms: number,
+  sleep: Sleep,
+): Promise<Exit | undefined> {
+  const timer = new AbortController();
+  try {
+    return await Promise.race([exited, sleep(ms, timer.signal).then(() => undefined)]);
+  } finally {
+    timer.abort();
+  }
+}
+
 /** SIGTERM, then SIGKILL if the child is still alive after RESTART_GRACE_MS. */
-async function stop(child: ChildHandle, sleep: (ms: number) => Promise<void>): Promise<void> {
-  let exited = false;
-  const done = child.exited.then(
-    () => {
-      exited = true;
-    },
-    () => {
-      exited = true;
-    },
-  );
+async function stop(child: ChildHandle, sleep: Sleep): Promise<Exit> {
   child.kill("SIGTERM");
-  await Promise.race([done, sleep(RESTART_GRACE_MS)]);
-  if (exited) return;
+  const exited = await exitedWithin(child.exited, RESTART_GRACE_MS, sleep);
+  if (exited) return exited;
   child.kill("SIGKILL");
-  await done;
+  return child.exited;
 }

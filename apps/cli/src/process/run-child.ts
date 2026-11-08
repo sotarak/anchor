@@ -39,7 +39,9 @@ export function createNodeStartChild(
 ): StartChild {
   return (cmd, args, env): ChildHandle => {
     const child = spawnFor(process.platform)(cmd, args, { stdio: "inherit", env, shell: false });
+    let stopRequested = false;
     const forward = (signal: NodeJS.Signals) => {
+      stopRequested = true;
       if (signal === "SIGINT" && !opts.forwardSigint) return;
       child.kill(signal);
     };
@@ -60,7 +62,11 @@ export function createNodeStartChild(
         });
       },
     );
-    return { exited, kill: (signal) => void child.kill(signal) };
+    return {
+      exited,
+      kill: (signal) => void child.kill(signal),
+      stopRequested: () => stopRequested,
+    };
   };
 }
 

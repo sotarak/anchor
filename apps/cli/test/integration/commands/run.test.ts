@@ -1,8 +1,10 @@
+import { EventEmitter } from "node:events";
 import type { SecretDto } from "@anchor/shared";
 import { describe, expect, it } from "vitest";
 import type { ApiClient, ConditionalSecrets } from "#src/api/client";
 import { buildChildEnv } from "#src/commands/run";
 import type { ChildHandle, RunChild, StartChild } from "#src/context";
+import { createNodeStartChild } from "#src/process/run-child";
 import { apiError, loggedIn } from "#test/support";
 
 const CANARY = "RUN-CANARY-91c";
@@ -200,6 +202,8 @@ function watchRig(
   const children: FakeChild[] = [];
   let overlaps = 0;
   let sleeps = 0;
+  /** Children (by index) that saw a SIGINT, SIGTERM or SIGHUP sent to anchor. */
+  const stopRequested = new Set<number>();
   const startChild: StartChild = (_cmd, _args, env) => {
     if (children.some((c) => !c.done)) overlaps++;
     let resolve!: (r: { code: number | null; signal: NodeJS.Signals | null }) => void;
@@ -222,6 +226,7 @@ function watchRig(
     log.push(`start ${child.n}`);
     const handle: ChildHandle = {
       exited,
+      stopRequested: () => stopRequested.has(child.n),
       kill(signal) {
         child.kills.push(signal);
         log.push(`kill ${child.n} ${signal}`);
@@ -237,7 +242,15 @@ function watchRig(
     opts.onSleep?.(ms, sleeps);
     return new Promise<void>((r) => setImmediate(r));
   };
-  return { startChild, sleep, children, log, overlaps: () => overlaps };
+  /** A SIGTERM sent to anchor: forwarded to the running child, which may ignore it. */
+  const signalAnchor = () => {
+    const child = children.at(-1);
+    if (!child || child.done) return;
+    stopRequested.add(child.n);
+    log.push(`signal ${child.n}`);
+    if (!opts.ignoresTerm?.includes(child.n - 1)) child.exit(null, "SIGTERM");
+  };
+  return { startChild, sleep, children, log, overlaps: () => overlaps, signalAnchor };
 }
 
 /**
@@ -407,5 +420,64 @@ describe("anchor run --watch", () => {
       expect(r.fake.calls).toEqual([]);
       expect(rig.children).toEqual([]);
     }
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "a real child that exits leaves no watch timer behind, so anchor exits at once",
+    async () => {
+      const cli = await loggedIn();
+      const timers = () => process.getActiveResourcesInfo().filter((r) => r === "Timeout").length;
+      const before = timers();
+      const r = await cli.run(
+        [
+          "run",
+          "--watch",
+          "--watch-interval",
+          "3600",
+          ...P,
+          "--",
+          process.execPath,
+          "-e",
+          "process.exit(3)",
+        ],
+        { listSecretsIfChanged: async () => changed("1") },
+        { startChild: createNodeStartChild(new EventEmitter()) },
+      );
+      expect(r.code).toBe(3);
+      expect(timers()).toBe(before);
+    },
+  );
+
+  it("a stop signal during the restart grace ends the watch instead of starting the next child", async () => {
+    const cli = await loggedIn();
+    const rig = watchRig({
+      ignoresTerm: [0],
+      onSleep: (ms) => {
+        if (ms !== 10_000) return;
+        rig.signalAnchor();
+        rig.children[0]?.exit(0);
+      },
+    });
+    const api = polls(rig, changed("1"), [changed("2")]);
+    const r = await cli.run(W, api, { startChild: rig.startChild, sleep: rig.sleep });
+    expect(r.code).toBe(0);
+    expect(rig.children).toHaveLength(1);
+  });
+
+  it("after a stop signal, a changed poll does not restart the shutting-down child", async () => {
+    const cli = await loggedIn();
+    const rig = watchRig({
+      ignoresTerm: [0],
+      onSleep: (_ms, n) => {
+        if (n !== 1) return;
+        rig.signalAnchor();
+        setTimeout(() => rig.children[0]?.exit(5), 5);
+      },
+    });
+    const api = polls(rig, changed("1"), [changed("2")]);
+    const r = await cli.run(W, api, { startChild: rig.startChild, sleep: rig.sleep });
+    expect(r.code).toBe(5);
+    expect(rig.children).toHaveLength(1);
+    expect(rig.children[0]?.kills).toEqual([]);
   });
 });

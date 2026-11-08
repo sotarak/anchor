@@ -21,10 +21,30 @@ export type RunChild = (
   env: Record<string, string>,
 ) => Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
 
+/** Resolves after `ms`, or at once when `signal` aborts (its timer is then cleared). */
+export type Sleep = (ms: number, signal?: AbortSignal) => Promise<void>;
+
+/** A Sleep on setTimeout that clears its timer on abort, so it never keeps the process alive. */
+export const timerSleep: Sleep = (ms, signal) =>
+  new Promise<void>((resolve) => {
+    if (signal?.aborted) return resolve();
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+
 /** A running child: when and how it exited, and a way to signal it. */
 export type ChildHandle = {
   exited: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
   kill(signal: NodeJS.Signals): void;
+  /** True once SIGINT, SIGTERM or SIGHUP reached this process while the child ran: stop, do not restart. */
+  stopRequested(): boolean;
 };
 
 /** Starts the user's command with inherited stdio and the given environment. */
@@ -47,7 +67,7 @@ export interface CliDeps {
   /** Opens a URL in the browser; false when it could not (tests inject a fake). */
   openUrl?: (url: string) => Promise<boolean>;
   /** Waits between polls (tests inject a fake). */
-  sleep?: (ms: number) => Promise<void>;
+  sleep?: Sleep;
 }
 
 export interface GlobalFlags {

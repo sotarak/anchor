@@ -144,6 +144,22 @@ describe.skipIf(process.platform === "win32")("createNodeRunChild (real processe
     expect(proc.listenerCount("SIGTERM")).toBe(0);
   });
 
+  it("startChild: stopRequested turns true once a forwarded signal reaches us, even an absorbed SIGINT", async () => {
+    const proc = new EventEmitter();
+    const ready = join(await tmpDir(), "ready");
+    const child = createNodeStartChild(proc, { forwardSigint: false })(
+      process.execPath,
+      [fixture, "wait"],
+      { ...baseEnv, READY_FILE: ready },
+    );
+    await until(() => existsSync(ready));
+    expect(child.stopRequested()).toBe(false);
+    proc.emit("SIGINT", "SIGINT");
+    expect(child.stopRequested()).toBe(true);
+    child.kill("SIGTERM");
+    await child.exited;
+  });
+
   it("child sees injected env", async () => {
     const r = await createNodeRunChild(new EventEmitter())(
       process.execPath,

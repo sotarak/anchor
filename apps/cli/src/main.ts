@@ -2,7 +2,7 @@ import { CommanderError } from "commander";
 import { configureProxyFromEnv } from "./api/proxy";
 import { assertRunSeparator } from "./commands/run";
 import { assertNoVersionFlagOnGet } from "./commands/secrets";
-import type { CliDeps } from "./context";
+import { type CliDeps, timerSleep } from "./context";
 import { CliError, EXIT } from "./errors";
 import { createNodeIo } from "./io";
 import { openUrl } from "./open-url";
@@ -26,7 +26,7 @@ async function defaultDeps(partial: Partial<CliDeps>): Promise<CliDeps> {
     fetch: partial.fetch ?? (await configureProxyFromEnv(io.env)) ?? globalThis.fetch,
     spawner,
     openUrl: partial.openUrl ?? ((url) => openUrl(url, io.platform, spawner)),
-    sleep: partial.sleep ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms))),
+    sleep: partial.sleep ?? timerSleep,
     runChild: partial.runChild ?? createNodeRunChild(process, childOptions),
     startChild: partial.startChild ?? createNodeStartChild(process, childOptions),
     selectStore: partial.selectStore,

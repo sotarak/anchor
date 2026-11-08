@@ -34,9 +34,9 @@ jobs:
       ANCHOR_TOKEN: ${{ secrets.ANCHOR_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-      - uses: sotarak/anchor/setup-action@v0.5.1
+      - uses: sotarak/anchor/setup-action@v0.5.2
         with:
-          version: 0.5.1
+          version: 0.5.2
       - run: anchor run --project my-app --env prod -- npm run deploy
 ```
 
@@ -47,8 +47,8 @@ pin it for reproducible builds. The installed version is available as the step o
 On other CI systems, or when Node.js is already on the runner, either of these works too:
 
 ```sh
-curl -fsSL https://sotarak.github.io/anchor/install.sh | ANCHOR_VERSION=0.5.1 sh   # ~/.local/bin
-npx -y @anchor-secrets/cli@0.5.1 run --project my-app --env prod -- npm run deploy
+curl -fsSL https://sotarak.github.io/anchor/install.sh | ANCHOR_VERSION=0.5.2 sh   # ~/.local/bin
+npx -y @anchor-secrets/cli@0.5.2 run --project my-app --env prod -- npm run deploy
 ```
 
 - **Set `ANCHOR_API_URL` next to `ANCHOR_TOKEN`.** The CLI only sends `ANCHOR_TOKEN` to an API URL

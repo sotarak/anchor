@@ -40,6 +40,8 @@ export type OverviewDto = {
     /** Keyed by environment slug; null when the key is absent there. */
     cells: Record<string, { version: number; updatedAt: number } | null>;
   }[];
+  /** Direct subfolders of the path, by name; `environments[slug]` is true where it exists. */
+  folders: { path: string; name: string; environments: Record<string, boolean> }[];
 };
 
 export type SecretDto = {

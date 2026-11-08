@@ -137,6 +137,9 @@ described in [Versions and rollback](/anchor/guides/versions/).
 | `anchor folders list` | List the subfolders of `--path` (default `/`) |
 | `anchor folders create <path>` | Create a folder and its parents (no-op if it exists) |
 | `anchor folders delete <path> [--force]` | Delete an empty folder; `--force` deletes its contents too |
+| `anchor imports list` | List the folders `--path` imports, in the order they apply |
+| `anchor imports add <env>:<path>` | Make `--path` show the secrets of another folder (no-op if it already does) |
+| `anchor imports remove <env>:<path>` | Stop importing a folder |
 | `anchor run [--no-override] [--no-expand] [--watch [--watch-interval <s>]] -- <command> [args...]` | Run a command with secrets in its environment |
 | `anchor export [--format dotenv\|json\|yaml] [--output <file>] [--no-expand]` | Write secrets to a file or a pipe |
 | `anchor tokens create --name <name> [--scope <env[:path]>]... [--permission read\|read-write] [--expires-in <days\|never>]` | Create a service token (`never`: valid until revoked) |
@@ -208,6 +211,25 @@ anchor secrets import --from-file apps/service-agent/.env --env prod --path /ser
 Then replace each value in `application.config.yaml` with its placeholder
 (`api_key: ${CONFIGS_OPENROUTER_API_KEY}`) and start the service with `anchor run`.
 
+### Imports
+
+`anchor imports` manages [imports](/anchor/guides/references-imports/#imports): a folder that also
+shows the secrets of another folder. It is not `anchor secrets import`, which loads a file.
+
+```sh
+anchor imports add prod:/shared --env prod --path /api   # /api now also shows /shared
+anchor imports list --env prod --path /api               # 1  prod:/shared
+anchor imports remove prod:/shared --env prod --path /api
+```
+
+- The source is `<env>:<path>`, written like a [reference](/anchor/guides/references-imports/#references)
+  without the key. `shared` alone means `shared:/`, and `shared:db` means `shared:/db`.
+- The folder is `--env` and `--path` (defaults from `.anchor.json`).
+- `add` is idempotent: adding an import that exists prints `Already imports ...` and exits 0.
+- `remove` asks for confirmation, because the folder's apps lose those keys on their next read.
+  Without a terminal it requires `--yes`. A source the folder does not import exits 5 and lists
+  the imports it has.
+
 ### Handling of secret values
 
 - Values are never accepted as command-line arguments. `anchor secrets set KEY=value` and any
@@ -274,7 +296,7 @@ under `anchor run --watch`.
 
 ### Destructive commands
 
-`secrets delete`, `tokens revoke`, `init` over an existing `.anchor.json` and `export --output` over
+`secrets delete`, `folders delete`, `imports remove`, `tokens revoke`, `init` over an existing `.anchor.json` and `export --output` over
 an existing file ask for confirmation in a terminal. Without a terminal they require `--yes` and exit
 2 otherwise.
 
@@ -403,6 +425,9 @@ existing fields are not renamed or removed without a major version.
 | `secrets set` | `{ secret: SecretDto, created: boolean }` (never the value) |
 | `secrets delete` | `{ deleted: { key, environment, path } }` |
 | `secrets import` | `{ created, updated, unchanged, skipped, empty }` (arrays of keys; `empty` holds source paths; `dryRun: true` with `--dry-run`, where the arrays hold the planned keys) |
+| `imports list` | `FolderImportDto[]` |
+| `imports add` | `{ import: FolderImportDto, created: boolean }` |
+| `imports remove` | `{ removed: FolderImportDto }` |
 | `export --output` | `{ path, count, format }` (without `--output`, use `--format json` instead of `--json`) |
 | `tokens create` | `{ serviceToken: ServiceTokenDto, token }` |
 | `tokens list` | `{ serviceTokens: ServiceTokenDto[] }` |

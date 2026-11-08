@@ -73,7 +73,7 @@ All paths are relative to `/api/v1`. `:project` and `:env` are slugs.
 |-----------------|---------|
 | `GET /projects`, `POST /projects` | List your projects; create one (owners and admins) |
 | `GET`, `PATCH`, `DELETE /projects/:project` | Read, rename, delete |
-| `GET /projects/:project/overview` | Counts and recent activity for the overview page |
+| `GET /projects/:project/overview?path=` | Keys and direct subfolders at a path, per environment the caller can read (no values) |
 | `GET`, `POST /projects/:project/environments` | List and create environments |
 | `PATCH`, `DELETE /projects/:project/environments/:env` | Rename and delete an environment |
 | `GET`, `POST /projects/:project/members`; `PATCH`, `DELETE …/members/:userId` | Project members, roles and allowed environments |

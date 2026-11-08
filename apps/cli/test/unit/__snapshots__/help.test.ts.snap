@@ -28,6 +28,8 @@ Commands:
   envs                        Discover environments of a project
   secrets                     Manage secrets in the current project, environment and path
   folders                     Manage folders in the current project and environment
+  imports                     Make a folder show the secrets of another folder (not to be confused
+                              with 'secrets import', which loads a file)
   run [options] [command...]  Run a command with the environment's secrets injected as environment
                               variables
   export [options]            Write the environment's secrets as dotenv, JSON or YAML (file mode
@@ -237,6 +239,121 @@ Examples:
 "
 `;
 
+exports[`help text > help for imports 1`] = `
+"Usage: anchor imports [options] [command]
+
+Make a folder show the secrets of another folder (not to be confused with 'secrets import', which
+loads a file)
+
+Options:
+  -h, --help        display help for command
+
+Global Options:
+  --version         print the CLI version
+  --json            print machine-readable JSON on stdout
+  -q, --quiet       suppress progress messages
+  --no-color        disable colored output
+  --debug           print request diagnostics to stderr (never secret values)
+  --api-url <url>   Anchor server URL
+  --project <slug>  project slug
+  --env <slug>      environment slug
+  --path <path>     secret folder path
+  -y, --yes         skip confirmations
+
+Commands:
+  list              List the folders --path imports, in the order they apply
+  add <source>      Import <env>:<path> into --path (no-op if it already does)
+  remove <source>   Stop importing <env>:<path> into --path
+  help [command]    display help for command
+"
+`;
+
+exports[`help text > help for imports add 1`] = `
+"Usage: anchor imports add [options] <source>
+
+Import <env>:<path> into --path (no-op if it already does)
+
+Arguments:
+  source            folder to import, e.g. shared:/ or prod:/shared
+
+Options:
+  -h, --help        display help for command
+
+Global Options:
+  --version         print the CLI version
+  --json            print machine-readable JSON on stdout
+  -q, --quiet       suppress progress messages
+  --no-color        disable colored output
+  --debug           print request diagnostics to stderr (never secret values)
+  --api-url <url>   Anchor server URL
+  --project <slug>  project slug
+  --env <slug>      environment slug
+  --path <path>     secret folder path
+  -y, --yes         skip confirmations
+
+Examples:
+  $ anchor imports add shared:/ --env prod --path /api
+  $ anchor imports add prod:/shared --env prod --path /worker
+
+"
+`;
+
+exports[`help text > help for imports list 1`] = `
+"Usage: anchor imports list [options]
+
+List the folders --path imports, in the order they apply
+
+Options:
+  -h, --help        display help for command
+
+Global Options:
+  --version         print the CLI version
+  --json            print machine-readable JSON on stdout
+  -q, --quiet       suppress progress messages
+  --no-color        disable colored output
+  --debug           print request diagnostics to stderr (never secret values)
+  --api-url <url>   Anchor server URL
+  --project <slug>  project slug
+  --env <slug>      environment slug
+  --path <path>     secret folder path
+  -y, --yes         skip confirmations
+
+Examples:
+  $ anchor imports list
+  $ anchor imports list --env prod --path /api --json
+
+"
+`;
+
+exports[`help text > help for imports remove 1`] = `
+"Usage: anchor imports remove [options] <source>
+
+Stop importing <env>:<path> into --path
+
+Arguments:
+  source            imported folder, e.g. shared:/
+
+Options:
+  -h, --help        display help for command
+
+Global Options:
+  --version         print the CLI version
+  --json            print machine-readable JSON on stdout
+  -q, --quiet       suppress progress messages
+  --no-color        disable colored output
+  --debug           print request diagnostics to stderr (never secret values)
+  --api-url <url>   Anchor server URL
+  --project <slug>  project slug
+  --env <slug>      environment slug
+  --path <path>     secret folder path
+  -y, --yes         skip confirmations
+
+Examples:
+  $ anchor imports remove shared:/ --env prod --path /api --yes
+
+"
+`;
+
 exports[`help text > help for init 1`] = `
 "Usage: anchor init [options]
 
@@ -442,7 +559,8 @@ Commands:
   set [options] <key>       Create or update a secret; the value comes from stdin, --from-file or a
                             prompt
   import [options]          Import a dotenv, JSON or YAML file; nested keys become UPPER_SNAKE and
-                            types are inferred
+                            types are inferred (not to be confused with 'imports', which links
+                            folders)
   delete <key>              Delete a secret (asks for confirmation; --yes in scripts)
   help [command]            display help for command
 "
@@ -546,7 +664,8 @@ Examples:
 exports[`help text > help for secrets import 1`] = `
 "Usage: anchor secrets import [options]
 
-Import a dotenv, JSON or YAML file; nested keys become UPPER_SNAKE and types are inferred
+Import a dotenv, JSON or YAML file; nested keys become UPPER_SNAKE and types are inferred (not to be
+confused with 'imports', which links folders)
 
 Options:
   --from-file <path>      file to import (otherwise piped stdin with --format)

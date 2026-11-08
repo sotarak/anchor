@@ -20,9 +20,14 @@ working. You import, verify and report; the person decides when the old files go
 
 1. **Map services to folders.** One folder per service (`/api`, `/worker`), and `/shared` for
    values several services use. `anchor run` reads one folder, so a service that needs shared
-   values gets an **import** of `/shared` into its folder: ask the person to add it in the
-   dashboard (folder → **Add import**); local keys win over imported ones. Create folders with
-   `anchor folders create /api --env prod`.
+   values gets an **import** of `/shared` into its folder. Create the folders with
+   `anchor folders create /api --env prod`, then add the import yourself and check it:
+   ```sh
+   anchor imports add prod:/shared --env prod --path /api
+   anchor imports list --env prod --path /api
+   ```
+   The import is live (keys added to `/shared` later show up in `/api` on the next read) and
+   local keys win over imported ones. It is idempotent, and `anchor imports remove` undoes it.
 2. **Check the target environment.** A developer's `apps/api/.env` usually holds `dev` values.
    Ask which environment each file belongs to before importing a local `.env` into `prod`.
 3. **Dry run.** Run each import with `--dry-run` first:

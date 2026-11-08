@@ -55,6 +55,11 @@ Your copy is an independent repository, not a fork: it does not follow this one.
 default branch builds and deploys again. To take a new Anchor release, merge it into your copy (see
 [Upgrade an instance](/anchor/operations/upgrading/)).
 
+> **Upgrading never needs a new database.** Deleting the D1 database deletes every secret. If you
+> delete it anyway and start over, your copy's `wrangler.jsonc` still names the deleted database,
+> and every build fails until you change it (see
+> [Troubleshooting](/anchor/troubleshooting/#the-deploy-buttons-build-fails-workers-builds)).
+
 ## Deploy manually
 
 Clone the repository and run `pnpm install` at its root. Run every command below from the

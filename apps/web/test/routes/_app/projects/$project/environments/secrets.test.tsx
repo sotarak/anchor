@@ -206,6 +206,69 @@ describe("/projects/$project/environments/$env", () => {
     expect(within(row).getByText(MASK)).toBeInTheDocument();
   });
 
+  it("the row menu copies a sensitive value without showing it", async () => {
+    const { get } = setup();
+    const { user } = await renderApp("/projects/app/environments/dev");
+    await openMenu(user, "API_KEY");
+    await user.click(await screen.findByRole("menuitem", { name: "Copy value" }));
+    expect(await screen.findByText("Value copied")).toBeInTheDocument();
+    expect(await navigator.clipboard.readText()).toBe(CANARY);
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).not.toContain(CANARY);
+    expect(within(await rowOf("API_KEY")).getByText(MASK)).toBeInTheDocument();
+  });
+
+  it("Copy value on a non-sensitive row copies the listed value with no request", async () => {
+    const { get } = setup({
+      secrets: [
+        {
+          ...(fixtures.secrets[1] as SecretDto),
+          key: "PORT",
+          type: "number",
+          sensitive: false,
+          value: "8080",
+        },
+      ],
+    });
+    const { user } = await renderApp("/projects/app/environments/dev");
+    await openMenu(user, "PORT");
+    await user.click(await screen.findByRole("menuitem", { name: "Copy value" }));
+    // Toasts from earlier tests may still be on screen: wait on the clipboard instead.
+    await waitFor(async () => expect(await navigator.clipboard.readText()).toBe("8080"));
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("Copy value on an imported row reads through the import", async () => {
+    const { get } = setup({
+      secrets: [
+        {
+          ...(fixtures.secrets[0] as SecretDto),
+          importedFrom: { environment: "shared", path: "/" },
+        },
+      ],
+    });
+    const { user } = await renderApp("/projects/app/environments/dev?path=%2Fapi");
+    await openMenu(user, "API_KEY");
+    await user.click(await screen.findByRole("menuitem", { name: "Copy value" }));
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+    const url = new URL((get.mock.calls[0] as unknown as [{ request: Request }])[0].request.url);
+    expect(url.searchParams.get("includeImports")).toBe("true");
+    expect(url.searchParams.get("path")).toBe("/api");
+  });
+
+  it("a failed Copy value read shows the API error and writes nothing", async () => {
+    setup();
+    await navigator.clipboard.writeText("before");
+    server.use(
+      http.get(`${base}/dev/secrets/:key`, () => apiError(403, "forbidden", "No read access here")),
+    );
+    const { user } = await renderApp("/projects/app/environments/dev");
+    await openMenu(user, "API_KEY");
+    await user.click(await screen.findByRole("menuitem", { name: "Copy value" }));
+    expect(await screen.findByText("No read access here")).toBeInTheDocument();
+    expect(await navigator.clipboard.readText()).toBe("before");
+  });
+
   it("add secret validates key (1BAD rejected client-side) and submits path from search", async () => {
     setup();
     const put = vi.fn(async ({ request }: { request: Request }) => {
@@ -508,6 +571,21 @@ describe("/projects/$project/environments/$env", () => {
     await user.click(within(sheet).getByRole("button", { name: "Add secret" }));
     await waitFor(() => expect(bodies).toHaveLength(1));
     expect(bodies[0]).toMatchObject({ value: '["a","b"]', type: "list" });
+  });
+
+  it("an empty list asks for an item instead of naming the JSON form", async () => {
+    setup();
+    const bodies = recordPuts();
+    const { user, sheet } = await openAdd();
+    await user.type(within(sheet).getByLabelText("Key"), "HOSTS");
+    await chooseType(user, sheet, /^List/);
+    await user.click(within(sheet).getByRole("button", { name: "Add secret" }));
+    expect(await within(sheet).findByText("Add at least one item")).toBeInTheDocument();
+    expect(within(sheet).queryByText("must be a JSON array of strings")).toBeNull();
+    expect(bodies).toEqual([]);
+    await user.type(within(sheet).getByRole("textbox", { name: "Item 1" }), "a");
+    await user.click(within(sheet).getByRole("button", { name: "Add secret" }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
   });
 
   it("adding a boolean requires a choice", async () => {

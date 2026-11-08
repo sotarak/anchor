@@ -3,6 +3,7 @@ import { Command, Option } from "commander";
 import { envsList } from "./commands/envs";
 import { EXPORT_FORMATS, type ExportFormat, exportCommand } from "./commands/export";
 import { foldersCreate, foldersDelete, foldersList } from "./commands/folders";
+import { importsAdd, importsList, importsRemove } from "./commands/imports";
 import { init } from "./commands/init";
 import { login } from "./commands/login";
 import { logout } from "./commands/logout";
@@ -219,7 +220,7 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
   secrets
     .command("import")
     .description(
-      "Import a dotenv, JSON or YAML file; nested keys become UPPER_SNAKE and types are inferred",
+      "Import a dotenv, JSON or YAML file; nested keys become UPPER_SNAKE and types are inferred (not to be confused with 'imports', which links folders)",
     )
     .option("--from-file <path>", "file to import (otherwise piped stdin with --format)")
     .addOption(
@@ -301,6 +302,38 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
         foldersDelete(ctx, path, { force: opts.force === true }),
       ),
     );
+
+  const imports = program
+    .command("imports")
+    .description(
+      "Make a folder show the secrets of another folder (not to be confused with 'secrets import', which loads a file)",
+    );
+  imports
+    .command("list")
+    .description("List the folders --path imports, in the order they apply")
+    .addHelpText(
+      "after",
+      examples("anchor imports list", "anchor imports list --env prod --path /api --json"),
+    )
+    .action(act((ctx) => importsList(ctx)));
+  imports
+    .command("add")
+    .description("Import <env>:<path> into --path (no-op if it already does)")
+    .argument("<source>", "folder to import, e.g. shared:/ or prod:/shared")
+    .addHelpText(
+      "after",
+      examples(
+        "anchor imports add shared:/ --env prod --path /api",
+        "anchor imports add prod:/shared --env prod --path /worker",
+      ),
+    )
+    .action(act((ctx, source: string) => importsAdd(ctx, source)));
+  imports
+    .command("remove")
+    .description("Stop importing <env>:<path> into --path")
+    .argument("<source>", "imported folder, e.g. shared:/")
+    .addHelpText("after", examples("anchor imports remove shared:/ --env prod --path /api --yes"))
+    .action(act((ctx, source: string) => importsRemove(ctx, source)));
 
   program
     .command("run")

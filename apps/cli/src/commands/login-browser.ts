@@ -48,7 +48,7 @@ export async function loginWithBrowser(
       throw new CliError(EXIT.ERROR, NO_BROWSER_LOGIN);
     if (e instanceof ApiRequestError && e.status === 429)
       throw new CliError(EXIT.ERROR, e.message, TOO_MANY_HINT, e.code);
-    throw toCliError(e, { apiUrl });
+    throw toCliError(e, { apiUrl, during: "login" });
   }
 
   // The URL is built here from the API URL the user chose and a code that must be 8 letters of
@@ -73,7 +73,7 @@ export async function loginWithBrowser(
       if (e.status === 429) interval += SLOW_DOWN_S;
       else if (e.status === 403) throw new CliError(EXIT.AUTH, DENIED);
       else if (e.status === 404) throw new CliError(EXIT.AUTH, EXPIRED);
-      else throw toCliError(e, { apiUrl });
+      else throw toCliError(e, { apiUrl, during: "login" });
     }
   }
 }

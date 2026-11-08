@@ -16,6 +16,14 @@ const full: OverviewDto = {
     { key: "API_KEY", cells: { dev: cell(1), staging: cell(2), prod: cell(3) } },
     { key: "DATABASE_URL", cells: { dev: cell(1), staging: null, prod: cell(1) } },
   ],
+  folders: [],
+};
+const withFolders: OverviewDto = {
+  ...full,
+  folders: [
+    { path: "/api", name: "api", environments: { dev: true, staging: false, prod: true } },
+    { path: "/db", name: "db", environments: { dev: true, staging: true, prod: true } },
+  ],
 };
 
 /** Serves the overview and records the `path` query of each request. */
@@ -53,10 +61,11 @@ describe("/projects/$project (overview)", () => {
     overviewIs({
       environments: [dev],
       keys: [{ key: "API_KEY", cells: { dev: cell(1) } }],
+      folders: [],
     });
     await renderApp("/projects/app");
     await screen.findByText("API_KEY");
-    expect(columnNames()).toEqual(["Key", "Development dev"]);
+    expect(columnNames()).toEqual(["Name", "Development dev"]);
   });
 
   it("missing cells show the Missing badge; present cells show version tooltip", async () => {
@@ -64,7 +73,12 @@ describe("/projects/$project (overview)", () => {
     const { user } = await renderApp("/projects/app");
     const row = (await screen.findByText("DATABASE_URL")).closest("tr") as HTMLElement;
     expect(within(row).getAllByText("Missing")).toHaveLength(1);
-    expect(columnNames()).toEqual(["Key", "Development dev", "Staging staging", "Production prod"]);
+    expect(columnNames()).toEqual([
+      "Name",
+      "Development dev",
+      "Staging staging",
+      "Production prod",
+    ]);
     await user.hover(within(row).getByRole("link", { name: "DATABASE_URL in Production: v1" }));
     expect(await screen.findByRole("tooltip")).toHaveTextContent(/^v1, updated /);
   });
@@ -78,8 +92,8 @@ describe("/projects/$project (overview)", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByText("API_KEY")).toBeNull();
     expect(screen.getByText("DATABASE_URL")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Search keys" }));
-    await user.type(screen.getByRole("searchbox", { name: "Search keys" }), "API");
+    await user.click(screen.getByRole("button", { name: "Search keys and folders" }));
+    await user.type(screen.getByRole("searchbox", { name: "Search keys and folders" }), "API");
     expect(await screen.findByText("No results match your filters")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(await screen.findByText("API_KEY")).toBeInTheDocument();
@@ -115,13 +129,124 @@ describe("/projects/$project (overview)", () => {
   });
 
   it("empty path offers Add a secret in the current environment", async () => {
-    setup({ environments: [dev, staging, prod], keys: [] });
+    setup({ environments: [dev, staging, prod], keys: [], folders: [] });
     const { router, user } = await renderApp("/projects/app?path=%2Fapi");
     await user.click(await screen.findByRole("button", { name: "Add a secret" }));
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/projects/app/environments/dev"),
     );
     expect(router.state.location.search).toEqual({ path: "/api" });
+  });
+
+  it("folder rows come before keys with a mark per environment", async () => {
+    setup(withFolders);
+    await renderApp("/projects/app");
+    const api = (await screen.findByRole("button", { name: "api" })).closest("tr") as HTMLElement;
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows.map((r) => r.textContent?.match(/^(api|db|API_KEY|DATABASE_URL)/)?.[0])).toEqual([
+      "api",
+      "db",
+      "API_KEY",
+      "DATABASE_URL",
+    ]);
+    expect(within(api).getAllByText("Missing")).toHaveLength(1);
+    expect(within(api).getAllByLabelText(/^api in .*: present$/)).toHaveLength(2);
+  });
+
+  it("clicking a folder row opens it", async () => {
+    const paths = setup(withFolders);
+    const { router, user } = await renderApp("/projects/app");
+    const name = await screen.findByRole("button", { name: "api" });
+    await user.click(name.closest("tr") as HTMLElement);
+    await waitFor(() => expect(router.state.location.search).toEqual({ path: "/api" }));
+    await waitFor(() => expect(paths).toEqual(["/", "/api"]));
+  });
+
+  it("a folder name is keyboard reachable", async () => {
+    setup(withFolders);
+    const { router, user } = await renderApp("/projects/app");
+    const name = await screen.findByRole("button", { name: "db" });
+    name.focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(router.state.location.search).toEqual({ path: "/db" }));
+  });
+
+  it("a path with folders but no keys is not empty", async () => {
+    setup({ ...withFolders, keys: [] });
+    await renderApp("/projects/app");
+    expect(await screen.findByRole("button", { name: "api" })).toBeInTheDocument();
+    expect(screen.queryByText(/^Nothing in/)).toBeNull();
+  });
+
+  it("the empty state names the path", async () => {
+    setup({ environments: [dev, staging, prod], keys: [], folders: [] });
+    await renderApp("/projects/app");
+    expect(await screen.findByText("Nothing in this project yet")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Secrets and folders you add to any environment show up here, one row per key or folder.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No secrets at this path")).toBeNull();
+  });
+
+  it("the empty state of a subfolder names it", async () => {
+    setup({ environments: [dev, staging, prod], keys: [], folders: [] });
+    await renderApp("/projects/app?path=%2Fapi");
+    expect(await screen.findByText("Nothing in /api yet")).toBeInTheDocument();
+  });
+
+  it("search matches folder names", async () => {
+    setup(withFolders);
+    const { user } = await renderApp("/projects/app");
+    await screen.findByText("API_KEY");
+    await user.click(screen.getByRole("button", { name: "Search keys and folders" }));
+    await user.type(screen.getByRole("searchbox", { name: "Search keys and folders" }), "db");
+    await waitFor(() => expect(screen.queryByText("API_KEY")).toBeNull());
+    expect(screen.getByRole("button", { name: "db" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "api" })).toBeNull();
+  });
+
+  it("opening a folder found by search clears the filters", async () => {
+    setup(withFolders);
+    const { router, user } = await renderApp("/projects/app");
+    await screen.findByText("API_KEY");
+    await user.click(screen.getByRole("button", { name: "Search keys and folders" }));
+    await user.type(screen.getByRole("searchbox", { name: "Search keys and folders" }), "db");
+    await user.click(await screen.findByRole("button", { name: "db" }));
+    await waitFor(() => expect(router.state.location.search).toEqual({ path: "/db" }));
+    // The subfolder's own rows show, not "No results match your filters".
+    expect(await screen.findByText("API_KEY")).toBeInTheDocument();
+    expect(screen.queryByText("No results match your filters")).toBeNull();
+  });
+
+  it('Status "Missing somewhere" hides a folder present everywhere', async () => {
+    setup(withFolders);
+    const { user } = await renderApp("/projects/app");
+    await screen.findByText("API_KEY");
+    await user.click(screen.getByRole("button", { name: "Status" }));
+    await user.click(await screen.findByRole("checkbox", { name: "Missing somewhere" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("button", { name: "db" })).toBeNull();
+    expect(screen.getByRole("button", { name: "api" })).toBeInTheDocument();
+  });
+
+  it("a new path starts on page 1", async () => {
+    const many: OverviewDto = {
+      ...full,
+      keys: Array.from({ length: 30 }, (_, i) => ({
+        key: `KEY_${String(i).padStart(2, "0")}`,
+        cells: { dev: cell(1), staging: cell(1), prod: cell(1) },
+      })),
+    };
+    setup(many);
+    const { user } = await renderApp("/projects/app?path=%2Fapi%2Fv1");
+    await screen.findByText("KEY_00");
+    await user.click(screen.getByRole("button", { name: "Next page" }));
+    expect(await screen.findByText("KEY_29")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "api" }));
+    expect(await screen.findByText("KEY_00")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
   });
 
   it("forbidden shows ForbiddenState", async () => {

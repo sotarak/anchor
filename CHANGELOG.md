@@ -7,6 +7,42 @@ dashboard and CLI.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-08
+
+### Added
+
+- **`anchor imports list | add | remove`** manages folder imports from the CLI. The source is
+  written `<env>:<path>` (`shared:/`, `prod:/shared`); the folder is `--env` and `--path`.
+  `add` is idempotent, and `remove` asks for confirmation (non-TTY needs `--yes`). Not to be
+  confused with `anchor secrets import`, which loads a file. `--json` prints the import DTOs.
+
+### Changed
+
+- **Copy value** in each secret row's ⋮ menu copies the stored value, like the copy button in the
+  value cell. A sensitive value is read on click (audited like a reveal) and only reaches the
+  clipboard.
+- **Secret rows stay one line.** The Comment column truncates earlier and Version and Updated no
+  longer wrap, so a long comment no longer doubles a row's height.
+- **Skills:** `anchor-migrate` adds the `/shared` import itself with `anchor imports add` instead
+  of sending you to the dashboard, and `anchor-cli` lists the import commands.
+- **Docs:** imports are a live link; _References and imports_ now says when changes show up
+  (the next read; a running `anchor run` needs a restart or `--watch`; an export is a snapshot).
+
+### Fixed
+
+- **The project overview shows subfolders.** It listed only keys stored directly at the path, so
+  a project whose secrets all live in folders looked empty ("No secrets at this path"). Subfolders
+  now come first, with a mark per environment, and open on click. `GET /overview` adds `folders`.
+  The first column reads "Name", search covers keys and folders, and each folder starts on page 1.
+- **`imports list` numbers imports 1, 2, 3** in the order they apply (`--json` keeps `position`).
+- **A 404 during `anchor login`** no longer hints at running `anchor login --api-url` again; it
+  asks for the address of your Anchor dashboard.
+- **An empty List** in the secret sheet says "Add at least one item" instead of "must be a JSON
+  array of strings".
+- **The CLI login approval page** always names the account it signs in as.
+- **Deploy docs:** Troubleshooting covers `could not be found [code: 7404]`, a copy that still
+  names a deleted database, and the deploy guide warns that upgrading never needs a new database.
+
 ## [0.5.1] - 2026-11-08
 
 ### Fixed
@@ -294,7 +330,8 @@ Cloudflare Workers, D1 and Queues.
   - A documentation site at https://sotarak.github.io/anchor/ (guides, operations runbooks,
     security model, API reference).
 
-[Unreleased]: https://github.com/sotarak/anchor/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/sotarak/anchor/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/sotarak/anchor/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/sotarak/anchor/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/sotarak/anchor/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sotarak/anchor/compare/v0.3.0...v0.4.0

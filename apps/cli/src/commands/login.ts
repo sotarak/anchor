@@ -116,7 +116,7 @@ async function loginWithPassword(
     if (e instanceof ApiRequestError && e.code === "rate_limited") {
       throw new CliError(EXIT.ERROR, "Too many failed attempts; try again later");
     }
-    throw toCliError(e, { apiUrl });
+    throw toCliError(e, { apiUrl, during: "login" });
   }
   await saveLogin(ctx, apiUrl, source, res);
 }

@@ -1,6 +1,6 @@
 {
   "name": "@anchor-secrets/sdk",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Node client for Anchor, a self-hosted secrets manager on Cloudflare Workers",
   "keywords": [
     "secrets",

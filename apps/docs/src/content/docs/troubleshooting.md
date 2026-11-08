@@ -83,6 +83,14 @@ the build log; Workers Builds runs `pnpm install`, the build command, then the d
   line) from the migrations step: the database was not created before the deploy command ran.
   Create it with `pnpm exec wrangler d1 create anchor`, add the printed `database_id` to the `DB`
   entry in your copy's `wrangler.jsonc`, push, and the build retries.
+- **`The database <id> could not be found [code: 7404]`** from the migrations step: your copy's
+  `wrangler.jsonc` names a D1 database that no longer exists, usually because it was deleted to
+  start over. The Deploy button only creates a database for a binding without an id, so deploying
+  again from the same copy does not create a new one. Deleting the database already deleted every
+  secret in it; to upgrade, never delete it (see [Upgrade an instance](/anchor/operations/upgrading/)).
+  To start over: create a database with `pnpm exec wrangler d1 create anchor`, put the printed
+  `database_id` in the `DB` entry of your copy's `wrangler.jsonc`, push, then open `/setup` at once
+  (the new database has no owner). Or deploy with the button again into a new copy.
 - **An error naming `anchor-reencrypt-dlq` or `anchor-reencrypt`**: a queue was not created. Create
   both with `pnpm exec wrangler queues create anchor-reencrypt` and
   `pnpm exec wrangler queues create anchor-reencrypt-dlq`, then retry the build. Creating a queue

@@ -3,10 +3,19 @@ import type { TableFooter } from "./table-footer";
 
 const PAGE_SIZES = [10, 25, 50];
 
-/** Client-side pagination for lists the API returns whole. The page is clamped when rows shrink. */
-export function useClientPages<T>(rows: T[], initialPageSize = 10) {
+/**
+ * Client-side pagination for lists the API returns whole. The page is clamped when rows shrink,
+ * and goes back to the first page when `resetKey` changes (a new folder is a new list).
+ */
+export function useClientPages<T>(rows: T[], initialPageSize = 10, resetKey?: unknown) {
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [page, setPage] = useState(0);
+  const [pageOf, setPageOf] = useState(resetKey);
+  if (pageOf !== resetKey) {
+    // Adjusting state during render: React re-renders at once, before anything paints.
+    setPageOf(resetKey);
+    setPage(0);
+  }
   const pages = Math.max(1, Math.ceil(rows.length / pageSize));
   const current = Math.min(page, pages - 1);
   const footer: ComponentProps<typeof TableFooter> = {

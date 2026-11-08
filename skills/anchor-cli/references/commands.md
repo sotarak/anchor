@@ -16,6 +16,11 @@ Without them the CLI uses `.anchor.json` in the directory or a parent.
 | `anchor init [--project p --env e]` | Writes `.anchor.json` (identifiers only, safe to commit) |
 | `anchor projects list`, `anchor envs list` | Discover slugs |
 | `anchor folders list`, `anchor folders create /api/v2` | Folders of an environment |
+| `anchor imports list [--path /api]` | Folders that `--path` imports, in the order they apply |
+| `anchor imports add prod:/shared --path /api` | `/api` also shows `/shared`'s secrets (live: new keys appear on the next read; local keys win). No-op if already imported |
+| `anchor imports remove prod:/shared --path /api` | Stop importing; confirms (non-TTY needs `--yes`) |
+
+`anchor imports` links folders; `anchor secrets import` loads a file. Different commands.
 
 ## Reading
 

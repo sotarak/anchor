@@ -4,7 +4,13 @@ import { createApiClient } from "#src/api/client";
 import { ApiRequestError, type HttpOptions, request } from "#src/api/http";
 import { EXIT, exitCodeForApiError, toCliError } from "#src/errors";
 
-type Call = { url: string; method: string; headers: Headers; body: string | undefined };
+type Call = {
+  url: string;
+  method: string;
+  headers: Headers;
+  body: string | undefined;
+  redirect: RequestInit["redirect"];
+};
 
 /** A fetch that records calls and replays scripted responses (or throws scripted errors). */
 function scriptedFetch(...script: (Response | Error | (() => Response))[]) {
@@ -15,6 +21,7 @@ function scriptedFetch(...script: (Response | Error | (() => Response))[]) {
       method: init?.method ?? "GET",
       headers: new Headers(init?.headers),
       body: init?.body as string | undefined,
+      redirect: init?.redirect,
     });
     const next = script.length > 1 ? script.shift() : script[0];
     if (next instanceof Error) throw next;
@@ -156,6 +163,40 @@ describe("http request", () => {
       await rejection(request(opts(f.fn), "GET", "/api/v1/x"));
       expect(f.calls).toHaveLength(1);
     }
+  });
+
+  it("never follows a redirect, names the origin and does not retry", async () => {
+    for (const method of ["GET", "PUT", "POST"] as const) {
+      const f = scriptedFetch(
+        new Response(null, { status: 302, headers: { location: "https://evil.example/x" } }),
+        json(200, {}),
+      );
+      const e = await rejection(request(opts(f.fn), method, "/api/v1/x", {}));
+      expect([e.status, e.code, e.message]).toEqual([
+        302,
+        "internal",
+        "https://anchor.example answered with a redirect (HTTP 302); use the final address as the API URL",
+      ]);
+      expect(e.message).not.toContain("anc_s_abc");
+      expect(f.calls).toHaveLength(1);
+      expect(f.calls[0]?.redirect).toBe("manual");
+    }
+  });
+
+  it("treats an opaque redirect as a redirect", async () => {
+    const opaque = { type: "opaqueredirect", status: 0, ok: false, headers: new Headers() };
+    const f = scriptedFetch(() => opaque as unknown as Response);
+    const e = await rejection(request(opts(f.fn), "GET", "/api/v1/x"));
+    expect(e.code).toBe("internal");
+    expect(e.message).toMatch(/answered with a redirect \(HTTP 0\)/);
+    expect(f.calls).toHaveLength(1);
+  });
+
+  it("every request asks fetch not to follow redirects", async () => {
+    const f = scriptedFetch(json(200, {}));
+    await request(opts(f.fn), "GET", "/api/v1/x");
+    await request(opts(f.fn), "DELETE", "/api/v1/x");
+    expect(f.calls.map((c) => c.redirect)).toEqual(["manual", "manual"]);
   });
 
   it("retries GET on 429", async () => {

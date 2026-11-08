@@ -71,6 +71,45 @@ describe("GET /projects/:project/overview", () => {
     expect((await overview(owner, "?path=..%2Fx")).status).toBe(400);
   });
 
+  it("overview lists subfolders with per-environment presence", async () => {
+    await put("dev", "K", "v", "/api");
+    await put("prod", "K", "v", "/api");
+    await put("staging", "K", "v", "/db");
+    const folder = await api(
+      "/api/v1/projects/app/environments/prod/folders",
+      jsonInit("POST", { path: "/empty" }, { token: owner }),
+    );
+    expect(folder.status).toBe(201);
+    const body = await json<OverviewDto>(await overview(owner));
+    expect(body.keys).toEqual([]);
+    expect(body.folders).toEqual([
+      { path: "/api", name: "api", environments: { dev: true, staging: false, prod: true } },
+      { path: "/db", name: "db", environments: { dev: false, staging: true, prod: false } },
+      { path: "/empty", name: "empty", environments: { dev: false, staging: false, prod: true } },
+    ]);
+  });
+
+  it("overview folders respect path", async () => {
+    await put("dev", "K", "v", "/api/v1");
+    await put("dev", "TOP", "v", "/api");
+    const body = await json<OverviewDto>(await overview(owner, "?path=%2Fapi"));
+    expect(body.folders).toEqual([
+      { path: "/api/v1", name: "v1", environments: { dev: true, staging: false, prod: false } },
+    ]);
+    expect(body.keys.map((k) => k.key)).toEqual(["TOP"]);
+  });
+
+  it("folders of an environment the caller cannot read are left out", async () => {
+    await put("dev", "K", "v", "/shared");
+    await put("prod", "K", "v", "/only-prod");
+    await put("prod", "K", "v", "/shared");
+    const dev = await createMember("app", { role: "developer", environments: ["dev"] });
+    const body = await json<OverviewDto>(await overview(dev.token));
+    expect(body.folders).toEqual([
+      { path: "/shared", name: "shared", environments: { dev: true } },
+    ]);
+  });
+
   it("developer restricted to dev sees only the dev column", async () => {
     await put("dev", "A");
     await put("prod", "B");
@@ -103,7 +142,7 @@ describe("GET /projects/:project/overview", () => {
     // Outside its scoped path the token reads nothing, not even key names.
     const root = await overview(token, "?path=%2F");
     expect(root.status).toBe(200);
-    expect(await json<OverviewDto>(root)).toEqual({ environments: [], keys: [] });
+    expect(await json<OverviewDto>(root)).toEqual({ environments: [], keys: [], folders: [] });
   });
 
   it("a service token for another project gets 403", async () => {

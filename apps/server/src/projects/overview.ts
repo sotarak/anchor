@@ -1,5 +1,6 @@
 import type { EnvironmentDto, OverviewDto, ProjectAccessDto, ProjectRole } from "@anchor/shared";
 import type { Principal } from "../env";
+import { listChildFolders } from "../folders/repo";
 import { parseEnvironmentIds } from "../members/repo";
 import { type EnvironmentRow, toEnvironmentDto } from "./repo";
 
@@ -75,7 +76,7 @@ export async function getOverview(
   path: string,
 ): Promise<OverviewDto> {
   const envDtos: EnvironmentDto[] = environments.map(toEnvironmentDto);
-  if (environments.length === 0) return { environments: envDtos, keys: [] };
+  if (environments.length === 0) return { environments: envDtos, keys: [], folders: [] };
   const placeholders = environments.map(() => "?").join(", ");
   const { results } = await db
     .prepare(
@@ -96,5 +97,34 @@ export async function getOverview(
     const slug = slugById.get(r.environment_id);
     if (slug) row.cells[slug] = { version: r.current_version, updatedAt: r.updated_at };
   }
-  return { environments: envDtos, keys: [...rows.values()] };
+  return {
+    environments: envDtos,
+    keys: [...rows.values()],
+    folders: await overviewFolders(db, environments, path),
+  };
+}
+
+/** The path's direct subfolders across the given environments, with where each exists. */
+async function overviewFolders(
+  db: D1Database,
+  environments: EnvironmentRow[],
+  path: string,
+): Promise<OverviewDto["folders"]> {
+  const perEnv = await Promise.all(environments.map((e) => listChildFolders(db, e.id, path)));
+  const folders = new Map<string, OverviewDto["folders"][number]>();
+  environments.forEach((environment, i) => {
+    for (const f of perEnv[i] ?? []) {
+      let folder = folders.get(f.path);
+      if (!folder) {
+        folder = {
+          path: f.path,
+          name: f.name,
+          environments: Object.fromEntries(environments.map((e) => [e.slug, false])),
+        };
+        folders.set(f.path, folder);
+      }
+      folder.environments[environment.slug] = true;
+    }
+  });
+  return [...folders.values()].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }

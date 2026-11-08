@@ -239,7 +239,12 @@ describe("api client", () => {
   });
 
   it("calls the import endpoints", async () => {
-    const imp = { id: "i1", path: "/api", source: { environment: "shared", path: "/" }, position: 1 };
+    const imp = {
+      id: "i1",
+      path: "/api",
+      source: { environment: "shared", path: "/" },
+      position: 1,
+    };
     const f = scriptedFetch(
       json(200, { imports: [imp] }),
       json(201, { import: imp }),

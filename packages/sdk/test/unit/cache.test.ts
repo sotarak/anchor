@@ -3,6 +3,7 @@ import {
   type CacheEntry,
   type CacheStore,
   cacheKey,
+  type Fetched,
   memoryStore,
   SecretCache,
 } from "../../src/cache";
@@ -40,9 +41,9 @@ function setup(opts: { maxStaleMs?: number; store?: CacheStore } = {}) {
   );
   let calls = 0;
   let next: () => Promise<AnchorSecret[]> = async () => [secret(`v${calls}`)];
-  const fetch = () => {
+  const fetch = async () => {
     calls++;
-    return next();
+    return { secrets: await next() };
   };
   return {
     cache,
@@ -164,19 +165,19 @@ describe("stale fallback", () => {
 
 describe("cancellation", () => {
   it("an aborted caller does not cancel the shared fetch for others", async () => {
-    let release!: (s: AnchorSecret[]) => void;
+    let release!: (f: Fetched) => void;
     const c2 = new SecretCache(
       { ttlMs: TTL, maxStaleMs: Number.POSITIVE_INFINITY, store: memoryStore() },
       () => {},
       () => t,
     );
-    const slow = () => new Promise<AnchorSecret[]>((r) => (release = r));
+    const slow = () => new Promise<Fetched>((r) => (release = r));
     const controller = new AbortController();
     const first = c2.load("k", slow, { signal: controller.signal });
     const second = c2.load("k", slow);
     controller.abort();
     await expect(first).rejects.toMatchObject({ code: "aborted" });
-    release([secret("shared")]);
+    release({ secrets: [secret("shared")] });
     expect((await second).secrets[0]?.value).toBe("shared");
   });
 });
@@ -243,5 +244,142 @@ describe("a failing store", () => {
     const c = setup({ store: broken("set") });
     expect((await c.load()).secrets[0]?.value).toBe("v1");
     expect(events).toMatchObject([{ type: "store_failed", operation: "set" }]);
+  });
+});
+
+describe("slow stores", () => {
+  /** A store whose get() calls are answered by the test, in call order. */
+  function slowStore() {
+    const entries = new Map<string, CacheEntry>();
+    const gets: Array<(entry: CacheEntry | undefined) => void> = [];
+    const store: CacheStore = {
+      get: () => new Promise((resolve) => gets.push(resolve)),
+      set: (k, e) => {
+        entries.set(k, e);
+      },
+    };
+    return { store, entries, answer: (i: number, e?: CacheEntry) => gets[i]?.(e), gets };
+  }
+  const deferred = <T>() => {
+    let resolve!: (v: T) => void;
+    const promise = new Promise<T>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve };
+  };
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+
+  it("a caller arriving during a fetch joins it without waiting for the store", async () => {
+    const s = slowStore();
+    const cache = new SecretCache(
+      { ttlMs: TTL, maxStaleMs: TTL, store: s.store },
+      () => {},
+      () => t,
+    );
+    const response = deferred<Fetched>();
+    let calls = 0;
+    const fetch = () => {
+      calls++;
+      return response.promise;
+    };
+    const a = cache.load("k", fetch);
+    s.answer(0, undefined); // A's store read: a miss, so A starts the fetch
+    await tick();
+    let bDone = false;
+    const b = cache.load("k", fetch).then((e) => {
+      bDone = true;
+      return e;
+    });
+    response.resolve({ secrets: [secret("v1")] });
+    await tick();
+    expect(bDone).toBe(true); // B never waited on its own (unanswered) store read
+    expect((await a).secrets[0]?.value).toBe("v1");
+    expect((await b).secrets[0]?.value).toBe("v1");
+    expect(calls).toBe(1);
+  });
+
+  it("a slow store read that returns an older entry does not start a second fetch", async () => {
+    const s = slowStore();
+    const cache = new SecretCache(
+      { ttlMs: TTL, maxStaleMs: TTL, store: s.store },
+      () => {},
+      () => t,
+    );
+    let calls = 0;
+    const fetch = async () => {
+      calls++;
+      return { secrets: [secret(`v${calls}`)] };
+    };
+    const old: CacheEntry = { secrets: [secret("v0")], fetchedAt: t - TTL };
+    const b = cache.load("k", fetch); // B's read starts first and stays slow
+    const a = cache.load("k", fetch);
+    s.answer(1, old); // A reads the stale entry and refreshes it
+    expect((await a).secrets[0]?.value).toBe("v1");
+    s.answer(0, old); // B's read finally answers with the entry from before A's write
+    expect((await b).secrets[0]?.value).toBe("v1");
+    expect(calls).toBe(1);
+  });
+});
+
+describe("conditional requests", () => {
+  const cacheWith = (store: CacheStore) =>
+    new SecretCache(
+      { ttlMs: TTL, maxStaleMs: TTL, store },
+      (e) => events.push(e),
+      () => t,
+    );
+
+  it("an entry stored without etag (0.4.0) refreshes with a plain request", async () => {
+    const store = memoryStore();
+    store.set("k", { secrets: [secret("v0")], fetchedAt: t - TTL });
+    const tags: Array<string | undefined> = [];
+    const entry = await cacheWith(store).load("k", async (_signal, etag) => {
+      tags.push(etag);
+      return { secrets: [secret("v1")], etag: '"t1"' };
+    });
+    expect(tags).toEqual([undefined]);
+    expect(entry).toEqual({ secrets: [secret("v1")], fetchedAt: t, etag: '"t1"' });
+  });
+
+  it("unchanged keeps the secrets array, renews fetchedAt and writes the store", async () => {
+    const store = memoryStore();
+    const secrets = [secret("v0")];
+    store.set("k", { secrets, fetchedAt: t - TTL, etag: '"t0"' });
+    const tags: Array<string | undefined> = [];
+    const entry = await cacheWith(store).load("k", async (_signal, etag) => {
+      tags.push(etag);
+      return "unchanged";
+    });
+    expect(tags).toEqual(['"t0"']);
+    expect(entry.secrets).toBe(secrets);
+    expect(entry).toEqual({ secrets, fetchedAt: t, etag: '"t0"' });
+    expect(await store.get("k")).toEqual(entry);
+  });
+
+  it("fresh: true still sends the stored tag", async () => {
+    const store = memoryStore();
+    store.set("k", { secrets: [secret("v0")], fetchedAt: t, etag: '"t0"' });
+    const tags: Array<string | undefined> = [];
+    await cacheWith(store).load(
+      "k",
+      async (_signal, etag) => {
+        tags.push(etag);
+        return "unchanged";
+      },
+      { fresh: true },
+    );
+    expect(tags).toEqual(['"t0"']);
+  });
+
+  it("unchanged without a stored entry is a bad_response", async () => {
+    const error = await cacheWith(memoryStore())
+      .load("k", async () => "unchanged")
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AnchorError);
+    expect(error).toMatchObject({
+      status: 304,
+      code: "bad_response",
+      message: "Anchor answered 304 to a request without a tag",
+    });
   });
 });

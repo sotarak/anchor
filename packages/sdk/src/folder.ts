@@ -5,9 +5,18 @@ import type { AnchorFolder, AnchorValue, CacheEntry, ListQuery } from "./types.j
 
 type Snapshot = { entry: CacheEntry; values: Readonly<Record<string, AnchorValue>> };
 
+/** Freezes plain objects and arrays all the way down: one folder's values are shared by every reader. */
+export function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) deepFreeze(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
 const snapshotOf = (entry: CacheEntry): Snapshot => ({
   entry,
-  values: Object.freeze(decodeAll(entry.secrets)),
+  values: deepFreeze(decodeAll(entry.secrets)),
 });
 
 export async function openFolder(
@@ -16,16 +25,22 @@ export async function openFolder(
   options: { signal?: AbortSignal } = {},
 ): Promise<AnchorFolder> {
   let snapshot = snapshotOf(await core.loadEntry(query, { signal: options.signal }));
-  /** When values were last asked for, successfully or not; staleness counts from here. */
-  let checkedAt = Date.now();
+  /**
+   * When values were last asked for, successfully or not; staleness counts from here. It starts
+   * at the entry's fetch time: an entry from a warm shared store may already be old.
+   */
+  let checkedAt = snapshot.entry.fetchedAt;
   /** Whether the last refresh failed without even a cached fallback (past `maxStaleMs`). */
   let failed = false;
   let pending: Promise<void> | undefined;
 
   const accept = (entry: CacheEntry) => {
     failed = false;
-    // Decode once per fetch: a cache hit returns the very entry this snapshot came from.
-    if (entry !== snapshot.entry) snapshot = snapshotOf(entry);
+    // A slow store can answer with an entry older than the one already shown: keep the newer.
+    if (entry.fetchedAt < snapshot.entry.fetchedAt) return;
+    // Decode once per change: a cache hit returns this very entry, a 304 the same secrets array.
+    if (entry.secrets === snapshot.entry.secrets) snapshot = { entry, values: snapshot.values };
+    else snapshot = snapshotOf(entry);
   };
 
   const refreshInBackground = () => {

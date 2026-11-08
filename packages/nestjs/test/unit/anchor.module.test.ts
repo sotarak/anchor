@@ -100,6 +100,26 @@ describe("AnchorModule.forRoot", () => {
     expect((err as AnchorError).code).toBe("forbidden");
   });
 
+  it("makes compile() reject with a network AnchorError when Anchor is unreachable", async () => {
+    const unreachable = vi.fn(async () => {
+      throw new TypeError("fetch failed");
+    });
+    const err = await Test.createTestingModule({
+      imports: [
+        AnchorModule.forRoot({
+          ...BASE,
+          retry: false,
+          fetch: unreachable as unknown as typeof fetch,
+        }),
+      ],
+    })
+      .compile()
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AnchorError);
+    expect(err).toMatchObject({ code: "network", retryable: true });
+    expect(unreachable).toHaveBeenCalledTimes(1);
+  });
+
   it("is global by default", async () => {
     const seen: unknown[] = [];
     @Module({

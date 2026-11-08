@@ -22,6 +22,7 @@ import {
   getProjectBySlug,
   type ProjectRow,
 } from "../projects/repo";
+import { etagFor, etagMatches } from "./etag";
 import { deleteSecret, putSecret, type SecretContext } from "./service";
 import { getVersionValue, listVersions, rollbackSecret } from "./versions";
 import { composeSecret, composeSecrets } from "./view";
@@ -87,6 +88,13 @@ secretRoutes.get("/", async (c) => {
     { ...ctx, principal: target.principal },
     query,
   );
+  // The tag covers the exact body, so anything that changes the answer changes the tag. A
+  // match sends no values, so it is not a read and writes no audit row.
+  const body = JSON.stringify({ secrets } satisfies { secrets: SecretDto[] });
+  const etag = await etagFor(c.env, body);
+  if (etagMatches(c.req.header("if-none-match"), etag)) {
+    return c.body(null, 304, { ETag: etag });
+  }
   // Values are about to leave: the read must be on record first (fails closed with a 500).
   if (query.reveal) {
     await recordAudit(c, {
@@ -100,7 +108,7 @@ secretRoutes.get("/", async (c) => {
       },
     });
   }
-  return c.json<{ secrets: SecretDto[] }>({ secrets });
+  return c.body(body, 200, { ETag: etag, "Content-Type": "application/json" });
 });
 
 function versionParam(c: Context<AppEnv>): number {

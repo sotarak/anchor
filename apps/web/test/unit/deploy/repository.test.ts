@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -370,7 +371,7 @@ describe("open-source repository", () => {
     expect(upgrading).toContain("run_worker_first");
   });
 
-  it("every workspace package is version 0.4.0", () => {
+  it("every manifest is 0.5.0 and the changelog has a 0.5.0 entry", () => {
     for (const f of [
       "package.json",
       "apps/cli/package.json",
@@ -381,10 +382,43 @@ describe("open-source repository", () => {
       "packages/sdk/package.json",
       "packages/nestjs/package.json",
     ]) {
-      expect(JSON.parse(read(f)).version, f).toBe("0.4.0");
+      expect(JSON.parse(read(f)).version, f).toBe("0.5.0");
     }
     // The MCP server reports this as its version.
-    expect(read("apps/server/src/version.ts")).toContain('SERVER_VERSION = "0.4.0"');
+    expect(read("apps/server/src/version.ts")).toContain('SERVER_VERSION = "0.5.0"');
+    // Exits non-zero (and throws here) when the section is missing.
+    const notes = execFileSync(process.execPath, ["scripts/changelog.mjs", "0.5.0"], {
+      cwd: path(""),
+      encoding: "utf8",
+    });
+    expect(notes).toContain("If-None-Match");
+    expect(notes).toContain("--watch");
+  });
+
+  it("SDK docs describe read-triggered refresh and conditional requests", () => {
+    for (const f of ["apps/docs/src/content/docs/guides/sdk.md", "packages/sdk/README.md"]) {
+      const doc = read(f);
+      expect(doc, f).toContain("If-None-Match");
+      expect(doc, f).toContain("304");
+      expect(doc, f).not.toContain("once a minute");
+    }
+  });
+
+  it("the CLI guide documents run --watch", () => {
+    const cli = read("apps/docs/src/content/docs/guides/cli.md");
+    for (const s of ["--watch", "--watch-interval", "Secrets changed; restarting"]) {
+      expect(cli, s).toContain(s);
+    }
+  });
+
+  it("the HTTP API reference documents ETag on the secrets list", () => {
+    const ref = read("apps/docs/src/content/docs/reference/http-api.md");
+    expect(ref).toContain("ETag");
+    expect(ref).toContain("If-None-Match");
+  });
+
+  it("the audit retention guide says a 304 is not audited", () => {
+    expect(read("apps/docs/src/content/docs/operations/audit-retention.md")).toContain("304");
   });
 
   it("the MCP guide shows Claude Code and Codex setup and the reveal permission", () => {
@@ -394,7 +428,7 @@ describe("open-source repository", () => {
     expect(mcp).toContain("secrets:reveal");
   });
 
-  it("the release publishes the SDK before the NestJS module, each skipped once on npm", () => {
+  it("the release publishes cli, then the SDK, then the NestJS module, idempotently, each skipped once on npm", () => {
     const wf = read(".github/workflows/release-cli.yml");
     const npmJob = wf.slice(wf.indexOf("\n  npm:\n"), wf.indexOf("\n  homebrew:\n"));
     const at = (s: string) => {
@@ -402,17 +436,24 @@ describe("open-source repository", () => {
       expect(i, s).toBeGreaterThan(-1);
       return i;
     };
-    const cliPublish = at('npm publish "$RUNNER_TEMP"/pkg/*.tgz');
+    const cliPublish = at(
+      'node scripts/npm-publish.mjs "$RUNNER_TEMP"/pkg/*.tgz "@anchor-secrets/cli@$VERSION" "$NPM_TAG"',
+    );
     const sdkSkip = at('npm view "@anchor-secrets/sdk@$VERSION" version');
     const nestSkip = at('npm view "@anchor-secrets/nestjs@$VERSION" version');
     const sdkPack = at("pnpm --filter ./packages/sdk pack");
     const nestPack = at("pnpm --filter ./packages/nestjs pack");
     const smoke = at("require('@anchor-secrets/nestjs')");
     expect(npmJob).toContain("import('@anchor-secrets/sdk')");
-    const sdkPublish = at('npm publish "$RUNNER_TEMP"/sdk/*.tgz --access public --tag "$NPM_TAG"');
-    const nestPublish = at(
-      'npm publish "$RUNNER_TEMP"/nestjs/*.tgz --access public --tag "$NPM_TAG"',
+    const sdkPublish = at(
+      'node scripts/npm-publish.mjs "$RUNNER_TEMP"/sdk/*.tgz "@anchor-secrets/sdk@$VERSION" "$NPM_TAG"',
     );
+    const nestPublish = at(
+      'node scripts/npm-publish.mjs "$RUNNER_TEMP"/nestjs/*.tgz "@anchor-secrets/nestjs@$VERSION" "$NPM_TAG"',
+    );
+    // Every publish goes through the idempotent script.
+    expect(npmJob).not.toMatch(/run: npm publish/);
+    expect(cliPublish).toBeLessThan(sdkPublish);
     expect(cliPublish).toBeLessThan(sdkPack);
     expect(sdkPack).toBeLessThan(nestPack);
     expect(nestPack).toBeLessThan(smoke);
@@ -486,10 +527,23 @@ describe("open-source repository", () => {
     expect(read("README.md")).toContain("https://sotarak.github.io/anchor/guides/agent-skills/");
   });
 
-  it("the CI guide pins the 0.4.0 CLI", () => {
+  it("the CI guide pins the 0.5.0 CLI", () => {
     const ci = read("apps/docs/src/content/docs/guides/ci.md");
-    expect(ci).not.toContain("0.3.0");
-    expect(ci.match(/0\.4\.0/g)?.length).toBe(4);
+    expect(ci).not.toContain("0.4.0");
+    expect(ci.match(/0\.5\.0/g)?.length).toBe(4);
+  });
+
+  it("workflows use actions/checkout@v7 and actions/upload-pages-artifact@v5", () => {
+    for (const f of ["ci", "dco", "docs", "release-cli"]) {
+      const wf = read(`.github/workflows/${f}.yml`);
+      for (const [, action, version] of wf.matchAll(
+        /uses: actions\/(checkout|upload-pages-artifact)@(v\d+)/g,
+      )) {
+        expect(`${f}: ${action}@${version}`).toBe(
+          `${f}: ${action}@${action === "checkout" ? "v7" : "v5"}`,
+        );
+      }
+    }
   });
 
   it("README links the docs site", () => {

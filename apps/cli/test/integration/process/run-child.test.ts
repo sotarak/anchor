@@ -6,7 +6,12 @@ import { fileURLToPath } from "node:url";
 import crossSpawn from "cross-spawn";
 import { describe, expect, it } from "vitest";
 import { CliError } from "#src/errors";
-import { createNodeRunChild, exitCodeFromChild, spawnFor } from "#src/process/run-child";
+import {
+  createNodeRunChild,
+  createNodeStartChild,
+  exitCodeFromChild,
+  spawnFor,
+} from "#src/process/run-child";
 import { tmpDir } from "#test/support";
 
 const fixture = fileURLToPath(new URL("../../support/fixtures/child.mjs", import.meta.url));
@@ -95,6 +100,64 @@ describe.skipIf(process.platform === "win32")("createNodeRunChild (real processe
     expect((e as CliError).exitCode).toBe(127);
     expect((e as CliError).message).toBe("Command not found: anchor-no-such-command-xyz");
     expect(proc.listenerCount("SIGINT")).toBe(0);
+  });
+
+  it("startChild: kill(SIGTERM) reaches the child; exited resolves with its code", async () => {
+    const ready = join(await tmpDir(), "ready");
+    const child = createNodeStartChild(new EventEmitter())(process.execPath, [fixture, "wait"], {
+      ...baseEnv,
+      READY_FILE: ready,
+    });
+    await until(() => existsSync(ready));
+    child.kill("SIGTERM");
+    expect(await child.exited).toEqual({ code: 42, signal: null });
+  });
+
+  it("startChild: kill(SIGKILL) ends it with signal SIGKILL", async () => {
+    const ready = join(await tmpDir(), "ready");
+    const child = createNodeStartChild(new EventEmitter())(process.execPath, [fixture, "wait"], {
+      ...baseEnv,
+      READY_FILE: ready,
+    });
+    await until(() => existsSync(ready));
+    child.kill("SIGKILL");
+    expect(await child.exited).toEqual({ code: null, signal: "SIGKILL" });
+  });
+
+  it("startChild: signal handlers are removed after exit", async () => {
+    const proc = new EventEmitter();
+    const child = createNodeStartChild(proc)(process.execPath, [fixture, "exit:0"], baseEnv);
+    expect(proc.listenerCount("SIGTERM")).toBe(1);
+    await child.exited;
+    for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) expect(proc.listenerCount(sig)).toBe(0);
+  });
+
+  it("startChild: a missing command rejects exited with CliError 127", async () => {
+    const proc = new EventEmitter();
+    const e = await createNodeStartChild(proc)(
+      "anchor-no-such-command-xyz",
+      [],
+      baseEnv,
+    ).exited.catch((err: unknown) => err);
+    expect(e).toBeInstanceOf(CliError);
+    expect((e as CliError).exitCode).toBe(127);
+    expect(proc.listenerCount("SIGTERM")).toBe(0);
+  });
+
+  it("startChild: stopRequested turns true once a forwarded signal reaches us, even an absorbed SIGINT", async () => {
+    const proc = new EventEmitter();
+    const ready = join(await tmpDir(), "ready");
+    const child = createNodeStartChild(proc, { forwardSigint: false })(
+      process.execPath,
+      [fixture, "wait"],
+      { ...baseEnv, READY_FILE: ready },
+    );
+    await until(() => existsSync(ready));
+    expect(child.stopRequested()).toBe(false);
+    proc.emit("SIGINT", "SIGINT");
+    expect(child.stopRequested()).toBe(true);
+    child.kill("SIGTERM");
+    await child.exited;
   });
 
   it("child sees injected env", async () => {

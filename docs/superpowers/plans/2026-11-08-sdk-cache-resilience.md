@@ -23,7 +23,7 @@ packages.
 - Branch: `feat/v0.4.0` (both packages are unpublished; this ships in 0.4.0).
 - SDK: no runtime dependencies; `engines.node` `>=20`; `@anchor/shared` stays bundled and never
   appears in a published declaration file.
-- SDK `dist/index.js` under 12 KB.
+- SDK `dist/index.js` under 20 KB (raised from 12 KB by the 0.4.0 release and the 0.5.0 spec; see `bundle.test.ts`).
 - `pnpm --filter <pkg> check:package` (publint + attw) green for both packages.
 - Never put a token or a secret value in an error message, an event, a cache key or a log.
 - Defaults: `timeoutMs` 10 000; `retry` `{ attempts: 3, baseDelayMs: 250, maxDelayMs: 5000 }`;

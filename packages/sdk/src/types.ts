@@ -101,7 +101,12 @@ export interface AnchorFolder {
 }
 
 /** What the cache keeps per folder. `secrets` hold plaintext values. */
-export type CacheEntry = { secrets: AnchorSecret[]; fetchedAt: number };
+export type CacheEntry = {
+  secrets: AnchorSecret[];
+  fetchedAt: number;
+  /** The server's tag for these secrets, sent back as `If-None-Match`; absent before 0.5.0. */
+  etag?: string;
+};
 
 /**
  * Where cached folders live; the default keeps them in memory. A custom store (a file, Redis)

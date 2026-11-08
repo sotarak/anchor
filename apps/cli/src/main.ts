@@ -2,12 +2,12 @@ import { CommanderError } from "commander";
 import { configureProxyFromEnv } from "./api/proxy";
 import { assertRunSeparator } from "./commands/run";
 import { assertNoVersionFlagOnGet } from "./commands/secrets";
-import type { CliDeps } from "./context";
+import { type CliDeps, timerSleep } from "./context";
 import { CliError, EXIT } from "./errors";
 import { createNodeIo } from "./io";
 import { openUrl } from "./open-url";
 import { Output } from "./output";
-import { createNodeRunChild } from "./process/run-child";
+import { createNodeRunChild, createNodeStartChild } from "./process/run-child";
 import { createNodeSpawner } from "./process/spawner";
 import { buildProgram, type RunState } from "./program";
 import { createInquirerPrompts } from "./prompts";
@@ -18,19 +18,17 @@ const UNEXPECTED = "Unexpected error (run with --debug for details)";
 async function defaultDeps(partial: Partial<CliDeps>): Promise<CliDeps> {
   const io = partial.io ?? createNodeIo();
   const spawner = partial.spawner ?? createNodeSpawner();
+  // A terminal (or the Windows console) already delivers Ctrl-C to the child.
+  const childOptions = { forwardSigint: !io.stdinIsTTY && process.platform !== "win32" };
   return {
     io,
     prompts: partial.prompts ?? createInquirerPrompts(),
     fetch: partial.fetch ?? (await configureProxyFromEnv(io.env)) ?? globalThis.fetch,
     spawner,
     openUrl: partial.openUrl ?? ((url) => openUrl(url, io.platform, spawner)),
-    sleep: partial.sleep ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms))),
-    runChild:
-      partial.runChild ??
-      createNodeRunChild(process, {
-        // A terminal (or the Windows console) already delivers Ctrl-C to the child.
-        forwardSigint: !io.stdinIsTTY && process.platform !== "win32",
-      }),
+    sleep: partial.sleep ?? timerSleep,
+    runChild: partial.runChild ?? createNodeRunChild(process, childOptions),
+    startChild: partial.startChild ?? createNodeStartChild(process, childOptions),
     selectStore: partial.selectStore,
     createApi: partial.createApi,
   };

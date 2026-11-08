@@ -54,7 +54,7 @@ describe("http request", () => {
   it("sends bearer token, JSON headers and user agent", async () => {
     const f = scriptedFetch(json(200, { ok: true }));
     const res = await request<{ ok: boolean }>(opts(f.fn), "PUT", "/api/v1/x", { a: 1 });
-    expect(res).toEqual({ status: 200, data: { ok: true } });
+    expect(res).toEqual({ status: 200, data: { ok: true }, etag: null });
     const [call] = f.calls;
     expect(call?.url).toBe("https://anchor.example/api/v1/x");
     expect(call?.method).toBe("PUT");
@@ -257,6 +257,44 @@ describe("api client", () => {
       `POST ${base}/K/rollback`,
     ]);
     expect(JSON.parse(f.calls[4]?.body ?? "")).toEqual({ path: "/a", version: 2 });
+  });
+
+  it("listSecretsIfChanged sends If-None-Match and maps 304 to changed: false", async () => {
+    const f = scriptedFetch(new Response(null, { status: 304, headers: { etag: '"t1"' } }));
+    const api = createApiClient(opts(f.fn));
+    const res = await api.listSecretsIfChanged(
+      "app",
+      "dev",
+      { path: "/a", reveal: true, expand: true },
+      '"t1"',
+    );
+    expect(res).toEqual({ changed: false });
+    expect(f.calls[0]?.headers.get("if-none-match")).toBe('"t1"');
+    expect(f.calls[0]?.url).toBe(
+      "https://anchor.example/api/v1/projects/app/environments/dev/secrets?path=%2Fa&reveal=true&expand=true",
+    );
+  });
+
+  it("listSecretsIfChanged without a tag sends no If-None-Match and returns the tag", async () => {
+    const f = scriptedFetch(
+      new Response(JSON.stringify({ secrets: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json", etag: '"t2"' },
+      }),
+    );
+    const api = createApiClient(opts(f.fn));
+    const res = await api.listSecretsIfChanged("app", "dev", { path: "/", reveal: true }, null);
+    expect(res).toEqual({ changed: true, secrets: [], etag: '"t2"' });
+    expect(f.calls[0]?.headers.has("if-none-match")).toBe(false);
+  });
+
+  it("a 304 is not retried and is not an error", async () => {
+    const f = scriptedFetch(new Response(null, { status: 304, headers: { etag: '"t1"' } }));
+    const res = await request(opts(f.fn), "GET", "/api/v1/x", undefined, {
+      headers: { "if-none-match": '"t1"' },
+    });
+    expect(res).toEqual({ status: 304, data: undefined, etag: '"t1"' });
+    expect(f.calls).toHaveLength(1);
   });
 
   it("unwraps response envelopes", async () => {

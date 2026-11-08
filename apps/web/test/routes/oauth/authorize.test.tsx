@@ -3,6 +3,7 @@ import { screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiError, fixtures, renderApp, server, signedInAs, signedOut } from "#test/support";
+import { Route } from "@/routes/oauth/authorize";
 
 const leave = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/leave-page", () => ({ leavePage: leave }));
@@ -94,6 +95,29 @@ describe("/oauth/authorize", () => {
       client_id: "client-1",
     });
   });
+
+  it("validateSearch keeps JSON objects and arrays the router parsed, so the page can restore their text", () => {
+    const validate = Route.options.validateSearch as (s: Record<string, unknown>) => unknown;
+    expect(validate({ state: { a: 1 }, scope: [1, 2], client_id: "c" })).toEqual({
+      state: { a: 1 },
+      scope: [1, 2],
+      client_id: "c",
+    });
+  });
+
+  it.each(["12345678901234567890", "true", "null", "1e3", '"quoted"', '{"a":1}', "[1,2]"])(
+    "posts state %j exactly as the client sent it",
+    async (state) => {
+      signedInAs(fixtures.owner);
+      const { checks, decisions } = consent(() => HttpResponse.json(dto()));
+      const qs = new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(QUERY)), state });
+      const { user } = await renderApp(`/oauth/authorize?${qs}`);
+      await user.click(await screen.findByRole("button", { name: "Approve" }));
+      await waitFor(() => expect(decisions).toHaveLength(1));
+      expect(checks[0]).toMatchObject({ state });
+      expect(decisions[0]).toMatchObject({ state });
+    },
+  );
 
   it("ticking the box sends allowReveal true", async () => {
     signedInAs(fixtures.owner);

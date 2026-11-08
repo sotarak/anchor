@@ -137,7 +137,7 @@ described in [Versions and rollback](/anchor/guides/versions/).
 | `anchor folders list` | List the subfolders of `--path` (default `/`) |
 | `anchor folders create <path>` | Create a folder and its parents (no-op if it exists) |
 | `anchor folders delete <path> [--force]` | Delete an empty folder; `--force` deletes its contents too |
-| `anchor run [--no-override] [--no-expand] -- <command> [args...]` | Run a command with secrets in its environment |
+| `anchor run [--no-override] [--no-expand] [--watch [--watch-interval <s>]] -- <command> [args...]` | Run a command with secrets in its environment |
 | `anchor export [--format dotenv\|json\|yaml] [--output <file>] [--no-expand]` | Write secrets to a file or a pipe |
 | `anchor tokens create --name <name> [--scope <env[:path]>]... [--permission read\|read-write] [--expires-in <days\|never>]` | Create a service token (`never`: valid until revoked) |
 | `anchor tokens list` | List the project's service tokens |
@@ -238,6 +238,39 @@ Then replace each value in `application.config.yaml` with its placeholder
   always use the stored text (`PORT=8080`, `MODELS=["a","b"]`).
 - `--debug` prints one line per request (`debug: GET /api/v1/... -> 200 (12ms)`): never headers,
   bodies, tokens or values.
+
+### Restart on changes: `anchor run --watch`
+
+```sh
+anchor run --watch -- npm run dev
+anchor run --watch --watch-interval 10 --env staging -- node server.js
+```
+
+With `--watch`, `anchor run` keeps checking Anchor while the command runs and restarts the
+command when its secrets change:
+
+- The first fetch works as without `--watch`: if it fails, the command is not started.
+- Every `--watch-interval` seconds (default 30, minimum 5, a whole number) the CLI asks Anchor
+  whether the folder changed, with `If-None-Match`. An unchanged folder costs a `304` with no
+  body and no audit row, so watching is cheap.
+- When the environment the command would get differs, stderr shows
+  `Secrets changed; restarting <command>` (never keys or values). The command gets `SIGTERM`; if
+  it has not exited after 10 seconds it gets `SIGKILL`. Then it starts again with the new values.
+  Only one copy of the command ever runs. A change that leaves the environment as it was (a
+  comment, or a key that `--no-override` hides) does not restart it.
+- When a check fails (network error, server error, expired or revoked token), the command keeps
+  running with the values it has. The first failure prints
+  `Could not check Anchor for changes (<reason>); keeping the current values`, and the first check
+  that works again prints `Reconnected to Anchor`.
+- When the command exits on its own, `anchor` stops watching and exits with the command's code.
+  `SIGINT`, `SIGTERM` and `SIGHUP` reach the command as without `--watch`, so stopping `anchor`
+  stops both.
+- On Windows, `SIGTERM` ends the command at once: there is no grace period.
+- `--watch-interval` without `--watch`, or a value that is not a whole number of at least 5,
+  exits 2.
+
+Only secrets are watched; to restart on file changes too, run a file watcher (such as `nodemon`)
+under `anchor run --watch`.
 
 ### Destructive commands
 

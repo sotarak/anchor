@@ -249,6 +249,21 @@ export async function revokeUserGrants(
   return result.meta.changes;
 }
 
+/** Revokes the user's other live grants for one client: approving it again replaces them. */
+export async function revokeClientGrants(
+  db: D1Database,
+  i: { userId: string; clientId: string; exceptGrantId: string; now: number },
+): Promise<number> {
+  const result = await db
+    .prepare(
+      `UPDATE oauth_grants SET revoked_at = ?
+       WHERE user_id = ? AND client_id = ? AND id <> ? AND revoked_at IS NULL`,
+    )
+    .bind(i.now, i.userId, i.clientId, i.exceptGrantId)
+    .run();
+  return result.meta.changes;
+}
+
 /** The grant a code-or-token string belongs to (any kind, any state), for revocation. */
 export async function findGrantIdByToken(db: D1Database, token: string): Promise<string | null> {
   const row = await db

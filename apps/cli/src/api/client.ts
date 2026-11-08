@@ -23,6 +23,11 @@ export type CreateServiceTokenBody = {
 /** Read flags for secrets; omitted flags are not sent, so the server defaults apply. */
 export type SecretReadFlags = { expand?: boolean; includeImports?: boolean };
 
+/** A conditional list: unchanged since the tag that was sent, or the new secrets and their tag. */
+export type ConditionalSecrets =
+  | { changed: false }
+  | { changed: true; secrets: SecretDto[]; etag: string | null };
+
 export interface ApiClient {
   login(email: string, password: string): Promise<LoginResponse>;
   /** Starts a browser login (no session needed). */
@@ -41,6 +46,13 @@ export interface ApiClient {
     env: string,
     q: { path: string; reveal: boolean } & SecretReadFlags,
   ): Promise<SecretDto[]>;
+  /** `listSecrets` with `If-None-Match: etag` when a tag is given. */
+  listSecretsIfChanged(
+    project: string,
+    env: string,
+    q: { path: string; reveal: boolean } & SecretReadFlags,
+    etag: string | null,
+  ): Promise<ConditionalSecrets>;
   getSecret(
     project: string,
     env: string,
@@ -110,6 +122,13 @@ export function createApiClient(opts: HttpOptions): ApiClient {
     for (const [k, v] of Object.entries(q)) if (v !== undefined) params.set(k, String(v));
     return `?${params}`;
   };
+  const listPath = (
+    project: string,
+    env: string,
+    q: { path: string; reveal: boolean } & SecretReadFlags,
+  ) =>
+    secretsPath(project, env) +
+    query({ path: q.path, reveal: q.reveal, expand: q.expand, includeImports: q.includeImports });
 
   return {
     login: (email, password) =>
@@ -137,18 +156,18 @@ export function createApiClient(opts: HttpOptions): ApiClient {
         )
       ).environments,
     listSecrets: async (project, env, q) =>
-      (
-        await data<{ secrets: SecretDto[] }>(
-          "GET",
-          secretsPath(project, env) +
-            query({
-              path: q.path,
-              reveal: q.reveal,
-              expand: q.expand,
-              includeImports: q.includeImports,
-            }),
-        )
-      ).secrets,
+      (await data<{ secrets: SecretDto[] }>("GET", listPath(project, env, q))).secrets,
+    listSecretsIfChanged: async (project, env, q, etag) => {
+      const res = await request<{ secrets: SecretDto[] }>(
+        opts,
+        "GET",
+        `/api/v1${listPath(project, env, q)}`,
+        undefined,
+        etag ? { headers: { "if-none-match": etag } } : {},
+      );
+      if (res.status === 304) return { changed: false };
+      return { changed: true, secrets: res.data.secrets, etag: res.etag };
+    },
     getSecret: async (project, env, key, q) =>
       (
         await data<{ secret: SecretDto }>(

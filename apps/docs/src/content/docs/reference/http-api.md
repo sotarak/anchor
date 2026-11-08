@@ -99,6 +99,21 @@ Prefix: `/projects/:project/environments/:env`.
 Reading values (`reveal=true`, one secret, or a past version) writes an audit event first; if that
 fails, the read fails with `500`.
 
+#### Conditional reads of a folder (0.5.0)
+
+`GET /secrets` sends an `ETag` header with every list:
+`ETag: "<base64url of the first 16 bytes of HMAC-SHA-256(key, body)>"`. The tag is computed from
+the exact JSON body, so anything that changes the body changes it: a value, a reference or import
+that expands differently, a type, a comment, a permission. The HMAC key is derived from
+`ANCHOR_ROOT_KEY`, so a tag never lets anyone test guesses of a value, and rotating the root key
+changes every tag (each client then gets one full response).
+
+Send the tag back as `If-None-Match` (a comma-separated list; `W/` prefixes are ignored and `*`
+matches any list). When it matches, the server answers `304 Not Modified` with no body, the same
+`ETag` and `Cache-Control: no-store`, and writes **no** audit event, with or without
+`reveal=true`: a `304` carries no values. Otherwise it answers `200` as usual. The SDK and
+`anchor run --watch` use this to check for changes cheaply. Other routes send no `ETag`.
+
 ### OAuth and MCP (0.4.0)
 
 These live at the instance origin, not under `/api/v1`, and answer CORS for any origin. See

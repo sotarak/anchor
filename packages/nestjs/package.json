@@ -1,6 +1,6 @@
 {
   "name": "@anchor-secrets/nestjs",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "NestJS module that loads configuration and secrets from Anchor at startup",
   "keywords": [
     "nestjs",

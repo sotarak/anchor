@@ -128,6 +128,40 @@ describe("POST /api/v1/oauth/authorize/check", () => {
 });
 
 describe("POST /api/v1/oauth/authorize/decision", () => {
+  it("approving the same client again revokes the earlier grant and audits the count", async () => {
+    await redirectOf(await decide({ ...base(), approve: true, allowReveal: false }));
+    await redirectOf(await decide({ ...base(), approve: true, allowReveal: false }));
+    const { results } = await db
+      .prepare("SELECT revoked_at FROM oauth_grants WHERE user_id = ? ORDER BY created_at, rowid")
+      .bind(web.userId)
+      .all<{ revoked_at: number | null }>();
+    expect(results.map((r) => r.revoked_at === null)).toEqual([false, true]);
+    const counts = (await auditRows("oauth.authorized")).map(
+      (r) => (JSON.parse(r.metadata ?? "{}") as { revokedGrants?: number }).revokedGrants ?? 0,
+    );
+    expect(counts.sort()).toEqual([0, 1]);
+  });
+
+  it("re-approval leaves other users' and other clients' grants live", async () => {
+    const other = await createUserWithSession({
+      role: "member",
+      kind: "web",
+      email: "o@example.test",
+    });
+    await redirectOf(
+      await decide({ ...base(), approve: true, allowReveal: false }, { cookie: other.cookie }),
+    );
+    const second = (await oauthClient()).id;
+    await redirectOf(
+      await decide({ ...base(), client_id: second, approve: true, allowReveal: false }),
+    );
+    await redirectOf(await decide({ ...base(), approve: true, allowReveal: false }));
+    const live = await db
+      .prepare("SELECT COUNT(*) AS n FROM oauth_grants WHERE revoked_at IS NULL")
+      .first<{ n: number }>();
+    expect(live?.n).toBe(3);
+  });
+
   const scopesOfOnlyGrant = async () => {
     const { results } = await grantRows();
     expect(results).toHaveLength(1);

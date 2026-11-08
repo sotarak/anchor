@@ -2,6 +2,7 @@ import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AppEnv } from "../env";
+import { rateLimitKey } from "../lib/ip";
 import { requestContext } from "../lib/request";
 import { verifyPkceS256 } from "./pkce";
 import { isValidRedirectUri } from "./redirects";
@@ -129,7 +130,8 @@ publicOAuthRoutes.post("/oauth/register", async (c) => {
   if (authMethod !== undefined && authMethod !== "none") {
     return oauthError(c, "invalid_client_metadata", "Only public clients are supported");
   }
-  const ip = c.get("clientIp");
+  // Counted per IPv6 /64: one host can rotate through a whole prefix.
+  const ip = rateLimitKey(c.get("clientIp"));
   const now = Date.now();
   const pending = await countPendingClients(c.env.DB, ip, now);
   if (

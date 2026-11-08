@@ -35,8 +35,11 @@ folder.get<string>("DATABASE_URL"); // synchronous, never waits for the network
 ```
 
 - `client.folder(query)` loads once and returns an `AnchorFolder`: `get`, `getOrThrow`, `has`,
-  `keys`, `toObject` (frozen) and `refresh()`. A read of values older than the cache ttl returns
-  them at once and starts one background refresh.
+  `keys`, `toObject` (frozen all the way down) and `refresh()`. A read of values older than the
+  cache ttl returns them at once and starts one background refresh; there is no timer.
+- A refresh sends the folder's last `ETag` as `If-None-Match`. When nothing changed, Anchor
+  answers `304` with no body and the cached values are kept. `cache: false` sends no
+  `If-None-Match`.
 - `loadSecrets(query)` returns `{ KEY: value }` with typed values decoded: `number` and `boolean`
   become numbers and booleans, `json` and `list` are parsed, `string` and `pem` stay strings.
   `listSecrets(query)` returns the secrets with their metadata (`key`, `path`, `type`,
@@ -74,7 +77,8 @@ Every failure is an `AnchorError` with `status` (0 when there was no response), 
 `aborted`, `stale`, or the server's error code such as `unauthenticated`, `forbidden` or `not_found`.
 Messages and events never contain tokens or values.
 
-Every value the client reads is recorded in the project's audit log under the token's name.
+Every request that returns values is recorded in the project's audit log under the token's
+name. A `304` returns no values and is not recorded.
 
 ## License
 

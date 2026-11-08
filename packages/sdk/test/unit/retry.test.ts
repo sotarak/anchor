@@ -210,6 +210,28 @@ describe("events", () => {
       },
     });
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(await pending).toEqual({ secrets: [] });
+    expect((await pending).body).toEqual({ secrets: [] });
+  });
+});
+
+describe("aborts raised by the onEvent hook", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("an abort raised inside onEvent stops the wait at once", async () => {
+    const controller = new AbortController();
+    let runs = 0;
+    const pending = withRetry(
+      async () => {
+        runs++;
+        throw new AnchorError(503, "unavailable", "Busy", { retryable: true });
+      },
+      { attempts: 3, baseDelayMs: 1_000, maxDelayMs: 1_000 },
+      { signal: controller.signal, emit: () => controller.abort() },
+    ).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(0);
+    const settled = await Promise.race([pending, Promise.resolve("still waiting")]);
+    expect(settled).toMatchObject({ code: "aborted" });
+    expect(runs).toBe(1);
   });
 });

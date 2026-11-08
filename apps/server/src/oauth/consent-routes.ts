@@ -14,7 +14,14 @@ import { parseJson } from "../lib/validate";
 import { mcpResource } from "./public-routes";
 import { isAllowedRedirect } from "./redirects";
 import { type OAuthScope, parseScopes, splitScopes } from "./scopes";
-import { createGrant, getClient, issueCode, type OAuthClientRow, revokeGrant } from "./store";
+import {
+  createGrant,
+  getClient,
+  issueCode,
+  type OAuthClientRow,
+  revokeClientGrants,
+  revokeGrant,
+} from "./store";
 
 /**
  * The dashboard side of /oauth/authorize (spec 2026-11-07-v0.4.0-mcp-oauth), mounted at
@@ -111,6 +118,12 @@ consentRoutes.post("/authorize/decision", async (c) => {
     scopes,
     now,
   });
+  const revoked = await revokeClientGrants(c.env.DB, {
+    userId: user.userId,
+    clientId: client.id,
+    exceptGrantId: grantId,
+    now,
+  });
   const code = await issueCode(c.env.DB, {
     grantId,
     redirectUri: body.redirect_uri,
@@ -120,7 +133,12 @@ consentRoutes.post("/authorize/decision", async (c) => {
   await recordAudit(c, {
     action: "oauth.authorized",
     target: grantId,
-    metadata: { clientId: client.id, clientName: client.name, scopes },
+    metadata: {
+      clientId: client.id,
+      clientName: client.name,
+      scopes,
+      ...(revoked > 0 ? { revokedGrants: revoked } : {}),
+    },
   });
   return c.json({ redirectTo: withParams(body.redirect_uri, { code }, body.state) });
 });

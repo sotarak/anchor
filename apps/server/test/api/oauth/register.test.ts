@@ -83,4 +83,13 @@ describe("POST /oauth/register", () => {
     );
     expect((await register(ok, "3.3.3.3")).status).toBe(429);
   });
+
+  it("IPv6 registrations are capped per /64, not per address", async () => {
+    const ok = { redirect_uris: ["https://a.example/cb"] };
+    for (let i = 1; i <= 10; i++) {
+      expect((await register(ok, `2001:db8:1:2::${i.toString(16)}`)).status).toBe(201);
+    }
+    expect((await register(ok, "2001:db8:1:2:ffff::1")).status).toBe(429);
+    expect((await register(ok, "2001:db8:1:3::1")).status).toBe(201);
+  });
 });

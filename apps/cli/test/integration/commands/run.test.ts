@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { SecretDto } from "@anchor/shared";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ApiClient, ConditionalSecrets } from "#src/api/client";
 import { buildChildEnv } from "#src/commands/run";
 import type { ChildHandle, RunChild, StartChild } from "#src/context";
@@ -426,25 +426,29 @@ describe("anchor run --watch", () => {
     "a real child that exits leaves no watch timer behind, so anchor exits at once",
     async () => {
       const cli = await loggedIn();
-      const timers = () => process.getActiveResourcesInfo().filter((r) => r === "Timeout").length;
-      const before = timers();
-      const r = await cli.run(
-        [
-          "run",
-          "--watch",
-          "--watch-interval",
-          "3600",
-          ...P,
-          "--",
-          process.execPath,
-          "-e",
-          "process.exit(3)",
-        ],
-        { listSecretsIfChanged: async () => changed("1") },
-        { startChild: createNodeStartChild(new EventEmitter()) },
-      );
-      expect(r.code).toBe(3);
-      expect(timers()).toBe(before);
+      // Only timers this run creates are counted: setTimeout is faked, the child is real.
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      try {
+        const r = await cli.run(
+          [
+            "run",
+            "--watch",
+            "--watch-interval",
+            "3600",
+            ...P,
+            "--",
+            process.execPath,
+            "-e",
+            "process.exit(3)",
+          ],
+          { listSecretsIfChanged: async () => changed("1") },
+          { startChild: createNodeStartChild(new EventEmitter()) },
+        );
+        expect(r.code).toBe(3);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
     },
   );
 

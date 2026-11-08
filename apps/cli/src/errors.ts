@@ -62,7 +62,7 @@ export function exitCodeForApiError(e: ApiRequestError): number {
 /** Turns an API failure into a user-facing error. Anything unexpected is rethrown. */
 export function toCliError(
   e: unknown,
-  ctx: { apiUrl: string; authSource?: "ANCHOR_TOKEN" | "stored" },
+  ctx: { apiUrl: string; authSource?: "ANCHOR_TOKEN" | "stored"; during?: "login" },
 ): CliError {
   if (e instanceof CliError) return e;
   if (!(e instanceof ApiRequestError)) throw e;
@@ -72,9 +72,17 @@ export function toCliError(
   if (e.code === "unauthenticated" && ctx.authSource === "ANCHOR_TOKEN") {
     return new CliError(EXIT.AUTH, "ANCHOR_TOKEN was rejected (expired, revoked or invalid)");
   }
-  const hint = e.status === 404 && e.code === "internal" ? NOT_ANCHOR_HINT : undefined;
+  const notAnchor = e.status === 404 && e.code === "internal";
+  // During login the --api-url hint would suggest the command that just failed.
+  const hint = notAnchor
+    ? ctx.during === "login"
+      ? LOGIN_NOT_ANCHOR_HINT
+      : NOT_ANCHOR_HINT
+    : undefined;
   return new CliError(exitCodeForApiError(e), e.message, hint, e.code);
 }
 
+const LOGIN_NOT_ANCHOR_HINT =
+  "Use the address of your Anchor dashboard, the URL you sign in to in the browser";
 const NOT_ANCHOR_HINT =
   "Check the server URL; run 'anchor login --api-url <url>' to change your default";

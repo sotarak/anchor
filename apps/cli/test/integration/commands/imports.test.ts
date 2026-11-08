@@ -26,6 +26,16 @@ describe("anchor imports list", () => {
     expect(json.fake.called("listImports")[0]?.args).toEqual(["app", "dev", { path: "/api" }]);
   });
 
+  it("numbers imports 1..n even when positions have gaps; --json keeps position", async () => {
+    const gap = [shared, imp("i3", "shared", "/db", 3)];
+    const r = await (await loggedIn()).run(["imports", "list", ...P], { listImports: async () => gap });
+    expect(r.out).toBe("1  shared:/\n2  shared:/db\n");
+    const json = await (await loggedIn()).run(["imports", "list", "--json", ...P], {
+      listImports: async () => gap,
+    });
+    expect(JSON.parse(json.out)[1].position).toBe(3);
+  });
+
   it('an empty list says "No imports in dev:/" on stderr and nothing on stdout', async () => {
     const cli = await loggedIn();
     const r = await cli.run(["imports", "list", ...P], { listImports: async () => [] });

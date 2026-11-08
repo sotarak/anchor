@@ -48,7 +48,7 @@ export async function importsList(ctx: CommandContext): Promise<void> {
     ctx.out.info(`No imports in ${env}:${path}`);
     return;
   }
-  ctx.out.data(imports, () => imports.map((i) => `${i.position}  ${where(i.source)}`).join("\n"));
+  ctx.out.data(imports, () => imports.map((i, n) => `${n + 1}  ${where(i.source)}`).join("\n"));
 }
 
 export async function importsAdd(ctx: CommandContext, raw: string): Promise<void> {

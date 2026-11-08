@@ -762,7 +762,11 @@ describe("anchor login (browser)", () => {
     );
     expect(await r.code).toBe(1);
     expect(io.err()).toContain(`error: ${message}`);
-    expect(io.err()).toContain("hint: Check the server URL");
+    // The hint must not suggest the very command that just failed.
+    expect(io.err()).toContain(
+      "hint: Use the address of your Anchor dashboard, the URL you sign in to in the browser",
+    );
+    expect(io.err()).not.toContain("anchor login --api-url");
     expect(io.err()).not.toContain("does not support browser login");
     await expect(readFile(join(xdg, "anchor", "config.json"), "utf8")).rejects.toThrow();
   });

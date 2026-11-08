@@ -13,7 +13,8 @@ const request: CliLoginRequestDto = {
   createdAt: Date.now() - 10_000,
   expiresAt: Date.now() + 590_000,
 };
-const WARNING = "Only approve if you just ran anchor login and this code matches your terminal";
+const WARNING =
+  "Only approve if you just ran anchor login. Approving signs this terminal in as you.";
 const DONE = "You can close this tab and return to your terminal.";
 const GONE = "This login request expired or was already used.";
 
@@ -43,10 +44,24 @@ describe("/cli/login", () => {
     pending();
     await renderApp(`/cli/login?code=${CODE}`);
     expect(await screen.findByText(CODE)).toBeInTheDocument();
-    expect(screen.getByText("dev@laptop")).toBeInTheDocument();
-    expect(screen.getByText("203.0.113.7")).toBeInTheDocument();
-    expect(screen.getByText(/requested less than a minute ago/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Approve CLI login" })).toBeInTheDocument();
+    expect(
+      await screen.findByText(`A terminal wants to sign in as ${fixtures.owner.email}`),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Check that it matches your terminal")).toBeInTheDocument();
+    expect(screen.getAllByRole("term").map((t) => t.textContent)).toEqual([
+      "Device",
+      "IP address",
+      "Requested",
+    ]);
+    expect(screen.getAllByRole("definition").map((d) => d.textContent)).toEqual([
+      "dev@laptop",
+      "203.0.113.7",
+      "less than a minute ago",
+    ]);
     expect(screen.getByText(WARNING)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Deny" })).toHaveClass("flex-1");
+    expect(screen.getByRole("button", { name: "Approve" })).toHaveClass("flex-1");
   });
 
   it("approve", async () => {

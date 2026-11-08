@@ -63,6 +63,17 @@ describe("/oauth/authorize", () => {
     });
   });
 
+  it("lists the app and the redirect host with the shared key-value list", async () => {
+    signedInAs(fixtures.owner);
+    consent(() => HttpResponse.json(dto()));
+    await renderApp(PAGE);
+    await screen.findByText("Claude Code");
+    expect(screen.getAllByRole("term").map((t) => t.textContent)).toEqual(["App", "Returns to"]);
+    const [app, host] = screen.getAllByRole("definition");
+    expect(app).toHaveClass("min-w-0", "break-words");
+    expect(host).toHaveClass("font-mono");
+  });
+
   it("the reveal checkbox appears only when requested, unchecked", async () => {
     signedInAs(fixtures.owner);
     consent(() => HttpResponse.json(dto()));

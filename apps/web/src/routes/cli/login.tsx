@@ -2,16 +2,18 @@ import { normalizeUserCode } from "@anchor/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
+import { RiCheckboxCircleFill, RiForbidFill } from "react-icons/ri";
 import { AuthLayout } from "@/components/auth-layout";
 import { errorMessage } from "@/components/data/table-states";
 import { Field } from "@/components/forms/field";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Input } from "@/components/ui/input";
+import { KeyValueList } from "@/components/ui/key-value-list";
 import { ApiClientError } from "@/lib/api/client";
 import { api } from "@/lib/api/endpoints";
 import { qk } from "@/lib/api/query-keys";
-import { requireUser } from "@/lib/auth";
+import { meQueryOptions, requireUser } from "@/lib/auth";
 import { formatRelative } from "@/lib/format";
 
 export const Route = createFileRoute("/cli/login")({
@@ -75,12 +77,11 @@ function EnterCode() {
 }
 
 function requestedLabel(createdAt: number, now = Date.now()): string {
-  return now - createdAt < 60_000
-    ? "Requested less than a minute ago"
-    : `Requested ${formatRelative(createdAt, now)}`;
+  return now - createdAt < 60_000 ? "less than a minute ago" : formatRelative(createdAt, now);
 }
 
 function Request({ code }: { code: string }) {
+  const me = useQuery(meQueryOptions);
   const request = useQuery({
     queryKey: qk.cliLogin(code),
     queryFn: () => api.cliLogin.get(code),
@@ -92,9 +93,18 @@ function Request({ code }: { code: string }) {
   const decisionError = approve.error ?? deny.error;
 
   if (approve.isSuccess || deny.isSuccess) {
-    return (
+    return approve.isSuccess ? (
       <AuthLayout
-        title={approve.isSuccess ? "CLI login approved" : "CLI login denied"}
+        title="CLI login approved"
+        titleIcon={<RiCheckboxCircleFill aria-hidden className="size-4 text-success-base" />}
+        description={DONE}
+      >
+        {null}
+      </AuthLayout>
+    ) : (
+      <AuthLayout
+        title="CLI login denied"
+        titleIcon={<RiForbidFill aria-hidden className="size-4 text-faded-base" />}
         description={DONE}
       >
         {null}
@@ -107,7 +117,7 @@ function Request({ code }: { code: string }) {
     (decisionError instanceof ApiClientError && decisionError.status === 404);
   if (gone) {
     return (
-      <AuthLayout title="Log in to the Anchor CLI">
+      <AuthLayout title="Approve CLI login">
         <Callout tone="error">{GONE}</Callout>
       </AuthLayout>
     );
@@ -116,35 +126,40 @@ function Request({ code }: { code: string }) {
   const busy = approve.isPending || deny.isPending;
   return (
     <AuthLayout
-      title="Log in to the Anchor CLI"
-      description="A terminal is asking to sign in to Anchor as you."
+      title="Approve CLI login"
+      description={`A terminal wants to sign in as ${me.data?.email ?? "you"}`}
     >
       <div className="flex flex-col gap-4">
-        <p className="text-center font-mono text-label-lg tracking-widest text-text-strong">
-          {code}
-        </p>
+        <div className="flex flex-col items-center gap-1 rounded-lg border bg-bg-weak p-4 text-center">
+          <p className="font-mono text-label-lg tracking-widest text-text-strong">{code}</p>
+          <p className="text-paragraph-xs text-text-soft">Check that it matches your terminal</p>
+        </div>
         {request.isError ? <Callout tone="error">{errorMessage(request.error)}</Callout> : null}
         {decisionError ? <Callout tone="error">{errorMessage(decisionError)}</Callout> : null}
         {request.data ? (
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-paragraph-sm">
-            <dt className="text-text-soft">Device</dt>
-            <dd className="text-text-strong">{request.data.clientName ?? "–"}</dd>
-            <dt className="text-text-soft">IP address</dt>
-            <dd className="text-code-xs text-text-strong">{request.data.ip ?? "–"}</dd>
-            <dd className="col-span-2 text-paragraph-xs text-text-soft">
-              {requestedLabel(request.data.createdAt)}
-            </dd>
-          </dl>
+          <KeyValueList
+            items={[
+              { label: "Device", value: request.data.clientName ?? "–" },
+              { label: "IP address", value: request.data.ip ?? "–", mono: true },
+              { label: "Requested", value: requestedLabel(request.data.createdAt) },
+            ]}
+          />
         ) : null}
-        <Callout tone="warning">
-          Only approve if you just ran anchor login and this code matches your terminal
+        <Callout tone="warning" size="sm">
+          Only approve if you just ran anchor login. Approving signs this terminal in as you.
         </Callout>
         {request.data ? (
-          <div className="flex justify-end gap-2">
-            <Button size="sm" disabled={busy} onClick={() => deny.mutate()}>
+          <div className="flex gap-2">
+            <Button size="sm" className="flex-1" disabled={busy} onClick={() => deny.mutate()}>
               Deny
             </Button>
-            <Button variant="primary" size="sm" disabled={busy} onClick={() => approve.mutate()}>
+            <Button
+              variant="primary"
+              size="sm"
+              className="flex-1"
+              disabled={busy}
+              onClick={() => approve.mutate()}
+            >
               Approve
             </Button>
           </div>

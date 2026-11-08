@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { KeyValueList } from "@/components/ui/key-value-list";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -224,5 +225,27 @@ describe("Input", () => {
     const input = screen.getByRole("textbox", { name: "Name" });
     expect(input).toHaveAttribute("aria-invalid", "true");
     expect(input.closest("[data-slot=input]")?.className).toContain("ring-error-base");
+  });
+});
+
+describe("KeyValueList", () => {
+  it("renders label/value pairs in order", () => {
+    render(
+      <KeyValueList
+        items={[
+          { label: "Device", value: "a-very-long-device-name.local" },
+          { label: "IP address", value: "203.0.113.7", mono: true },
+        ]}
+      />,
+    );
+    expect(screen.getAllByRole("term").map((t) => t.textContent)).toEqual(["Device", "IP address"]);
+    const values = screen.getAllByRole("definition");
+    expect(values.map((d) => d.textContent)).toEqual([
+      "a-very-long-device-name.local",
+      "203.0.113.7",
+    ]);
+    expect(values[0]).not.toHaveClass("font-mono");
+    expect(values[1]).toHaveClass("font-mono");
+    for (const dd of values) expect(dd).toHaveClass("min-w-0", "break-words");
   });
 });

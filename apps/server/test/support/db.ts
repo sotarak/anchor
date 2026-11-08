@@ -7,6 +7,7 @@ import { AUDIT_RETENTION_TRIGGER_DDL } from "./audit";
  */
 export const TABLES_CHILD_FIRST = [
   "audit_events",
+  "login_attempts",
   "oauth_tokens",
   "oauth_codes",
   "oauth_grants",

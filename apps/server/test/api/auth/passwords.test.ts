@@ -105,7 +105,7 @@ describe("change password", () => {
     expect((await mcpCall(agent.accessToken, "tools/list")).status).toBe(200);
   });
 
-  it("change password with the wrong current password -> 401 and counts toward lockout", async () => {
+  it("change password with the wrong current password -> 401 and locks further changes", async () => {
     const m = await user("member", "m@example.test");
     for (let i = 0; i < 5; i++) {
       const res = await changePassword(m.token, "wrong password!!");
@@ -113,7 +113,8 @@ describe("change password", () => {
       expect((await json<ApiErrorBody>(res)).error.code).toBe("invalid_credentials");
     }
     expect((await changePassword(m.token, TEST_PASSWORD)).status).toBe(429);
-    expect((await login("m@example.test")).status).toBe(429);
+    // Since 0.5.3 login has its own limit per (address, email); the account lock is not shared.
+    expect((await login("m@example.test")).status).toBe(200);
     expect((await me(m.token)).status).toBe(200);
   });
 

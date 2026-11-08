@@ -114,4 +114,28 @@ describe("cli login purge", () => {
       logs.mockRestore();
     }
   });
+
+  it("the daily job purges old login-attempt counters and logs login_attempts_purged", async () => {
+    await env.DB.prepare(
+      "INSERT INTO login_attempts (key, email, failures, window_start) VALUES ('i|198.51.100.1', NULL, 1, ?)",
+    )
+      .bind(Date.now() - 2 * DAY)
+      .run();
+    const logs = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await handleScheduled(
+        createScheduledController({ cron: "0 3 * * *" }),
+        env,
+        createExecutionContext(),
+      );
+      const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM login_attempts").first();
+      expect(left?.n).toBe(0);
+      const lines = logs.mock.calls.map((c) => String(c[0]));
+      expect(
+        lines.some((l) => l.includes('"login_attempts_purged"') && l.includes('"count":1')),
+      ).toBe(true);
+    } finally {
+      logs.mockRestore();
+    }
+  });
 });

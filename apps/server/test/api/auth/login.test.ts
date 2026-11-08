@@ -69,42 +69,6 @@ describe("POST /auth/login", () => {
     expect(res.status).toBe(200);
   });
 
-  it("5 failures lock the account; correct password then gets 429", async () => {
-    for (let i = 0; i < 5; i++) {
-      expect((await login({ email: EMAIL, password: `wrong-${i}-password` })).status).toBe(401);
-    }
-    const res = await login({ email: EMAIL, password: TEST_PASSWORD });
-    expect(res.status).toBe(429);
-    expect((await json<ApiErrorBody>(res)).error).toEqual({
-      code: "rate_limited",
-      message: "Too many failed attempts, try again later",
-    });
-    expect((await state())?.locked_until).toBeGreaterThan(Date.now());
-  });
-
-  it("attempts while locked do not change the lock state", async () => {
-    for (let i = 0; i < 5; i++) await login({ email: EMAIL, password: `wrong-${i}-password` });
-    const before = await state();
-    await login({ email: EMAIL, password: "still wrong pw" });
-    expect(await state()).toEqual(before);
-  });
-
-  it("after lockout expires, the correct password works", async () => {
-    for (let i = 0; i < 5; i++) await login({ email: EMAIL, password: `wrong-${i}-password` });
-    await env.DB.prepare("UPDATE users SET locked_until = ? WHERE email = ?")
-      .bind(Date.now() - 1, EMAIL)
-      .run();
-    expect((await login({ email: EMAIL, password: TEST_PASSWORD })).status).toBe(200);
-  });
-
-  it("successful login resets failed_logins to 0", async () => {
-    await login({ email: EMAIL, password: "wrong password 1" });
-    await login({ email: EMAIL, password: "wrong password 2" });
-    expect((await state())?.failed_logins).toBe(2);
-    await login({ email: EMAIL, password: TEST_PASSWORD });
-    expect(await state()).toEqual({ failed_logins: 0, locked_until: null });
-  });
-
   it("invalid body -> 400", async () => {
     expect((await login({ email: "not-an-email", password: "x" })).status).toBe(400);
     expect((await login({ email: EMAIL, password: TEST_PASSWORD, client: "mobile" })).status).toBe(
@@ -113,23 +77,102 @@ describe("POST /auth/login", () => {
   });
 });
 
-describe("lockout under concurrency", () => {
-  it("parallel wrong logins cannot exceed 5 guesses per lock", async () => {
-    const attempts = Array.from({ length: 20 }, (_, i) =>
-      login({ email: EMAIL, password: `wrong password number ${i}` }),
-    );
+const A = "198.51.100.7";
+const B = "203.0.113.9";
+const LOCKED = { code: "rate_limited", message: "Too many failed attempts, try again later" };
+const loginFrom = (ip: string, b: Record<string, unknown>) => {
+  const init = jsonInit("POST", b);
+  (init.headers as Record<string, string>)["cf-connecting-ip"] = ip;
+  return api("/api/v1/auth/login", init);
+};
+const wrong = (ip: string, email = EMAIL, n = 0) =>
+  loginFrom(ip, { email, password: `wrong-${n}-password` });
+const attemptRow = (key: string) =>
+  env.DB.prepare("SELECT failures, locked_until FROM login_attempts WHERE key = ?")
+    .bind(key)
+    .first<{ failures: number; locked_until: number | null }>();
+
+describe("login limit per address and email", () => {
+  it("5 failures from one address lock that pair; the correct password then gets 429", async () => {
+    for (let i = 0; i < 5; i++) expect((await wrong(A, EMAIL, i)).status).toBe(401);
+    const res = await loginFrom(A, { email: EMAIL, password: TEST_PASSWORD });
+    expect(res.status).toBe(429);
+    expect((await json<ApiErrorBody>(res)).error).toEqual(LOCKED);
+  });
+
+  it("the same email still logs in from another address (an attacker cannot lock the owner out)", async () => {
+    for (let i = 0; i < 6; i++) await wrong(A, EMAIL, i);
+    expect((await loginFrom(B, { email: EMAIL, password: TEST_PASSWORD })).status).toBe(200);
+  });
+
+  it("an unknown email locks exactly like a known one (no enumeration)", async () => {
+    for (let i = 0; i < 5; i++) {
+      expect((await wrong(A, "nobody@example.io", i)).status).toBe(401);
+      await wrong(B, EMAIL, i);
+    }
+    const unknown = await wrong(A, "nobody@example.io", 9);
+    const known = await wrong(B, EMAIL, 9);
+    expect(unknown.status).toBe(429);
+    expect(known.status).toBe(429);
+    expect(await json<ApiErrorBody>(unknown)).toEqual(await json<ApiErrorBody>(known));
+  });
+
+  it("a success clears the pair", async () => {
+    for (let i = 0; i < 4; i++) await wrong(A, EMAIL, i);
+    expect((await loginFrom(A, { email: EMAIL, password: TEST_PASSWORD })).status).toBe(200);
+    for (let i = 0; i < 4; i++) expect((await wrong(A, EMAIL, i)).status).toBe(401);
+  });
+
+  it("50 failures from one address lock it for every email; another address is unaffected", async () => {
+    for (let i = 0; i < 50; i++) {
+      expect((await wrong(A, `user${i}@example.io`)).status).toBe(401);
+    }
+    expect((await wrong(A, "user50@example.io")).status).toBe(429);
+    expect((await loginFrom(A, { email: EMAIL, password: TEST_PASSWORD })).status).toBe(429);
+    expect((await loginFrom(B, { email: EMAIL, password: TEST_PASSWORD })).status).toBe(200);
+  });
+
+  it("IPv6 addresses in one /64 share a counter", async () => {
+    for (let i = 0; i < 5; i++) await wrong(i % 2 ? "2001:db8::1" : "2001:db8::2", EMAIL, i);
+    expect(
+      (await loginFrom("2001:db8::99", { email: EMAIL, password: TEST_PASSWORD })).status,
+    ).toBe(429);
+  });
+
+  it("after the lock expires, the correct password works", async () => {
+    for (let i = 0; i < 5; i++) await wrong(A, EMAIL, i);
+    await env.DB.prepare("UPDATE login_attempts SET locked_until = ?")
+      .bind(Date.now() - 1)
+      .run();
+    expect((await loginFrom(A, { email: EMAIL, password: TEST_PASSWORD })).status).toBe(200);
+  });
+
+  it("attempts while locked are not counted", async () => {
+    for (let i = 0; i < 5; i++) await wrong(A, EMAIL, i);
+    const before = await attemptRow(`p|${A}|${EMAIL}`);
+    expect(before?.locked_until).toBeGreaterThan(Date.now());
+    await wrong(A, EMAIL, 7);
+    expect(await attemptRow(`p|${A}|${EMAIL}`)).toEqual(before);
+  });
+
+  it("login never locks the account itself", async () => {
+    for (let i = 0; i < 6; i++) await wrong(A, EMAIL, i);
+    expect(await state()).toEqual({ failed_logins: 0, locked_until: null });
+  });
+
+  it("a 429 is audited as login_failed with reason locked", async () => {
+    for (let i = 0; i < 6; i++) await wrong(A, EMAIL, i);
+    const rows = await auditRows("auth.login_failed");
+    expect(JSON.parse(rows.at(-1)?.metadata ?? "null")).toEqual({ reason: "locked" });
+  });
+});
+
+describe("login limit under concurrency", () => {
+  it("parallel wrong logins from one address cannot exceed 5 guesses per lock", async () => {
+    const attempts = Array.from({ length: 20 }, (_, i) => wrong(A, EMAIL, i));
     const statuses = (await Promise.all(attempts)).map((r) => r.status);
     expect(statuses.filter((s) => s === 401).length).toBeLessThanOrEqual(5);
     expect(statuses.filter((s) => s !== 401 && s !== 429)).toEqual([]);
-    expect((await login({ email: EMAIL, password: TEST_PASSWORD })).status).toBe(429);
-  });
-
-  it("a correct password still resets after concurrent failures below the limit", async () => {
-    await Promise.all(
-      [0, 1, 2].map((i) => login({ email: EMAIL, password: `wrong password number ${i}` })),
-    );
-    expect((await state())?.failed_logins).toBe(3);
-    expect((await login({ email: EMAIL, password: TEST_PASSWORD })).status).toBe(200);
-    expect(await state()).toEqual({ failed_logins: 0, locked_until: null });
+    expect((await loginFrom(A, { email: EMAIL, password: TEST_PASSWORD })).status).toBe(429);
   });
 });

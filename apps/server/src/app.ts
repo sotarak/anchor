@@ -11,6 +11,7 @@ import { inviteRoutes } from "./invites/routes";
 import { keyRoutes } from "./keys/routes";
 import { errorHandler, notFoundHandler } from "./lib/errors";
 import { requestContext } from "./lib/request";
+import { securityHeaders } from "./lib/security-headers";
 import { mcpRoutes } from "./mcp/route";
 import { memberRoutes } from "./members/routes";
 import { consentRoutes } from "./oauth/consent-routes";
@@ -23,6 +24,7 @@ import { userRoutes } from "./users/routes";
 export function createApp(): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
+  app.use("*", securityHeaders);
   app.use("/api/*", async (c, next) => {
     await next();
     c.header("Cache-Control", "no-store");

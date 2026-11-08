@@ -31,6 +31,7 @@ describe("public/_headers", () => {
     expect(all).toContain("X-Content-Type-Options: nosniff");
     expect(all).toContain("Referrer-Policy: no-referrer");
     expect(all).toContain("X-Frame-Options: DENY");
+    expect(all).toContain("Strict-Transport-Security: max-age=31536000; includeSubDomains");
   });
 
   it("CSP allows no unsafe-inline or unsafe-eval", () => {

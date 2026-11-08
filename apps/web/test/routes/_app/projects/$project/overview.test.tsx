@@ -202,6 +202,19 @@ describe("/projects/$project (overview)", () => {
     expect(screen.queryByRole("button", { name: "api" })).toBeNull();
   });
 
+  it("opening a folder found by search clears the filters", async () => {
+    setup(withFolders);
+    const { router, user } = await renderApp("/projects/app");
+    await screen.findByText("API_KEY");
+    await user.click(screen.getByRole("button", { name: "Search keys" }));
+    await user.type(screen.getByRole("searchbox", { name: "Search keys" }), "db");
+    await user.click(await screen.findByRole("button", { name: "db" }));
+    await waitFor(() => expect(router.state.location.search).toEqual({ path: "/db" }));
+    // The subfolder's own rows show, not "No results match your filters".
+    expect(await screen.findByText("API_KEY")).toBeInTheDocument();
+    expect(screen.queryByText("No results match your filters")).toBeNull();
+  });
+
   it('Status "Missing somewhere" hides a folder present everywhere', async () => {
     setup(withFolders);
     const { user } = await renderApp("/projects/app");

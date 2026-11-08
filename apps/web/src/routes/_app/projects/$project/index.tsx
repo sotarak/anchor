@@ -159,7 +159,11 @@ function OverviewPage() {
                     key={`folder:${item.folder.path}`}
                     folder={item.folder}
                     environments={environments}
-                    onOpen={() => setPath(item.folder.path)}
+                    onOpen={() => {
+                      // A filter that found this folder rarely matches what is inside it.
+                      clearFilters();
+                      setPath(item.folder.path);
+                    }}
                   />
                 ) : (
                   <TableRow key={item.row.key}>

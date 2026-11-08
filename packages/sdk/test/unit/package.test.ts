@@ -20,7 +20,7 @@ it("runs on Node 20 without runtime dependencies", () => {
 
 it("is a public package at the workspace version", () => {
   expect(pkg.name).toBe("@anchor-secrets/sdk");
-  expect(pkg.version).toBe("0.4.0");
+  expect(pkg.version).toBe("0.5.0");
   expect(pkg.version).toBe(root.version);
   expect(pkg.private).toBeUndefined();
   expect(pkg.publishConfig).toEqual({ access: "public" });

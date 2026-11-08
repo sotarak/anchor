@@ -7,6 +7,48 @@ dashboard and CLI.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-08
+
+### Added
+
+- **Conditional reads of a folder.** `GET /secrets` sends an `ETag` (a keyed HMAC of the exact
+  response body, so a tag never reveals a value) and answers a matching `If-None-Match` with
+  `304 Not Modified`: no body, no audit row, with or without `reveal`. The SDK, the NestJS module
+  and `anchor run --watch` refresh this way, so an unchanged folder no longer writes one
+  `secret.read` row per refresh.
+- **SDK conditional refresh.** `@anchor-secrets/sdk` stores the tag with each cached folder
+  (`CacheEntry.etag`) and sends it back on refresh, also with `fresh: true`; a `304` keeps the
+  cached values without decoding them again. `cache: false` never sends `If-None-Match`. Folders
+  cached by 0.4.0 refresh with a plain request first.
+- **`anchor run --watch`** restarts the command when its secrets change. It checks every
+  `--watch-interval` seconds (default 30, minimum 5) with `If-None-Match`, restarts with
+  `SIGTERM` then `SIGKILL` after 10 seconds, keeps the command running while Anchor is
+  unreachable, and exits with the command's code when it stops on its own.
+
+### Fixed
+
+- OAuth: approving an app again revokes your earlier grants for it, so only the newest approval
+  stays live (`oauth.authorized` records `revokedGrants`).
+- OAuth: the consent page keeps `state` and the other parameters byte for byte. Values such as
+  `true`, `null`, `1e3` or `12345678901234567890` were rewritten by the router's JSON parsing and
+  broke the client's state check.
+- SDK: folder values are frozen all the way down, so nested `json` and `list` values cannot be
+  changed by one reader under another; `loadSecrets` still returns fresh copies.
+- SDK: an abort from inside `onEvent` stops a retry wait at once.
+- SDK: a folder opened from a warm shared cache refreshes `ttlMs` after that entry was fetched,
+  not after it was opened, and never replaces its values with an older entry.
+- SDK: with a slow cache store, a read that arrives during a fetch joins it, and a stale store
+  answer never starts a second fetch.
+- Release: an npm publish that fails because the version is already out (published by hand, or
+  slow to show) now succeeds after checking the registry, so a re-run finishes. Declarations in
+  package subfolders are emitted with their `.d.cts` twins.
+
+### Security
+
+- OAuth: the cap of 10 pending client registrations counts an IPv6 client by its `/64` prefix,
+  so one host can no longer register without limit by rotating addresses. IPv4 (including
+  IPv4-mapped IPv6) counts the full address. `oauth_clients.ip` stores this normalized key.
+
 ## [0.4.0] - 2026-11-08
 
 ### Added
@@ -61,6 +103,7 @@ dashboard and CLI.
 - **`anchor login` uses the browser by default.** Email and password login moves behind
   `--with-password`, which `--email` and `--password-stdin` still imply. Password logins are now
   audited with `method: "password"`.
+- CLI 0.3.x shows a service token without an expiry as expired in 1970; upgrade the CLI.
 
 ### Security
 
@@ -220,7 +263,8 @@ Cloudflare Workers, D1 and Queues.
   - A documentation site at https://sotarak.github.io/anchor/ (guides, operations runbooks,
     security model, API reference).
 
-[Unreleased]: https://github.com/sotarak/anchor/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/sotarak/anchor/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/sotarak/anchor/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sotarak/anchor/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sotarak/anchor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sotarak/anchor/compare/v0.1.0...v0.2.0

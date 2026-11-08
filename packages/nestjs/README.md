@@ -51,7 +51,8 @@ export class Database {
   fetches now. Typed values are decoded: a `number` secret is a number, `json` and `list` are
   parsed.
 - Values refresh in the background: a read of values older than `cache.ttlMs` (default one
-  minute) returns them at once and starts one refresh. If Anchor is down, the app keeps its
+  minute) returns them at once and starts one refresh, a conditional request (`If-None-Match`)
+  that Anchor answers with `304` when nothing changed. If Anchor is down, the app keeps its
   values and `onEvent` receives `refresh_failed`; with `cache.maxStaleMs` set, reads throw
   `AnchorError` code `stale` once that limit is passed.
 - The module is global unless you pass `isGlobal: false`. `ANCHOR_OPTIONS` injects the options.

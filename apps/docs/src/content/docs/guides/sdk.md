@@ -11,9 +11,12 @@ in `anchor run`:
 - `@anchor-secrets/sdk`: a small Node client (Node 20 or later, no runtime dependencies).
 - `@anchor-secrets/nestjs`: a NestJS module built on it (NestJS 10, 11 or 12).
 
-Both cache what they fetch, so reading a value does not call Anchor each time, and refresh it in
-the background once a minute by default. When Anchor is unreachable, a running service keeps the
-values it has. They only read; writing secrets stays with the CLI and the dashboard.
+Both cache what they fetch, so reading a value does not call Anchor each time. A read of values
+older than the cache ttl (one minute by default) starts one background refresh; there is no timer,
+so an idle service asks nothing. A refresh is a conditional request: when nothing changed, Anchor
+answers `304` and the service keeps the values it has. When Anchor is unreachable, a running
+service keeps its values too. They only read; writing secrets stays with the CLI and the
+dashboard.
 
 ## Give the service a token
 
@@ -33,7 +36,9 @@ ANCHOR_TOKEN=anc_st_...
 
 A token expires after 90 days by default. For a long-running server you can create one with
 `--expires-in never`; see [Tokens without an expiry](/anchor/guides/ci/#tokens-without-an-expiry).
-Every value the service reads is in the project's audit log under the token's name.
+Every request that returns values is in the project's audit log under the token's name. A refresh
+answered with `304` returns no values and writes no audit row, so an unchanged folder adds nothing
+to the log.
 
 ## NestJS
 
@@ -75,7 +80,8 @@ export class DatabaseService {
   is refused, startup fails with an `AnchorError`: the service never starts without its
   configuration.
 - `AnchorService` reads synchronously: `get(key)` (or `undefined`), `getOrThrow(key)` (throws
-  `Anchor secret KEY is not set`), `has(key)`, `keys()` and `toObject()` (every value, frozen).
+  `Anchor secret KEY is not set`), `has(key)`, `keys()` and `toObject()` (every value, frozen all the way down: nested
+  `json` objects and `list` arrays cannot be changed).
   `refresh()` fetches now.
 - Values refresh in the background: a read of values older than the cache `ttlMs` (default one
   minute) returns them at once and starts one refresh. Read a value where you use it to see
@@ -174,6 +180,16 @@ Each client keeps the folders it fetched in memory, keyed by server, token, proj
 folder and the `expand` / `includeImports` flags. A folder younger than `ttlMs` is served without
 a request, and reads that arrive while a fetch is under way share it. `cache: false` asks Anchor
 on every call.
+
+Anchor tags every folder it sends with an `ETag`. When a cached folder is older than `ttlMs` (or
+you pass `fresh: true`), the client sends that tag back as `If-None-Match`. If nothing in the
+folder changed, Anchor answers `304 Not Modified` with no body: the client keeps the values it
+has, renews their age, and decodes nothing again. With `cache: false` the client never sends
+`If-None-Match`, so every call returns the full folder (and is audited). Folders cached by SDK
+0.4.0 carry no tag; their first refresh is a plain request.
+
+`loadSecrets` returns fresh objects you may change on every call; an `AnchorFolder` (and
+`AnchorService`) shares one frozen copy between all readers.
 
 Nothing is written to disk. To keep folders elsewhere, for example in Redis, pass a `CacheStore`:
 

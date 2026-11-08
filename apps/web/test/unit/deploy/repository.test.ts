@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -370,7 +371,7 @@ describe("open-source repository", () => {
     expect(upgrading).toContain("run_worker_first");
   });
 
-  it("every workspace package is version 0.4.0", () => {
+  it("every manifest is 0.5.0 and the changelog has a 0.5.0 entry", () => {
     for (const f of [
       "package.json",
       "apps/cli/package.json",
@@ -381,10 +382,43 @@ describe("open-source repository", () => {
       "packages/sdk/package.json",
       "packages/nestjs/package.json",
     ]) {
-      expect(JSON.parse(read(f)).version, f).toBe("0.4.0");
+      expect(JSON.parse(read(f)).version, f).toBe("0.5.0");
     }
     // The MCP server reports this as its version.
-    expect(read("apps/server/src/version.ts")).toContain('SERVER_VERSION = "0.4.0"');
+    expect(read("apps/server/src/version.ts")).toContain('SERVER_VERSION = "0.5.0"');
+    // Exits non-zero (and throws here) when the section is missing.
+    const notes = execFileSync(process.execPath, ["scripts/changelog.mjs", "0.5.0"], {
+      cwd: path(""),
+      encoding: "utf8",
+    });
+    expect(notes).toContain("If-None-Match");
+    expect(notes).toContain("--watch");
+  });
+
+  it("SDK docs describe read-triggered refresh and conditional requests", () => {
+    for (const f of ["apps/docs/src/content/docs/guides/sdk.md", "packages/sdk/README.md"]) {
+      const doc = read(f);
+      expect(doc, f).toContain("If-None-Match");
+      expect(doc, f).toContain("304");
+      expect(doc, f).not.toContain("once a minute");
+    }
+  });
+
+  it("the CLI guide documents run --watch", () => {
+    const cli = read("apps/docs/src/content/docs/guides/cli.md");
+    for (const s of ["--watch", "--watch-interval", "Secrets changed; restarting"]) {
+      expect(cli, s).toContain(s);
+    }
+  });
+
+  it("the HTTP API reference documents ETag on the secrets list", () => {
+    const ref = read("apps/docs/src/content/docs/reference/http-api.md");
+    expect(ref).toContain("ETag");
+    expect(ref).toContain("If-None-Match");
+  });
+
+  it("the audit retention guide says a 304 is not audited", () => {
+    expect(read("apps/docs/src/content/docs/operations/audit-retention.md")).toContain("304");
   });
 
   it("the MCP guide shows Claude Code and Codex setup and the reveal permission", () => {
@@ -493,10 +527,10 @@ describe("open-source repository", () => {
     expect(read("README.md")).toContain("https://sotarak.github.io/anchor/guides/agent-skills/");
   });
 
-  it("the CI guide pins the 0.4.0 CLI", () => {
+  it("the CI guide pins the 0.5.0 CLI", () => {
     const ci = read("apps/docs/src/content/docs/guides/ci.md");
-    expect(ci).not.toContain("0.3.0");
-    expect(ci.match(/0\.4\.0/g)?.length).toBe(4);
+    expect(ci).not.toContain("0.4.0");
+    expect(ci.match(/0\.5\.0/g)?.length).toBe(4);
   });
 
   it("workflows use actions/checkout@v7 and actions/upload-pages-artifact@v5", () => {

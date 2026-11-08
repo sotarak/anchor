@@ -7,6 +7,7 @@ import { errorMessage } from "@/components/data/table-states";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Checkbox } from "@/components/ui/checkbox";
+import { KeyValueList } from "@/components/ui/key-value-list";
 import { api } from "@/lib/api/endpoints";
 import { qk } from "@/lib/api/query-keys";
 import { requireUser } from "@/lib/auth";
@@ -113,12 +114,12 @@ function AuthorizePage() {
   return (
     <AuthLayout title={TITLE} description="An app is asking to use Anchor as you.">
       <div className="flex flex-col gap-4">
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-paragraph-sm">
-          <dt className="text-text-soft">App</dt>
-          <dd className="text-label-sm text-text-strong">{details.client.name}</dd>
-          <dt className="text-text-soft">Returns to</dt>
-          <dd className="text-code-xs text-text-strong">{details.client.redirectHost}</dd>
-        </dl>
+        <KeyValueList
+          items={[
+            { label: "App", value: details.client.name },
+            { label: "Returns to", value: details.client.redirectHost, mono: true },
+          ]}
+        />
         <div className="flex flex-col gap-2">
           <p className="text-paragraph-sm text-text-sub">It will be able to:</p>
           <ul className="flex list-disc flex-col gap-1 pl-5 text-paragraph-sm text-text-strong">

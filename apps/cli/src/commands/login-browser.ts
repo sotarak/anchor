@@ -35,15 +35,16 @@ export async function loginWithBrowser(
 ): Promise<void> {
   const { io } = ctx.deps;
   const sleep = ctx.deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const { apiUrl, fromProject } = await resolveLoginTarget(ctx, "browser");
+  const { apiUrl, source } = await resolveLoginTarget(ctx, "browser");
   const api = rawApiFor(ctx, apiUrl);
 
   let started: Awaited<ReturnType<typeof api.cliLoginStart>>;
   try {
     started = await api.cliLoginStart({ clientName: clientName() });
   } catch (e) {
-    // A 0.3.x server has no such route.
-    if (e instanceof ApiRequestError && e.status === 404)
+    // A 0.3.x server has no such route (an Anchor not_found). A 404 without an Anchor error body
+    // is not an Anchor server at all, and toCliError says so.
+    if (e instanceof ApiRequestError && e.status === 404 && e.code !== "internal")
       throw new CliError(EXIT.ERROR, NO_BROWSER_LOGIN);
     if (e instanceof ApiRequestError && e.status === 429)
       throw new CliError(EXIT.ERROR, e.message, TOO_MANY_HINT, e.code);
@@ -66,7 +67,7 @@ export async function loginWithBrowser(
     await sleep(interval * 1000);
     try {
       const result = await api.cliLoginToken(started.deviceCode);
-      if (result.status === "approved") return saveLogin(ctx, apiUrl, fromProject, result.login);
+      if (result.status === "approved") return saveLogin(ctx, apiUrl, source, result.login);
     } catch (e) {
       if (!(e instanceof ApiRequestError)) throw e;
       if (e.status === 429) interval += SLOW_DOWN_S;

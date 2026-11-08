@@ -2,6 +2,7 @@ import type { LoginResponse } from "@anchor/shared";
 import { ApiRequestError } from "../api/http";
 import { credentialStore, rawApiFor } from "../auth";
 import { normalizeApiUrl } from "../config/api-url";
+import type { Source } from "../config/resolve";
 import { readUserConfig, writeUserConfig } from "../config/user-config";
 import type { CommandContext } from "../context";
 import { CliError, EXIT, toCliError } from "../errors";
@@ -29,10 +30,11 @@ export async function login(
 export async function resolveLoginTarget(
   ctx: CommandContext,
   mode: "browser" | "password",
-): Promise<{ apiUrl: string; fromProject: boolean }> {
+): Promise<{ apiUrl: string; source: LoginSource }> {
   const { prompts } = ctx.deps;
   const interactive = isInteractive(ctx);
   let apiUrl = ctx.config.apiUrl?.value;
+  let source: LoginSource = ctx.config.apiUrl?.source ?? "prompt";
   if (!apiUrl) {
     if (!interactive) {
       throw new CliError(
@@ -42,11 +44,11 @@ export async function resolveLoginTarget(
       );
     }
     apiUrl = normalizeApiUrl(await prompts.input({ message: "API URL" }));
+    source = "prompt";
   }
   // A cloned repository's .anchor.json must not be able to collect a password unnoticed, nor
   // become the user's default server (which would make ANCHOR_TOKEN eligible for it).
-  const fromProject = ctx.config.apiUrl?.source === "project";
-  if (fromProject && ctx.config.userApiUrl !== apiUrl) {
+  if (source === "project" && ctx.config.userApiUrl !== apiUrl) {
     ctx.out.warn(
       `.anchor.json points to ${apiUrl}, which differs from your configured ${ctx.config.userApiUrl ?? "(none)"}`,
     );
@@ -66,7 +68,7 @@ export async function resolveLoginTarget(
     }
   }
   ctx.out.notice(`Logging in to ${apiUrl}`);
-  return { apiUrl, fromProject };
+  return { apiUrl, source };
 }
 
 async function loginWithPassword(
@@ -75,7 +77,7 @@ async function loginWithPassword(
 ): Promise<void> {
   const { io, prompts } = ctx.deps;
   const interactive = isInteractive(ctx);
-  const { apiUrl, fromProject } = await resolveLoginTarget(ctx, "password");
+  const { apiUrl, source } = await resolveLoginTarget(ctx, "password");
 
   // Email and password. The password never comes from argv.
   let email = opts.email;
@@ -116,14 +118,21 @@ async function loginWithPassword(
     }
     throw toCliError(e, { apiUrl });
   }
-  await saveLogin(ctx, apiUrl, fromProject, res);
+  await saveLogin(ctx, apiUrl, source, res);
 }
 
-/** Stores the CLI session and reports it; the same for both login flows. */
+/** Where the login's API URL came from: a resolved config source, or the interactive prompt. */
+export type LoginSource = Source | "prompt";
+
+/**
+ * Stores the CLI session and reports it; the same for both login flows. An explicit --api-url
+ * becomes the default server; other sources only fill an empty default, and .anchor.json never
+ * does.
+ */
 export async function saveLogin(
   ctx: CommandContext,
   apiUrl: string,
-  fromProject: boolean,
+  source: LoginSource,
   res: LoginResponse,
 ): Promise<void> {
   const { io } = ctx.deps;
@@ -131,10 +140,22 @@ export async function saveLogin(
   const store = await credentialStore(ctx);
   await store.set({ apiUrl, token: res.token, email: res.user.email, expiresAt: res.expiresAt });
   const userConfig = await readUserConfig(io);
-  if (!userConfig.apiUrl && !fromProject) await writeUserConfig(io, { ...userConfig, apiUrl });
+  const current = userConfig.apiUrl ? normalizeApiUrl(userConfig.apiUrl) : null;
+  let defaultApiUrl = current;
+  if (source !== "project" && current !== apiUrl && (current === null || source === "flag")) {
+    await writeUserConfig(io, { ...userConfig, apiUrl });
+    if (current !== null) ctx.out.notice(`Default server changed from ${current} to ${apiUrl}`);
+    defaultApiUrl = apiUrl;
+  }
 
   ctx.out.data(
-    { apiUrl, user: res.user, expiresAt: res.expiresAt, credentialStore: store.kind },
+    {
+      apiUrl,
+      user: res.user,
+      expiresAt: res.expiresAt,
+      credentialStore: store.kind,
+      defaultApiUrl,
+    },
     () => `Logged in to ${apiUrl} as ${res.user.email}`,
   );
 }

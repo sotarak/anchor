@@ -286,7 +286,8 @@ describe("/projects/$project/environments/$env", () => {
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByLabelText("Key")).toHaveValue("API_KEY");
     expect(within(sheet).getByLabelText("Key")).toHaveAttribute("readonly");
-    expect(within(sheet).getByLabelText("Value")).toHaveValue("");
+    expect(within(sheet).getByText("Value unchanged")).toBeInTheDocument();
+    expect(within(sheet).queryByRole("textbox", { name: "Value" })).toBeNull();
     const comment = within(sheet).getByLabelText("Comment");
     await user.clear(comment);
     await user.type(comment, "Rotated");
@@ -321,6 +322,7 @@ describe("/projects/$project/environments/$env", () => {
     await openMenu(user, "API_KEY");
     await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
     const sheet = await screen.findByRole("dialog");
+    await user.click(within(sheet).getByRole("button", { name: "Replace value" }));
     await user.type(within(sheet).getByLabelText("Value"), "ROTATED-VALUE");
     await user.click(within(sheet).getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -343,6 +345,7 @@ describe("/projects/$project/environments/$env", () => {
     await openMenu(user, "API_KEY");
     await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
     const sheet = await screen.findByRole("dialog");
+    await user.click(within(sheet).getByRole("button", { name: "Replace value" }));
     await user.type(within(sheet).getByLabelText("Value"), "new value");
     await user.click(within(sheet).getByRole("button", { name: "Save changes" }));
     expect(
@@ -362,6 +365,7 @@ describe("/projects/$project/environments/$env", () => {
     await openMenu(user, "API_KEY");
     await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
     const sheet = await screen.findByRole("dialog");
+    await user.click(within(sheet).getByRole("button", { name: "Replace value" }));
     await user.type(within(sheet).getByLabelText("Value"), "big");
     await user.click(within(sheet).getByRole("button", { name: "Save changes" }));
     expect(await within(sheet).findByText("Value is larger than 64 KiB")).toBeInTheDocument();
@@ -388,8 +392,8 @@ describe("/projects/$project/environments/$env", () => {
     const sheet = await screen.findByRole("dialog");
     await user.type(within(sheet).getByLabelText("Key"), "PORT");
     await user.click(within(sheet).getByRole("combobox", { name: "Type" }));
-    await user.click(await screen.findByRole("option", { name: "number" }));
-    await user.click(within(sheet).getByRole("checkbox", { name: "Sensitive" }));
+    await user.click(await screen.findByRole("option", { name: /^Number/ }));
+    await user.click(within(sheet).getByRole("switch", { name: "Sensitive" }));
     await user.type(within(sheet).getByLabelText("Value"), "8080");
     await user.click(within(sheet).getByRole("button", { name: "Add secret" }));
     await waitFor(() =>
@@ -409,10 +413,10 @@ describe("/projects/$project/environments/$env", () => {
     const sheet = await screen.findByRole("dialog");
     await user.type(within(sheet).getByLabelText("Key"), "CFG");
     await user.click(within(sheet).getByRole("combobox", { name: "Type" }));
-    await user.click(await screen.findByRole("option", { name: "json" }));
+    await user.click(await screen.findByRole("option", { name: /^JSON/ }));
     await user.type(within(sheet).getByLabelText("Value"), "{{a");
     await user.click(within(sheet).getByRole("button", { name: "Add secret" }));
-    expect(await within(sheet).findByText("not valid JSON")).toBeInTheDocument();
+    expect(await within(sheet).findByText(/^not valid JSON/)).toBeInTheDocument();
     expect(put).not.toHaveBeenCalled();
   });
 
@@ -428,8 +432,11 @@ describe("/projects/$project/environments/$env", () => {
     await openMenu(user, "TLS_CERT");
     await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
     const sheet = await screen.findByRole("dialog");
-    expect(within(sheet).getByRole("combobox", { name: "Type" })).toHaveTextContent("pem");
-    expect(within(sheet).getByRole("checkbox", { name: "Sensitive" })).toBeChecked();
+    expect(within(sheet).getByRole("combobox", { name: "Type" })).toHaveTextContent("PEM");
+    expect(within(sheet).getByRole("switch", { name: "Sensitive" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
   });
 
   it("changing the type with an untouched value surfaces the server reason", async () => {
@@ -444,10 +451,174 @@ describe("/projects/$project/environments/$env", () => {
     await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
     const sheet = await screen.findByRole("dialog");
     await user.click(within(sheet).getByRole("combobox", { name: "Type" }));
-    await user.click(await screen.findByRole("option", { name: "number" }));
+    await user.click(await screen.findByRole("option", { name: /^Number/ }));
     await user.click(within(sheet).getByRole("button", { name: "Save changes" }));
     expect(await within(sheet).findByText("not a number")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  /** Opens "Add secret" and returns the sheet. */
+  async function openAdd() {
+    const app = await renderApp("/projects/app/environments/dev");
+    await screen.findByText("API_KEY");
+    await app.user.click(screen.getByRole("button", { name: "Add secret" }));
+    return { ...app, sheet: await screen.findByRole("dialog") };
+  }
+
+  async function chooseType(
+    user: Awaited<ReturnType<typeof renderApp>>["user"],
+    sheet: HTMLElement,
+    name: RegExp,
+  ) {
+    await user.click(within(sheet).getByRole("combobox", { name: "Type" }));
+    await user.click(await screen.findByRole("option", { name }));
+  }
+
+  function recordPuts(key = ":key") {
+    const bodies: Record<string, unknown>[] = [];
+    server.use(
+      http.put(`${base}/dev/secrets/${key}`, async ({ request }) => {
+        bodies.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json({ secret: fixtures.secrets[0], created: false });
+      }),
+    );
+    return bodies;
+  }
+
+  it("the type picker shows names and help", async () => {
+    setup();
+    const { user, sheet } = await openAdd();
+    const trigger = within(sheet).getByRole("combobox", { name: "Type" });
+    expect(trigger).toHaveTextContent("Text");
+    await user.click(trigger);
+    const list = await screen.findByRole("option", { name: /^List/ });
+    expect(list).toHaveTextContent("Several text items, stored as a JSON array");
+    expect(screen.getByRole("option", { name: /^Text/ })).toHaveTextContent(
+      "Any text, one or more lines",
+    );
+  });
+
+  it("adding a list sends a JSON array", async () => {
+    setup();
+    const bodies = recordPuts();
+    const { user, sheet } = await openAdd();
+    await user.type(within(sheet).getByLabelText("Key"), "HOSTS");
+    await chooseType(user, sheet, /^List/);
+    await user.type(within(sheet).getByRole("textbox", { name: "Item 1" }), "a{Enter}b");
+    await user.click(within(sheet).getByRole("button", { name: "Add secret" }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({ value: '["a","b"]', type: "list" });
+  });
+
+  it("adding a boolean requires a choice", async () => {
+    setup();
+    const bodies = recordPuts();
+    const { user, sheet } = await openAdd();
+    await user.type(within(sheet).getByLabelText("Key"), "FLAG");
+    await chooseType(user, sheet, /^Boolean/);
+    await user.click(within(sheet).getByRole("button", { name: "Add secret" }));
+    expect(await within(sheet).findByText("must be true or false")).toBeInTheDocument();
+    expect(bodies).toEqual([]);
+    await user.click(within(sheet).getByRole("radio", { name: "true" }));
+    expect(within(sheet).queryByText("must be true or false")).toBeNull();
+    await user.click(within(sheet).getByRole("button", { name: "Add secret" }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({ value: "true", type: "boolean" });
+  });
+
+  it("a JSON error shows after blur, not while typing", async () => {
+    setup();
+    const { user, sheet } = await openAdd();
+    await chooseType(user, sheet, /^JSON/);
+    await user.type(within(sheet).getByLabelText("Value"), "{{");
+    expect(within(sheet).queryByText(/^not valid JSON/)).toBeNull();
+    await user.tab();
+    expect(await within(sheet).findByText(/^not valid JSON/)).toBeInTheDocument();
+    await user.click(within(sheet).getByLabelText("Value"));
+    await user.type(within(sheet).getByLabelText("Value"), "}");
+    expect(within(sheet).queryByText(/^not valid JSON/)).toBeNull();
+  });
+
+  /** Opens Edit on a secret whose stored value is `stored`. */
+  async function openEdit(secret: SecretDto, stored: string) {
+    setup({ secrets: [secret] });
+    const get = vi.fn(() => HttpResponse.json({ secret: { ...secret, value: stored } }));
+    server.use(http.get(`${base}/dev/secrets/:key`, get));
+    const app = await renderApp("/projects/app/environments/dev");
+    await openMenu(app.user, secret.key);
+    await app.user.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    return { ...app, get, sheet: await screen.findByRole("dialog") };
+  }
+
+  const listSecret = {
+    ...(fixtures.secrets[0] as SecretDto),
+    key: "HOSTS",
+    type: "list" as const,
+  };
+
+  it("Replace then Keep current value re-sends the stored value", async () => {
+    const bodies = recordPuts("HOSTS");
+    const { user, sheet } = await openEdit(listSecret, '["a", "b"]');
+    await user.click(within(sheet).getByRole("button", { name: "Replace value" }));
+    await user.type(within(sheet).getByRole("textbox", { name: "Item 1" }), "zzz");
+    await user.click(within(sheet).getByRole("button", { name: "Keep current value" }));
+    expect(within(sheet).getByText("Value unchanged")).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]?.value).toBe('["a", "b"]');
+  });
+
+  it("Reveal loads the stored list into the list editor, and saving without edits sends it byte for byte", async () => {
+    const bodies = recordPuts("HOSTS");
+    const { user, sheet } = await openEdit(listSecret, '["a", "b"]');
+    await user.click(within(sheet).getByRole("button", { name: "Reveal current value" }));
+    expect(await within(sheet).findByRole("textbox", { name: "Item 1" })).toHaveValue("a");
+    expect(within(sheet).getByRole("textbox", { name: "Item 2" })).toHaveValue("b");
+    await user.click(within(sheet).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]?.value).toBe('["a", "b"]');
+  });
+
+  it("switching to List after revealing a text value splits its lines, and saves nothing by itself", async () => {
+    const bodies = recordPuts(":key");
+    const text = { ...(fixtures.secrets[0] as SecretDto), key: "HOSTS", type: "string" as const };
+    const { user, sheet } = await openEdit(text, "a\nb");
+    await user.click(within(sheet).getByRole("button", { name: "Reveal current value" }));
+    expect(await within(sheet).findByLabelText("Value")).toHaveValue("a\nb");
+    await chooseType(user, sheet, /^List/);
+    expect(within(sheet).getByRole("textbox", { name: "Item 1" })).toHaveValue("a");
+    expect(within(sheet).getByRole("textbox", { name: "Item 2" })).toHaveValue("b");
+    expect(bodies).toEqual([]);
+    await user.click(within(sheet).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({ value: '["a","b"]', type: "list" });
+  });
+
+  it("loading a file that is not PEM shows the reason at once", async () => {
+    setup();
+    const bodies = recordPuts();
+    const { user, sheet } = await openAdd();
+    await chooseType(user, sheet, /^PEM/);
+    await user.upload(
+      within(sheet).getByLabelText("PEM file"),
+      new File([new Uint8Array([0x30, 0x82, 0x01])], "cert.cer"),
+    );
+    expect(await within(sheet).findByText("not a PEM block")).toBeInTheDocument();
+    expect(bodies).toEqual([]);
+  });
+
+  it("Sensitive is a switch, on by default", async () => {
+    setup();
+    const { sheet } = await openAdd();
+    expect(within(sheet).getByRole("switch", { name: "Sensitive" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(
+      within(sheet).getByText(
+        "Hidden in lists until revealed. Turn off for plain config such as ports or feature flags.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("table shows a type tag and plain non-sensitive values", async () => {

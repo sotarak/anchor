@@ -87,6 +87,32 @@ describe("http request", () => {
     ]);
   });
 
+  it("a non-JSON 404 names the origin", async () => {
+    const f = scriptedFetch(new Response("Not Found", { status: 404 }));
+    const e = await rejection(request(opts(f.fn), "GET", "/api/v1/projects"));
+    expect([e.status, e.code, e.message]).toEqual([
+      404,
+      "internal",
+      "https://anchor.example did not answer as an Anchor server (HTTP 404)",
+    ]);
+  });
+
+  it("a JSON 404 that is not an Anchor error also names the origin", async () => {
+    const f = scriptedFetch(json(404, { message: "nope" }));
+    const e = await rejection(request(opts(f.fn), "GET", "/api/v1/projects"));
+    expect([e.status, e.code, e.message]).toEqual([
+      404,
+      "internal",
+      "https://anchor.example did not answer as an Anchor server (HTTP 404)",
+    ]);
+  });
+
+  it("a non-JSON 500 keeps the generic message", async () => {
+    const f = scriptedFetch(new Response("oops", { status: 500 }));
+    const e = await rejection(request(opts(f.fn, { maxRetries: 0 }), "POST", "/api/v1/x"));
+    expect(e.message).toBe("Unexpected response from server (HTTP 500)");
+  });
+
   it("retries GET on 503 twice then succeeds; never retries POST or DELETE", async () => {
     const delays: number[] = [];
     const sleep = async (ms: number) => {
@@ -386,6 +412,30 @@ describe("error mapping", () => {
       apiUrl: "https://a.example",
     });
     expect([forbidden.exitCode, forbidden.message]).toEqual([EXIT.FORBIDDEN, "Forbidden"]);
+  });
+
+  it("toCliError adds the server hint to a non-Anchor 404 and keeps exit 1", () => {
+    const message = "https://a.example did not answer as an Anchor server (HTTP 404)";
+    const e = toCliError(new ApiRequestError(404, "internal", message), {
+      apiUrl: "https://a.example",
+    });
+    expect([e.exitCode, e.message, e.hint, e.apiCode]).toEqual([
+      EXIT.ERROR,
+      message,
+      "Check the server URL; run 'anchor login --api-url <url>' to change your default",
+      "internal",
+    ]);
+  });
+
+  it("toCliError gives an Anchor not_found no server hint", () => {
+    const e = toCliError(new ApiRequestError(404, "not_found", "Project not found"), {
+      apiUrl: "https://a.example",
+    });
+    expect([e.exitCode, e.message, e.hint]).toEqual([
+      EXIT.NOT_FOUND,
+      "Project not found",
+      undefined,
+    ]);
   });
 });
 

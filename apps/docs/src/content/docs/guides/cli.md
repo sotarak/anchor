@@ -325,7 +325,7 @@ starting with `anc_` (a token): remove it and rotate the token.
 
 `$XDG_CONFIG_HOME/anchor/config.json`, else `~/.config/anchor/config.json` (macOS, Linux), or
 `%APPDATA%\anchor\config.json` (Windows). It holds `{ "apiUrl": "..." }`, written by the first
-`anchor login`.
+`anchor login` and replaced by `anchor login --api-url`.
 
 ### API URL
 
@@ -334,6 +334,12 @@ The URL is reduced to its origin. `https://` is required, except for `localhost`
 `.anchor.json` and differs from your user config, it warns and asks before logging in
 (`Log in to <url>?`, or `Send your password to <url>?` with `--with-password`; without a terminal it
 exits 2 unless you pass `--api-url` or `--yes`), and it never saves that URL as your user config.
+
+`anchor login --api-url <url>` makes `<url>` your default server, and prints
+`Default server changed from <old> to <new>` when it replaces another one, for example after you
+move a deployment to a custom domain. `ANCHOR_API_URL` and `.anchor.json` never change the default;
+the first only fills it when you have none. Sessions for the old server stay stored until you run
+`anchor logout --api-url <old>`. `anchor login --json` reports the result as `defaultApiUrl`.
 
 ### Environment variables
 
@@ -386,7 +392,7 @@ existing fields are not renamed or removed without a major version.
 
 | Command | Shape |
 |---------|-------|
-| `login` | `{ apiUrl, user, expiresAt, credentialStore }` (never the token) |
+| `login` | `{ apiUrl, user, expiresAt, credentialStore, defaultApiUrl }` (never the token) |
 | `logout` | `{ loggedOut, revoked }` |
 | `whoami` | `{ apiUrl, type: "user", user }` or `{ apiUrl, type: "service_token", serviceToken }` |
 | `init` | `{ projectFile, project, defaultEnv }` |

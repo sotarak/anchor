@@ -7,10 +7,13 @@ import { RiAnchorLine } from "react-icons/ri";
  */
 export function AuthLayout({
   title,
+  titleIcon,
   description,
   children,
 }: {
   title: string;
+  /** A status icon shown before the title (an approved or denied request). */
+  titleIcon?: ReactNode;
   description?: string;
   children: ReactNode;
 }) {
@@ -22,7 +25,10 @@ export function AuthLayout({
             <RiAnchorLine />
           </span>
           <div className="flex flex-col gap-1">
-            <h1 className="text-label-md text-text-strong">{title}</h1>
+            <h1 className="flex items-center gap-1.5 text-label-md text-text-strong">
+              {titleIcon}
+              {title}
+            </h1>
             {description ? <p className="text-paragraph-sm text-text-sub">{description}</p> : null}
           </div>
         </div>

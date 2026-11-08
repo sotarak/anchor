@@ -7,6 +7,37 @@ dashboard and CLI.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-08
+
+### Fixed
+
+- **`anchor login --api-url` makes the URL your default server.** Before, login saved the URL
+  only when no default existed, so moving a deployment to a custom domain left every later
+  command on the old host. An explicit `--api-url` that differs from the saved default now
+  replaces it and prints `Default server changed from <old> to <new>`. `ANCHOR_API_URL` and the
+  prompt still only fill an empty default, and `.anchor.json` never writes it. `login --json`
+  adds `defaultApiUrl`. Sessions for the old server stay stored until `anchor logout --api-url`.
+- **A 404 that does not come from Anchor names the server.** It reads
+  `<origin> did not answer as an Anchor server (HTTP 404)`, with a hint to check the URL or run
+  `anchor login --api-url`, instead of `Unexpected response from server (HTTP 404)`. Browser
+  login no longer reports such a server as one without browser login.
+
+### Changed
+
+- **CLI login approval page.** It names the account the terminal signs in as, shows the code in
+  its own tile, lists Device, IP address and Requested on one baseline, keeps the warning to one
+  compact line and gives Deny and Approve equal width. The OAuth consent page uses the same
+  key-value list.
+- **Secret editors per type.** The type picker shows a name and a line of help (Text, Number,
+  Boolean, JSON, List, PEM). Number asks for a decimal keypad, Boolean is a true/false choice,
+  JSON has a Format button and names the line and column of a syntax error, List edits one row
+  per item (stored as a JSON array of strings), and PEM loads a file in the browser and names the
+  detected block. Type problems show once you leave the field or save. A stored list or JSON
+  value revealed and saved without edits is sent back byte for byte.
+- **Editing a secret** starts with a "Value unchanged" row (Reveal current value, Replace value,
+  and Keep current value to go back), for every type.
+- **Sensitive** is a switch, still on by default.
+
 ## [0.5.0] - 2026-11-08
 
 ### Added
@@ -263,7 +294,8 @@ Cloudflare Workers, D1 and Queues.
   - A documentation site at https://sotarak.github.io/anchor/ (guides, operations runbooks,
     security model, API reference).
 
-[Unreleased]: https://github.com/sotarak/anchor/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/sotarak/anchor/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/sotarak/anchor/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/sotarak/anchor/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sotarak/anchor/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sotarak/anchor/compare/v0.2.0...v0.3.0

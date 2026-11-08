@@ -371,7 +371,7 @@ describe("open-source repository", () => {
     expect(upgrading).toContain("run_worker_first");
   });
 
-  it("every manifest is 0.5.0 and the changelog has a 0.5.0 entry", () => {
+  it("every manifest is 0.5.1 and the changelog has a 0.5.1 entry", () => {
     for (const f of [
       "package.json",
       "apps/cli/package.json",
@@ -382,17 +382,17 @@ describe("open-source repository", () => {
       "packages/sdk/package.json",
       "packages/nestjs/package.json",
     ]) {
-      expect(JSON.parse(read(f)).version, f).toBe("0.5.0");
+      expect(JSON.parse(read(f)).version, f).toBe("0.5.1");
     }
     // The MCP server reports this as its version.
-    expect(read("apps/server/src/version.ts")).toContain('SERVER_VERSION = "0.5.0"');
+    expect(read("apps/server/src/version.ts")).toContain('SERVER_VERSION = "0.5.1"');
     // Exits non-zero (and throws here) when the section is missing.
-    const notes = execFileSync(process.execPath, ["scripts/changelog.mjs", "0.5.0"], {
+    const notes = execFileSync(process.execPath, ["scripts/changelog.mjs", "0.5.1"], {
       cwd: path(""),
       encoding: "utf8",
     });
-    expect(notes).toContain("If-None-Match");
-    expect(notes).toContain("--watch");
+    expect(notes).toContain("--api-url");
+    expect(notes).toContain("did not answer as an Anchor server");
   });
 
   it("SDK docs describe read-triggered refresh and conditional requests", () => {
@@ -527,10 +527,10 @@ describe("open-source repository", () => {
     expect(read("README.md")).toContain("https://sotarak.github.io/anchor/guides/agent-skills/");
   });
 
-  it("the CI guide pins the 0.5.0 CLI", () => {
+  it("the CI guide pins the 0.5.1 CLI", () => {
     const ci = read("apps/docs/src/content/docs/guides/ci.md");
-    expect(ci).not.toContain("0.4.0");
-    expect(ci.match(/0\.5\.0/g)?.length).toBe(4);
+    expect(ci).not.toContain("0.5.0");
+    expect(ci.match(/0\.5\.1/g)?.length).toBe(4);
   });
 
   it("workflows use actions/checkout@v7 and actions/upload-pages-artifact@v5", () => {

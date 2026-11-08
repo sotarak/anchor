@@ -66,7 +66,8 @@ test("folder → reference → resolved preview → history → rollback", async
   await expect(edit.getByText(RESOLVED)).toHaveCount(0);
   await edit.getByRole("button", { name: "Show resolved value" }).click();
   await expect(edit.getByText(RESOLVED)).toBeVisible();
-  // Save a second version.
+  // Save a second version: the value starts as "Value unchanged" until replaced.
+  await edit.getByRole("button", { name: "Replace value" }).click();
   await edit.getByLabel("Value").fill("postgres://u:${PASSWORD}@h2/db");
   await edit.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByRole("row", { name: /DB_URL/ })).toContainText("v2");

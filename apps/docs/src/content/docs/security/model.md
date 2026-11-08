@@ -118,8 +118,11 @@ access to `prod:/db`, and a forbidden target is a `403` whether it exists or not
 ## Known gaps
 
 - **No end-to-end encryption.** See the trust model above.
-- **Only login is rate limited.** Add a Cloudflare rule in front of the other anonymous endpoints;
-  see [Rate limiting](/anchor/operations/rate-limiting/).
+- **Only login is rate limited, and not per account.** Limits are per address and email, so an
+  attacker with many addresses (a botnet, or an IPv6 /48 with 65,536 /64s) can keep guessing one
+  account's password: the price of nobody being able to lock the owner out. Use a long, unique
+  password, and add a Cloudflare rate-limiting rule on `/api/v1/auth/login` and the other anonymous
+  endpoints; see [Rate limiting](/anchor/operations/rate-limiting/).
 - **Break-glass recovery leaves no audit event.** It is a direct D1 update; see
   [Break-glass recovery](/anchor/operations/break-glass/).
 - **First-run setup is open until the owner exists.** `/setup` asks for no token; the first account

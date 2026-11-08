@@ -33,6 +33,15 @@ dashboard and CLI.
 - **The project overview shows subfolders.** It listed only keys stored directly at the path, so
   a project whose secrets all live in folders looked empty ("No secrets at this path"). Subfolders
   now come first, with a mark per environment, and open on click. `GET /overview` adds `folders`.
+  The first column reads "Name", search covers keys and folders, and each folder starts on page 1.
+- **`imports list` numbers imports 1, 2, 3** in the order they apply (`--json` keeps `position`).
+- **A 404 during `anchor login`** no longer hints at running `anchor login --api-url` again; it
+  asks for the address of your Anchor dashboard.
+- **An empty List** in the secret sheet says "Add at least one item" instead of "must be a JSON
+  array of strings".
+- **The CLI login approval page** always names the account it signs in as.
+- **Deploy docs:** Troubleshooting covers `could not be found [code: 7404]`, a copy that still
+  names a deleted database, and the deploy guide warns that upgrading never needs a new database.
 
 ## [0.5.1] - 2026-11-08
 

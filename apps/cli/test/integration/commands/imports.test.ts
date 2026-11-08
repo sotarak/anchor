@@ -28,7 +28,9 @@ describe("anchor imports list", () => {
 
   it("numbers imports 1..n even when positions have gaps; --json keeps position", async () => {
     const gap = [shared, imp("i3", "shared", "/db", 3)];
-    const r = await (await loggedIn()).run(["imports", "list", ...P], { listImports: async () => gap });
+    const r = await (await loggedIn()).run(["imports", "list", ...P], {
+      listImports: async () => gap,
+    });
     expect(r.out).toBe("1  shared:/\n2  shared:/db\n");
     const json = await (await loggedIn()).run(["imports", "list", "--json", ...P], {
       listImports: async () => gap,

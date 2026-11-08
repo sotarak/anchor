@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -28,6 +29,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -38,6 +40,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tag } from "@/components/ui/tag";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   TooltipContent,
   TooltipProvider,
@@ -247,5 +250,31 @@ describe("KeyValueList", () => {
     expect(values[0]).not.toHaveClass("font-mono");
     expect(values[1]).toHaveClass("font-mono");
     for (const dd of values) expect(dd).toHaveClass("min-w-0", "break-words");
+  });
+});
+
+describe("Switch", () => {
+  it("toggles aria-checked", async () => {
+    const user = userEvent.setup();
+    render(<Switch aria-label="Sensitive" defaultChecked />);
+    const sw = screen.getByRole("switch", { name: "Sensitive" });
+    expect(sw).toHaveAttribute("aria-checked", "true");
+    await user.click(sw);
+    expect(sw).toHaveAttribute("aria-checked", "false");
+  });
+});
+
+describe("ToggleGroup", () => {
+  it("marks the pressed item", async () => {
+    const user = userEvent.setup();
+    render(
+      <ToggleGroup type="single" aria-label="Choice">
+        <ToggleGroupItem value="a">A</ToggleGroupItem>
+        <ToggleGroupItem value="b">B</ToggleGroupItem>
+      </ToggleGroup>,
+    );
+    await user.click(screen.getByRole("radio", { name: "B" }));
+    expect(screen.getByRole("radio", { name: "B" })).toHaveAttribute("data-state", "on");
+    expect(screen.getByRole("radio", { name: "A" })).toHaveAttribute("data-state", "off");
   });
 });

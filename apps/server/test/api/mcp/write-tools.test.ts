@@ -95,10 +95,11 @@ describe("MCP write tools", () => {
     const viewerToken = await oauthTokenFor(viewer.userId, ["secrets:read", "secrets:write"]);
     const r = await mcpTool(viewerToken, "set_secret", { ...at, key: "K", value: "v" });
     expect(r.isError).toBe(true);
-    expect(r.text).toMatch(/permission/i);
+    expect(r.text).toBe("You do not have permission to perform this action");
     expect(await secretCount()).toBe(0);
     const d = await mcpTool(viewerToken, "delete_secret", { ...at, key: "K" });
     expect(d.isError).toBe(true);
+    expect(d.text).toBe("You do not have permission to perform this action");
   });
 
   it("delete_secret deletes", async () => {

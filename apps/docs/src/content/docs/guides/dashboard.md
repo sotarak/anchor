@@ -19,12 +19,15 @@ disabled, and the server rejects the request anyway.
 ## Projects
 
 - **Projects** (home) lists the projects you can access. Instance owners and admins can create one.
-- **Project overview** summarizes the project and its environments.
+- **Project overview** shows, for one folder at a time, which subfolders and keys exist in which
+  environment: a check where it exists, **Missing** where it does not. Subfolders come first;
+  click one to open it, and use the path at the top right to go back up. No values are shown.
 - **Environment** (`/projects/<project>/environments/<env>`) is where secrets live:
   - The sidebar's environment switcher changes the environment for the whole project.
   - The table lists the secrets of the current folder in columns: Key, Value (masked), Comment,
     Version and Updated. A long comment is cut to one line; hover it to read it in full. Reveal and
-    copy appear on hover. Create and edit open a side sheet.
+    copy appear on hover; the row's **⋮** menu also has **Copy key** and **Copy value**. Create and
+    edit open a side sheet.
   - The side sheet has a **Type** (Text, Number, Boolean, JSON, List, PEM; stored as `string`,
     `number`, `boolean`, `json`, `list`, `pem`) and a **Sensitive** switch (on by default). Each
     type has its own editor: true/false buttons for Boolean, a **Format** button for JSON, one row

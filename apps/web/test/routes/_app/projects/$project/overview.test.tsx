@@ -16,6 +16,14 @@ const full: OverviewDto = {
     { key: "API_KEY", cells: { dev: cell(1), staging: cell(2), prod: cell(3) } },
     { key: "DATABASE_URL", cells: { dev: cell(1), staging: null, prod: cell(1) } },
   ],
+  folders: [],
+};
+const withFolders: OverviewDto = {
+  ...full,
+  folders: [
+    { path: "/api", name: "api", environments: { dev: true, staging: false, prod: true } },
+    { path: "/db", name: "db", environments: { dev: true, staging: true, prod: true } },
+  ],
 };
 
 /** Serves the overview and records the `path` query of each request. */
@@ -53,6 +61,7 @@ describe("/projects/$project (overview)", () => {
     overviewIs({
       environments: [dev],
       keys: [{ key: "API_KEY", cells: { dev: cell(1) } }],
+      folders: [],
     });
     await renderApp("/projects/app");
     await screen.findByText("API_KEY");
@@ -115,13 +124,93 @@ describe("/projects/$project (overview)", () => {
   });
 
   it("empty path offers Add a secret in the current environment", async () => {
-    setup({ environments: [dev, staging, prod], keys: [] });
+    setup({ environments: [dev, staging, prod], keys: [], folders: [] });
     const { router, user } = await renderApp("/projects/app?path=%2Fapi");
     await user.click(await screen.findByRole("button", { name: "Add a secret" }));
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/projects/app/environments/dev"),
     );
     expect(router.state.location.search).toEqual({ path: "/api" });
+  });
+
+  it("folder rows come before keys with a mark per environment", async () => {
+    setup(withFolders);
+    await renderApp("/projects/app");
+    const api = (await screen.findByRole("button", { name: "api" })).closest("tr") as HTMLElement;
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows.map((r) => r.textContent?.match(/^(api|db|API_KEY|DATABASE_URL)/)?.[0])).toEqual([
+      "api",
+      "db",
+      "API_KEY",
+      "DATABASE_URL",
+    ]);
+    expect(within(api).getAllByText("Missing")).toHaveLength(1);
+    expect(within(api).getAllByLabelText(/^api in .*: present$/)).toHaveLength(2);
+  });
+
+  it("clicking a folder row opens it", async () => {
+    const paths = setup(withFolders);
+    const { router, user } = await renderApp("/projects/app");
+    const name = await screen.findByRole("button", { name: "api" });
+    await user.click(name.closest("tr") as HTMLElement);
+    await waitFor(() => expect(router.state.location.search).toEqual({ path: "/api" }));
+    await waitFor(() => expect(paths).toEqual(["/", "/api"]));
+  });
+
+  it("a folder name is keyboard reachable", async () => {
+    setup(withFolders);
+    const { router, user } = await renderApp("/projects/app");
+    const name = await screen.findByRole("button", { name: "db" });
+    name.focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(router.state.location.search).toEqual({ path: "/db" }));
+  });
+
+  it("a path with folders but no keys is not empty", async () => {
+    setup({ ...withFolders, keys: [] });
+    await renderApp("/projects/app");
+    expect(await screen.findByRole("button", { name: "api" })).toBeInTheDocument();
+    expect(screen.queryByText(/^Nothing in/)).toBeNull();
+  });
+
+  it("the empty state names the path", async () => {
+    setup({ environments: [dev, staging, prod], keys: [], folders: [] });
+    await renderApp("/projects/app");
+    expect(await screen.findByText("Nothing in this project yet")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Secrets and folders you add to any environment show up here, one row per key or folder.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No secrets at this path")).toBeNull();
+  });
+
+  it("the empty state of a subfolder names it", async () => {
+    setup({ environments: [dev, staging, prod], keys: [], folders: [] });
+    await renderApp("/projects/app?path=%2Fapi");
+    expect(await screen.findByText("Nothing in /api yet")).toBeInTheDocument();
+  });
+
+  it("search matches folder names", async () => {
+    setup(withFolders);
+    const { user } = await renderApp("/projects/app");
+    await screen.findByText("API_KEY");
+    await user.click(screen.getByRole("button", { name: "Search keys" }));
+    await user.type(screen.getByRole("searchbox", { name: "Search keys" }), "db");
+    await waitFor(() => expect(screen.queryByText("API_KEY")).toBeNull());
+    expect(screen.getByRole("button", { name: "db" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "api" })).toBeNull();
+  });
+
+  it('Status "Missing somewhere" hides a folder present everywhere', async () => {
+    setup(withFolders);
+    const { user } = await renderApp("/projects/app");
+    await screen.findByText("API_KEY");
+    await user.click(screen.getByRole("button", { name: "Status" }));
+    await user.click(await screen.findByRole("checkbox", { name: "Missing somewhere" }));
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("button", { name: "db" })).toBeNull();
+    expect(screen.getByRole("button", { name: "api" })).toBeInTheDocument();
   });
 
   it("forbidden shows ForbiddenState", async () => {

@@ -2,7 +2,7 @@ import type { EnvironmentDto, OverviewDto } from "@anchor/shared";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ReactNode, useMemo, useState } from "react";
-import { RiCheckboxCircleFill, RiKey2Line } from "react-icons/ri";
+import { RiCheckboxCircleFill, RiFolder3Line, RiKey2Line } from "react-icons/ri";
 import { useSetHeader } from "@/components/app-shell/header";
 import { FilterChip } from "@/components/data/filter-chip";
 import { SearchChip } from "@/components/data/search-chip";
@@ -46,15 +46,23 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: "complete", label: "Present everywhere" },
 ];
 type Row = OverviewDto["keys"][number];
+type Folder = OverviewDto["folders"][number];
+/** One table row: the path's subfolders first, then its keys. */
+type Item = { kind: "folder"; folder: Folder } | { kind: "key"; row: Row };
 
-function isComplete(row: Row) {
-  return Object.values(row.cells).every((c) => c !== null);
+const itemName = (item: Item) => (item.kind === "folder" ? item.folder.name : item.row.key);
+
+function isComplete(item: Item) {
+  return item.kind === "folder"
+    ? Object.values(item.folder.environments).every(Boolean)
+    : Object.values(item.row.cells).every((c) => c !== null);
 }
 
-function matches(row: Row, search: string, status: StatusFilter[]) {
-  if (search.trim() && !row.key.toLowerCase().includes(search.trim().toLowerCase())) return false;
+function matches(item: Item, search: string, status: StatusFilter[]) {
+  const needle = search.trim().toLowerCase();
+  if (needle && !itemName(item).toLowerCase().includes(needle)) return false;
   if (status.length === 0 || status.length === STATUS_OPTIONS.length) return true;
-  return status.includes(isComplete(row) ? "complete" : "missing");
+  return status.includes(isComplete(item) ? "complete" : "missing");
 }
 
 function OverviewPage() {
@@ -76,9 +84,16 @@ function OverviewPage() {
   useSetHeader({ title: projectQuery.data?.name ?? "" });
 
   const environments = overview.data?.environments ?? [];
+  const items = useMemo<Item[]>(
+    () => [
+      ...(overview.data?.folders ?? []).map((folder) => ({ kind: "folder" as const, folder })),
+      ...(overview.data?.keys ?? []).map((row) => ({ kind: "key" as const, row })),
+    ],
+    [overview.data],
+  );
   const filtered = useMemo(
-    () => (overview.data?.keys ?? []).filter((r) => matches(r, keySearch, status)),
-    [overview.data, keySearch, status],
+    () => items.filter((item) => matches(item, keySearch, status)),
+    [items, keySearch, status],
   );
   const page = useClientPages(filtered, 25);
   const setPath = (next: string) => void navigate({ search: next === "/" ? {} : { path: next } });
@@ -92,12 +107,12 @@ function OverviewPage() {
     body = <ForbiddenState what="this project" />;
   } else if (overview.isError) {
     body = <ErrorState error={overview.error} onRetry={() => void overview.refetch()} />;
-  } else if (overview.data?.keys.length === 0) {
+  } else if (overview.data && items.length === 0) {
     body = (
       <EmptyState
         icon={RiKey2Line}
-        title="No secrets at this path"
-        description="Secrets you add to any environment of this project show up here, one row per key."
+        title={path === "/" ? "Nothing in this project yet" : `Nothing in ${path} yet`}
+        description="Secrets and folders you add to any environment show up here, one row per key or folder."
         action={
           currentEnv ? (
             <Button
@@ -138,21 +153,30 @@ function OverviewPage() {
             {overview.isPending ? (
               <TableSkeletonRows columns={["24ch", "8ch", "8ch", "8ch"]} />
             ) : (
-              page.rows.map((row) => (
-                <TableRow key={row.key}>
-                  <TableCell primary>
-                    <span className="flex items-center gap-2">
-                      <RiKey2Line aria-hidden className="size-4 shrink-0 text-text-soft" />
-                      {row.key}
-                    </span>
-                  </TableCell>
-                  {environments.map((e) => (
-                    <TableCell key={e.slug}>
-                      <MatrixCell project={project} path={path} env={e} row={row} />
+              page.rows.map((item) =>
+                item.kind === "folder" ? (
+                  <FolderRow
+                    key={`folder:${item.folder.path}`}
+                    folder={item.folder}
+                    environments={environments}
+                    onOpen={() => setPath(item.folder.path)}
+                  />
+                ) : (
+                  <TableRow key={item.row.key}>
+                    <TableCell primary>
+                      <span className="flex items-center gap-2">
+                        <RiKey2Line aria-hidden className="size-4 shrink-0 text-text-soft" />
+                        {item.row.key}
+                      </span>
                     </TableCell>
-                  ))}
-                </TableRow>
-              ))
+                    {environments.map((e) => (
+                      <TableCell key={e.slug}>
+                        <MatrixCell project={project} path={path} env={e} row={item.row} />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ),
+              )
             )}
           </TableBody>
         </Table>
@@ -172,6 +196,52 @@ function OverviewPage() {
       </div>
       {body}
     </>
+  );
+}
+
+/** A subfolder of the path: a click (or its name, from the keyboard) opens it here. */
+function FolderRow({
+  folder,
+  environments,
+  onOpen,
+}: {
+  folder: Folder;
+  environments: EnvironmentDto[];
+  onOpen: () => void;
+}) {
+  return (
+    <TableRow clickable onClick={onOpen}>
+      <TableCell primary>
+        <span className="flex items-center gap-2">
+          <RiFolder3Line aria-hidden className="size-4 shrink-0 text-text-soft" />
+          <button
+            type="button"
+            className="min-w-0 truncate text-left outline-none focus-visible:underline"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen();
+            }}
+          >
+            {folder.name}
+          </button>
+        </span>
+      </TableCell>
+      {environments.map((e) => (
+        <TableCell key={e.slug}>
+          {folder.environments[e.slug] ? (
+            <RiCheckboxCircleFill
+              role="img"
+              aria-label={`${folder.name} in ${e.name}: present`}
+              className="size-4 text-success-base"
+            />
+          ) : (
+            <StatusBadge status="warning" aria-label={`${folder.name} in ${e.name}: missing`}>
+              Missing
+            </StatusBadge>
+          )}
+        </TableCell>
+      ))}
+    </TableRow>
   );
 }
 

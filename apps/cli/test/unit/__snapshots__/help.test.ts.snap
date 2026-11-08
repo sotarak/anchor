@@ -381,29 +381,32 @@ exports[`help text > help for run 1`] = `
 Run a command with the environment's secrets injected as environment variables
 
 Arguments:
-  command           the command to run, after --
+  command                     the command to run, after --
 
 Options:
-  --no-override     keep existing environment variables instead of Anchor values
-  --expand          expand \${KEY} references in values (default)
-  --no-expand       inject stored values without expanding references
-  -h, --help        display help for command
+  --no-override               keep existing environment variables instead of Anchor values
+  --expand                    expand \${KEY} references in values (default)
+  --no-expand                 inject stored values without expanding references
+  --watch                     restart the command when its secrets change
+  --watch-interval <seconds>  how often to check, in seconds (default 30, minimum 5)
+  -h, --help                  display help for command
 
 Global Options:
-  --version         print the CLI version
-  --json            print machine-readable JSON on stdout
-  -q, --quiet       suppress progress messages
-  --no-color        disable colored output
-  --debug           print request diagnostics to stderr (never secret values)
-  --api-url <url>   Anchor server URL
-  --project <slug>  project slug
-  --env <slug>      environment slug
-  --path <path>     secret folder path
-  -y, --yes         skip confirmations
+  --version                   print the CLI version
+  --json                      print machine-readable JSON on stdout
+  -q, --quiet                 suppress progress messages
+  --no-color                  disable colored output
+  --debug                     print request diagnostics to stderr (never secret values)
+  --api-url <url>             Anchor server URL
+  --project <slug>            project slug
+  --env <slug>                environment slug
+  --path <path>               secret folder path
+  -y, --yes                   skip confirmations
 
 Examples:
   $ anchor run -- npm start
   $ anchor run --env prod --path /api -- node server.js
+  $ anchor run --watch -- npm run dev
 
 "
 `;

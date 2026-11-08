@@ -7,7 +7,7 @@ import { init } from "./commands/init";
 import { login } from "./commands/login";
 import { logout } from "./commands/logout";
 import { projectsList } from "./commands/projects";
-import { runCommand } from "./commands/run";
+import { runCommand, watchIntervalMs } from "./commands/run";
 import {
   secretsDelete,
   secretsGet,
@@ -309,14 +309,31 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     .option("--no-override", "keep existing environment variables instead of Anchor values")
     .option("--expand", "expand ${KEY} references in values (default)")
     .option("--no-expand", "inject stored values without expanding references")
+    .option("--watch", "restart the command when its secrets change")
+    .option("--watch-interval <seconds>", "how often to check, in seconds (default 30, minimum 5)")
     .usage("[options] -- <command> [args...]")
     .addHelpText(
       "after",
-      examples("anchor run -- npm start", "anchor run --env prod --path /api -- node server.js"),
+      examples(
+        "anchor run -- npm start",
+        "anchor run --env prod --path /api -- node server.js",
+        "anchor run --watch -- npm run dev",
+      ),
     )
     .action(
-      act((ctx, command: string[], opts: { override: boolean; expand?: boolean }) =>
-        runCommand(ctx, command, { override: opts.override, expand: opts.expand !== false }),
+      act(
+        (
+          ctx,
+          command: string[],
+          opts: { override: boolean; expand?: boolean; watch?: boolean; watchInterval?: string },
+        ) => {
+          const intervalMs = watchIntervalMs(opts.watch === true, opts.watchInterval);
+          return runCommand(ctx, command, {
+            override: opts.override,
+            expand: opts.expand !== false,
+            watch: intervalMs === undefined ? undefined : { intervalMs },
+          });
+        },
       ),
     );
 

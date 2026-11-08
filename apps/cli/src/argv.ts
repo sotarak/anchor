@@ -17,6 +17,7 @@ const VALUE_OPTIONS = new Set([
   "--expires-in",
   "--at-version",
   "--to",
+  "--watch-interval",
 ]);
 
 export interface Positional {

@@ -45,6 +45,10 @@ export function cacheKey(origin: string, token: string, q: Required<ListQuery>):
   ]);
 }
 
+/** The more recently fetched of two entries. */
+const newer = (a: CacheEntry | undefined, b: CacheEntry | undefined) =>
+  a && b ? (b.fetchedAt > a.fetchedAt ? b : a) : (a ?? b);
+
 /** Resolves like `promise`, or rejects with `aborted` as soon as `signal` aborts. */
 function untilAborted<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return promise;
@@ -65,6 +69,8 @@ export class SecretCache {
   private readonly inflight = new Map<string, Flight>();
   /** When the last fetch of a key failed; the stale entry is served without asking for one ttl. */
   private readonly failedAt = new Map<string, number>();
+  /** The newest entry this instance fetched per key, in case the store returns an older one. */
+  private readonly latest = new Map<string, CacheEntry>();
 
   constructor(
     private readonly policy: CachePolicy,
@@ -82,9 +88,14 @@ export class SecretCache {
     opts: { fresh?: boolean; signal?: AbortSignal; strict?: boolean } = {},
   ): Promise<CacheEntry> {
     if (opts.signal?.aborted) throw abortedError();
-    const entry = await this.read(key);
-    if (entry && !opts.fresh && this.servable(key, entry)) return entry;
-    const flight = this.inflight.get(key) ?? this.start(key, fetch, entry);
+    // A fetch already running answers this caller too: no need to wait on a slow store first.
+    let flight = opts.fresh ? undefined : this.inflight.get(key);
+    if (!flight) {
+      // The store may answer with an entry older than one this instance fetched since.
+      const entry = newer(await this.read(key), this.latest.get(key));
+      if (entry && !opts.fresh && this.servable(key, entry)) return entry;
+      flight = this.inflight.get(key) ?? this.start(key, fetch, entry);
+    }
     flight.waiters++;
     let outcome: Outcome;
     try {
@@ -157,6 +168,7 @@ export class SecretCache {
   ): Promise<Outcome> {
     try {
       const entry: CacheEntry = { secrets: await fetch(), fetchedAt: this.now() };
+      this.latest.set(key, entry);
       await this.write(key, entry);
       this.failedAt.delete(key);
       return { entry };

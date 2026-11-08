@@ -245,3 +245,77 @@ describe("a failing store", () => {
     expect(events).toMatchObject([{ type: "store_failed", operation: "set" }]);
   });
 });
+
+describe("slow stores", () => {
+  /** A store whose get() calls are answered by the test, in call order. */
+  function slowStore() {
+    const entries = new Map<string, CacheEntry>();
+    const gets: Array<(entry: CacheEntry | undefined) => void> = [];
+    const store: CacheStore = {
+      get: () => new Promise((resolve) => gets.push(resolve)),
+      set: (k, e) => {
+        entries.set(k, e);
+      },
+    };
+    return { store, entries, answer: (i: number, e?: CacheEntry) => gets[i]?.(e), gets };
+  }
+  const deferred = <T>() => {
+    let resolve!: (v: T) => void;
+    const promise = new Promise<T>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve };
+  };
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+
+  it("a caller arriving during a fetch joins it without waiting for the store", async () => {
+    const s = slowStore();
+    const cache = new SecretCache(
+      { ttlMs: TTL, maxStaleMs: TTL, store: s.store },
+      () => {},
+      () => t,
+    );
+    const response = deferred<AnchorSecret[]>();
+    let calls = 0;
+    const fetch = () => {
+      calls++;
+      return response.promise;
+    };
+    const a = cache.load("k", fetch);
+    s.answer(0, undefined); // A's store read: a miss, so A starts the fetch
+    await tick();
+    let bDone = false;
+    const b = cache.load("k", fetch).then((e) => {
+      bDone = true;
+      return e;
+    });
+    response.resolve([secret("v1")]);
+    await tick();
+    expect(bDone).toBe(true); // B never waited on its own (unanswered) store read
+    expect((await a).secrets[0]?.value).toBe("v1");
+    expect((await b).secrets[0]?.value).toBe("v1");
+    expect(calls).toBe(1);
+  });
+
+  it("a slow store read that returns an older entry does not start a second fetch", async () => {
+    const s = slowStore();
+    const cache = new SecretCache(
+      { ttlMs: TTL, maxStaleMs: TTL, store: s.store },
+      () => {},
+      () => t,
+    );
+    let calls = 0;
+    const fetch = async () => {
+      calls++;
+      return [secret(`v${calls}`)];
+    };
+    const old: CacheEntry = { secrets: [secret("v0")], fetchedAt: t - TTL };
+    const b = cache.load("k", fetch); // B's read starts first and stays slow
+    const a = cache.load("k", fetch);
+    s.answer(1, old); // A reads the stale entry and refreshes it
+    expect((await a).secrets[0]?.value).toBe("v1");
+    s.answer(0, old); // B's read finally answers with the entry from before A's write
+    expect((await b).secrets[0]?.value).toBe("v1");
+    expect(calls).toBe(1);
+  });
+});

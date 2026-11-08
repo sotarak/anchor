@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./value-decode": "./src/value-decode.ts"
+    "./value-decode": "./src/value-decode.ts",
+    "./env-keys": "./src/env-keys.ts"
   },
   "scripts": {
     "test": "vitest run",

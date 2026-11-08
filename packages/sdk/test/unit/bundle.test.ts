@@ -14,6 +14,7 @@ it("bundles the shared decoder without zod or the rest of @anchor/shared", async
   const inputs = Object.keys(result.metafile.inputs);
   expect(inputs.filter((p) => p.includes("node_modules/zod"))).toEqual([]);
   expect(inputs.filter((p) => p.includes("shared/src/schemas"))).toEqual([]);
+  expect(inputs.some((p) => p.endsWith("shared/src/env-keys.ts"))).toBe(true);
   expect(result.outputFiles[0]?.text.length).toBeLessThan(20_000);
 });
 
@@ -29,4 +30,10 @@ it("keeps dist/index.js under 20 KB", async () => {
     logLevel: "silent",
   });
   expect(result.outputFiles[0]?.contents.byteLength).toBeLessThan(20 * 1024);
+});
+
+it("exports isReservedEnvKey", async () => {
+  const sdk = await import("../../src/index");
+  expect(typeof sdk.isReservedEnvKey).toBe("function");
+  expect(sdk.isReservedEnvKey("LD_PRELOAD")).toBe(true);
 });

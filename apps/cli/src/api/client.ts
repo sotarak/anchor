@@ -2,6 +2,7 @@ import type {
   CliLoginStartDto,
   EnvironmentDto,
   FolderDto,
+  FolderImportDto,
   LoginResponse,
   ProjectDto,
   SecretDto,
@@ -98,6 +99,13 @@ export interface ApiClient {
     body: { path: string },
   ): Promise<{ folder: FolderDto; created: boolean }>;
   deleteFolder(project: string, env: string, q: { path: string; force: boolean }): Promise<void>;
+  listImports(project: string, env: string, q: { path: string }): Promise<FolderImportDto[]>;
+  createImport(
+    project: string,
+    env: string,
+    body: { path: string; source: { environment: string; path: string } },
+  ): Promise<FolderImportDto>;
+  deleteImport(project: string, env: string, id: string): Promise<void>;
   listServiceTokens(project: string): Promise<ServiceTokenDto[]>;
   createServiceToken(
     project: string,
@@ -117,6 +125,8 @@ export function createApiClient(opts: HttpOptions): ApiClient {
     `/projects/${seg(project)}/environments/${seg(env)}/secrets`;
   const foldersPath = (project: string, env: string) =>
     `/projects/${seg(project)}/environments/${seg(env)}/folders`;
+  const importsPath = (project: string, env: string) =>
+    `/projects/${seg(project)}/environments/${seg(env)}/imports`;
   const query = (q: Record<string, string | boolean | undefined>) => {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(q)) if (v !== undefined) params.set(k, String(v));
@@ -219,6 +229,18 @@ export function createApiClient(opts: HttpOptions): ApiClient {
     },
     deleteFolder: async (project, env, q) => {
       await call("DELETE", `${foldersPath(project, env)}${query(q)}`);
+    },
+    listImports: async (project, env, q) =>
+      (
+        await data<{ imports: FolderImportDto[] }>(
+          "GET",
+          `${importsPath(project, env)}${query({ path: q.path })}`,
+        )
+      ).imports,
+    createImport: async (project, env, body) =>
+      (await data<{ import: FolderImportDto }>("POST", importsPath(project, env), body)).import,
+    deleteImport: async (project, env, id) => {
+      await call("DELETE", `${importsPath(project, env)}/${seg(id)}`);
     },
     listServiceTokens: async (project) =>
       (

@@ -238,6 +238,34 @@ describe("api client", () => {
     expect(JSON.parse(f.calls[0]?.body ?? "")).toEqual({ value: "v", path: "/" });
   });
 
+  it("calls the import endpoints", async () => {
+    const imp = { id: "i1", path: "/api", source: { environment: "shared", path: "/" }, position: 1 };
+    const f = scriptedFetch(
+      json(200, { imports: [imp] }),
+      json(201, { import: imp }),
+      new Response(null, { status: 204 }),
+    );
+    const api = createApiClient(opts(f.fn));
+    expect(await api.listImports("app", "dev", { path: "/api" })).toEqual([imp]);
+    expect(
+      await api.createImport("app", "dev", {
+        path: "/api",
+        source: { environment: "shared", path: "/" },
+      }),
+    ).toEqual(imp);
+    expect(await api.deleteImport("app", "dev", "i1")).toBeUndefined();
+    const base = "https://anchor.example/api/v1/projects/app/environments/dev/imports";
+    expect(f.calls.map((c) => [c.method, c.url])).toEqual([
+      ["GET", `${base}?path=%2Fapi`],
+      ["POST", base],
+      ["DELETE", `${base}/i1`],
+    ]);
+    expect(JSON.parse(f.calls[1]?.body ?? "")).toEqual({
+      path: "/api",
+      source: { environment: "shared", path: "/" },
+    });
+  });
+
   it("encodes path segments and query parameters", async () => {
     const f = scriptedFetch(json(200, { secret: {} }));
     const api = createApiClient(opts(f.fn));

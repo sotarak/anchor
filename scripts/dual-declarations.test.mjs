@@ -55,3 +55,26 @@ test("ignores files that are not declarations", async () => {
     "a.d.ts",
   ]);
 });
+
+test("declarations in subdirectories are emitted with the same relative layout, with .cjs imports in the .d.cts twin", async () => {
+  const { typesDir, distDir } = await dirs({ "a.d.ts": "export {};\n" });
+  const { mkdir } = await import("node:fs/promises");
+  await mkdir(new URL("sub/", typesDir), { recursive: true });
+  await writeFile(new URL("sub/x.d.ts", typesDir), 'export * from "./y.js";\n');
+  const names = await emitDualDeclarations({ typesDir, distDir });
+  assert.ok(names.includes("sub/x.d.ts"), names.join(", "));
+  assert.ok(names.includes("sub/x.d.cts"), names.join(", "));
+  assert.match(await read(distDir, "sub/x.d.ts"), /"\.\/y\.js"/);
+  assert.match(await read(distDir, "sub/x.d.cts"), /"\.\/y\.cjs"/);
+});
+
+test("the forbid check applies to declarations in subdirectories", async () => {
+  const { typesDir, distDir } = await dirs({});
+  const { mkdir } = await import("node:fs/promises");
+  await mkdir(new URL("sub/", typesDir), { recursive: true });
+  await writeFile(new URL("sub/x.d.ts", typesDir), 'import type { V } from "@anchor/shared";\n');
+  await assert.rejects(
+    emitDualDeclarations({ typesDir, distDir, forbid: ["@anchor/shared"] }),
+    /sub\/x\.d\.ts imports @anchor\/shared/,
+  );
+});

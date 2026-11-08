@@ -96,7 +96,13 @@ describe("anchor login", () => {
       { login: loginOk },
     );
     expect(await r.code).toBe(0);
-    expect(JSON.parse(io.out())).toEqual({ apiUrl: API, user, expiresAt, credentialStore: "file" });
+    expect(JSON.parse(io.out())).toEqual({
+      apiUrl: API,
+      user,
+      expiresAt,
+      credentialStore: "file",
+      defaultApiUrl: API,
+    });
     expect(io.out()).not.toContain("TOKENCANARY");
   });
 
@@ -148,6 +154,83 @@ describe("anchor login", () => {
       ["password", "Password"],
     ]);
     expect(r.fake.clients[0]?.baseUrl).toBe(API);
+  });
+
+  const OLD = "https://old.example";
+  const NEW = "https://new.example";
+  async function defaultServer(xdg: string, apiUrl: string) {
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(xdg, "anchor"), { recursive: true });
+    await writeFile(join(xdg, "anchor", "config.json"), JSON.stringify({ apiUrl }));
+  }
+  const savedDefault = async (xdg: string) =>
+    JSON.parse(await readFile(join(xdg, "anchor", "config.json"), "utf8"));
+
+  it("--api-url replaces a different default and says so", async () => {
+    const { io, xdg } = await env({ stdin: PASSWORD });
+    await defaultServer(xdg, OLD);
+    const r = run(io, ["login", "--api-url", NEW, "--email", user.email, "--password-stdin"], {
+      login: loginOk,
+    });
+    expect(await r.code).toBe(0);
+    expect(await savedDefault(xdg)).toEqual({ apiUrl: NEW });
+    expect(io.err()).toContain(`Default server changed from ${OLD} to ${NEW}`);
+  });
+
+  it("--api-url equal to the default after normalization changes nothing", async () => {
+    const { io, xdg } = await env({ stdin: PASSWORD });
+    await defaultServer(xdg, NEW);
+    const before = await readFile(join(xdg, "anchor", "config.json"), "utf8");
+    const r = run(
+      io,
+      [
+        "login",
+        "--api-url",
+        "https://NEW.example/some/path/",
+        "--email",
+        user.email,
+        "--password-stdin",
+      ],
+      { login: loginOk },
+    );
+    expect(await r.code).toBe(0);
+    expect(io.err()).not.toContain("Default server changed");
+    expect(await readFile(join(xdg, "anchor", "config.json"), "utf8")).toBe(before);
+  });
+
+  it("ANCHOR_API_URL does not replace an existing default", async () => {
+    const { io, xdg } = await env({
+      stdin: PASSWORD,
+      env: { ANCHOR_API_URL: "https://env.example" },
+    });
+    await defaultServer(xdg, OLD);
+    const r = run(io, ["login", "--email", user.email, "--password-stdin"], { login: loginOk });
+    expect(await r.code).toBe(0);
+    expect(r.fake.clients[0]?.baseUrl).toBe("https://env.example");
+    expect(await savedDefault(xdg)).toEqual({ apiUrl: OLD });
+    expect(io.err()).not.toContain("Default server changed");
+  });
+
+  it("--json reports defaultApiUrl after a replacing login", async () => {
+    const { io, xdg } = await env({ stdin: PASSWORD });
+    await defaultServer(xdg, OLD);
+    const r = run(
+      io,
+      ["login", "--json", "--api-url", NEW, "--email", user.email, "--password-stdin"],
+      { login: loginOk },
+    );
+    expect(await r.code).toBe(0);
+    expect(JSON.parse(io.out()).defaultApiUrl).toBe(NEW);
+  });
+
+  it("--json reports a null defaultApiUrl when only .anchor.json named the server", async () => {
+    const { io, dir, xdg } = await env({ stdin: PASSWORD });
+    await projectPointsTo(dir, xdg);
+    const r = run(io, ["login", "--json", "--yes", "--email", user.email, "--password-stdin"], {
+      login: loginOk,
+    });
+    expect(await r.code).toBe(0);
+    expect(JSON.parse(io.out()).defaultApiUrl).toBeNull();
   });
 
   async function projectPointsTo(dir: string, xdg: string, userApiUrl?: string) {
@@ -490,6 +573,22 @@ describe("anchor login (browser)", () => {
       expect(text).not.toContain("TOKENCANARY");
       expect(text).not.toContain("DEVICECANARY");
     }
+  });
+
+  it("browser login with --api-url replaces the default", async () => {
+    const { io, xdg } = await env();
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(xdg, "anchor"), { recursive: true });
+    await writeFile(
+      join(xdg, "anchor", "config.json"),
+      JSON.stringify({ apiUrl: "https://old.example" }),
+    );
+    const r = run(io, ["login", "--api-url", API], browserApi(["approved"]), deps().extra);
+    expect(await r.code).toBe(0);
+    expect(JSON.parse(await readFile(join(xdg, "anchor", "config.json"), "utf8"))).toEqual({
+      apiUrl: API,
+    });
+    expect(io.err()).toContain(`Default server changed from https://old.example to ${API}`);
   });
 
   it("sends <user>@<host> as the client name", async () => {

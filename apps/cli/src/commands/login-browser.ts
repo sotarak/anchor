@@ -35,7 +35,7 @@ export async function loginWithBrowser(
 ): Promise<void> {
   const { io } = ctx.deps;
   const sleep = ctx.deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const { apiUrl, fromProject } = await resolveLoginTarget(ctx, "browser");
+  const { apiUrl, source } = await resolveLoginTarget(ctx, "browser");
   const api = rawApiFor(ctx, apiUrl);
 
   let started: Awaited<ReturnType<typeof api.cliLoginStart>>;
@@ -66,7 +66,7 @@ export async function loginWithBrowser(
     await sleep(interval * 1000);
     try {
       const result = await api.cliLoginToken(started.deviceCode);
-      if (result.status === "approved") return saveLogin(ctx, apiUrl, fromProject, result.login);
+      if (result.status === "approved") return saveLogin(ctx, apiUrl, source, result.login);
     } catch (e) {
       if (!(e instanceof ApiRequestError)) throw e;
       if (e.status === 429) interval += SLOW_DOWN_S;

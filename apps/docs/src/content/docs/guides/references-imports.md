@@ -48,8 +48,8 @@ An import makes a folder show the secrets of another folder, in the same or anot
 of the same project. For example, import `shared:/` into `prod:/api` so every service gets the
 common values without copying them.
 
-- Manage imports on the folder in the dashboard (**Add import**), or through the API
-  (`/imports`). Creating or deleting one requires write access to the folder and read access to
+- Manage imports on the folder in the dashboard (**Add import**), with the CLI
+  ([`anchor imports`](/anchor/guides/cli/#imports)), or through the API (`/imports`). Creating or deleting one requires write access to the folder and read access to
   the source.
 - Reads include imports only when asked: the API with `includeImports=true`; the CLI always
   includes them in `secrets get`, `run` and `export`; the dashboard lists imported secrets with an
@@ -62,3 +62,18 @@ common values without copying them.
 - A listing authorizes every import: if you cannot read one source, listing the folder with
   imports is a `403` that names it. Reading one key that exists locally still works.
 - Deleting an environment removes the imports that point to it.
+
+### When changes show up
+
+An import is a live link, not a copy: every read looks at the source folder again.
+
+- A key added to the source, or a new value of one of its keys, shows up in the importing folder
+  on the next read: the dashboard after a reload, `anchor secrets get`, `run` and `export`.
+- It does not show up when the importing folder has a key with the same name (local keys win),
+  or when an earlier import of the same folder already has that key.
+- Only the source folder itself is imported: importing `shared:/` brings neither `shared:/db`
+  nor the folders `shared:/` imports.
+- A running `anchor run` keeps the environment it started with. Restart it, or start it with
+  [`--watch`](/anchor/guides/cli/#restart-on-changes-anchor-run---watch) to restart on changes.
+- A file written by `anchor export` is a snapshot. Export again to pick up changes.
+- A service token reading the importing folder also needs read access to the source folder.

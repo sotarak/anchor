@@ -35,6 +35,7 @@ heredoc, an `echo`, a temp file or a quoted argument is a value you typed.
 | Add or change a value the person has | Give them `anchor secrets set KEY [--env prod]` to run; it prompts with hidden input |
 | Value is in a file they already have | `anchor secrets set KEY --from-file path/to/file` |
 | Plain config (port, host, flag) | `printf 8080 \| anchor secrets set PORT --type number --no-sensitive` |
+| A folder should also get another folder's values (e.g. `/shared`) | `anchor imports add prod:/shared --env prod --path /api`, then `anchor imports list --env prod --path /api` |
 | A tool insists on a dotenv file | `anchor export --output .env.local`, only after `git check-ignore -q .env.local` succeeds |
 | Not logged in | Ask the person to run `anchor login` (browser approval) |
 

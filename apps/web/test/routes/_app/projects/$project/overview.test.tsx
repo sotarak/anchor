@@ -65,7 +65,7 @@ describe("/projects/$project (overview)", () => {
     });
     await renderApp("/projects/app");
     await screen.findByText("API_KEY");
-    expect(columnNames()).toEqual(["Key", "Development dev"]);
+    expect(columnNames()).toEqual(["Name", "Development dev"]);
   });
 
   it("missing cells show the Missing badge; present cells show version tooltip", async () => {
@@ -73,7 +73,12 @@ describe("/projects/$project (overview)", () => {
     const { user } = await renderApp("/projects/app");
     const row = (await screen.findByText("DATABASE_URL")).closest("tr") as HTMLElement;
     expect(within(row).getAllByText("Missing")).toHaveLength(1);
-    expect(columnNames()).toEqual(["Key", "Development dev", "Staging staging", "Production prod"]);
+    expect(columnNames()).toEqual([
+      "Name",
+      "Development dev",
+      "Staging staging",
+      "Production prod",
+    ]);
     await user.hover(within(row).getByRole("link", { name: "DATABASE_URL in Production: v1" }));
     expect(await screen.findByRole("tooltip")).toHaveTextContent(/^v1, updated /);
   });
@@ -87,8 +92,8 @@ describe("/projects/$project (overview)", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByText("API_KEY")).toBeNull();
     expect(screen.getByText("DATABASE_URL")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Search keys" }));
-    await user.type(screen.getByRole("searchbox", { name: "Search keys" }), "API");
+    await user.click(screen.getByRole("button", { name: "Search keys and folders" }));
+    await user.type(screen.getByRole("searchbox", { name: "Search keys and folders" }), "API");
     expect(await screen.findByText("No results match your filters")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(await screen.findByText("API_KEY")).toBeInTheDocument();
@@ -195,8 +200,8 @@ describe("/projects/$project (overview)", () => {
     setup(withFolders);
     const { user } = await renderApp("/projects/app");
     await screen.findByText("API_KEY");
-    await user.click(screen.getByRole("button", { name: "Search keys" }));
-    await user.type(screen.getByRole("searchbox", { name: "Search keys" }), "db");
+    await user.click(screen.getByRole("button", { name: "Search keys and folders" }));
+    await user.type(screen.getByRole("searchbox", { name: "Search keys and folders" }), "db");
     await waitFor(() => expect(screen.queryByText("API_KEY")).toBeNull());
     expect(screen.getByRole("button", { name: "db" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "api" })).toBeNull();
@@ -206,8 +211,8 @@ describe("/projects/$project (overview)", () => {
     setup(withFolders);
     const { router, user } = await renderApp("/projects/app");
     await screen.findByText("API_KEY");
-    await user.click(screen.getByRole("button", { name: "Search keys" }));
-    await user.type(screen.getByRole("searchbox", { name: "Search keys" }), "db");
+    await user.click(screen.getByRole("button", { name: "Search keys and folders" }));
+    await user.type(screen.getByRole("searchbox", { name: "Search keys and folders" }), "db");
     await user.click(await screen.findByRole("button", { name: "db" }));
     await waitFor(() => expect(router.state.location.search).toEqual({ path: "/db" }));
     // The subfolder's own rows show, not "No results match your filters".
@@ -224,6 +229,24 @@ describe("/projects/$project (overview)", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("button", { name: "db" })).toBeNull();
     expect(screen.getByRole("button", { name: "api" })).toBeInTheDocument();
+  });
+
+  it("a new path starts on page 1", async () => {
+    const many: OverviewDto = {
+      ...full,
+      keys: Array.from({ length: 30 }, (_, i) => ({
+        key: `KEY_${String(i).padStart(2, "0")}`,
+        cells: { dev: cell(1), staging: cell(1), prod: cell(1) },
+      })),
+    };
+    setup(many);
+    const { user } = await renderApp("/projects/app?path=%2Fapi%2Fv1");
+    await screen.findByText("KEY_00");
+    await user.click(screen.getByRole("button", { name: "Next page" }));
+    expect(await screen.findByText("KEY_29")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "api" }));
+    expect(await screen.findByText("KEY_00")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
   });
 
   it("forbidden shows ForbiddenState", async () => {

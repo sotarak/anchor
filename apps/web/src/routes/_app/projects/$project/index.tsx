@@ -95,7 +95,7 @@ function OverviewPage() {
     () => items.filter((item) => matches(item, keySearch, status)),
     [items, keySearch, status],
   );
-  const page = useClientPages(filtered, 25);
+  const page = useClientPages(filtered, 25, path);
   const setPath = (next: string) => void navigate({ search: next === "/" ? {} : { path: next } });
   const clearFilters = () => {
     setKeySearch("");
@@ -140,7 +140,7 @@ function OverviewPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Key</TableHead>
+              <TableHead>Name</TableHead>
               {environments.map((e) => (
                 <TableHead key={e.slug}>
                   <span>{e.name}</span>{" "}
@@ -192,7 +192,11 @@ function OverviewPage() {
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
-        <SearchChip value={keySearch} onChange={setKeySearch} placeholder="Search keys" />
+        <SearchChip
+          value={keySearch}
+          onChange={setKeySearch}
+          placeholder="Search keys and folders"
+        />
         <FilterChip label="Status" options={STATUS_OPTIONS} value={status} onChange={setStatus} />
         <div className="ml-auto">
           <PathBreadcrumb path={path} onNavigate={setPath} />

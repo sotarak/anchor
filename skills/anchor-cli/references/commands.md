@@ -45,8 +45,7 @@ Without them the CLI uses `.anchor.json` in the directory or a parent.
 | `anchor export --output .env.local` | Writes dotenv (mode 0600). Only to a gitignored file |
 | `anchor export --format json\|yaml` | Other formats; typed values keep their type in JSON/YAML |
 
-`--format dotenv` refuses a value a shell would run or expand (a `'` together with `$`, a backtick,
-`"` or a newline) and points to `--format json`/`yaml`; it leaves reserved names out unless
+`--format dotenv` refuses a value a shell would run or expand (a `'` or a newline together with `$`, a backtick, `"` or `\`, or a trailing `\`) and points to `--format json`/`yaml`; it leaves reserved names out unless
 `--allow-reserved`.
 
 ## Writing

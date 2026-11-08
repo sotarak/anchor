@@ -53,7 +53,8 @@ used to accept.
 - **Reserved names:** a folder that stores `NODE_OPTIONS`, `*_PROXY`, `PATH`, `ANCHOR_*` and the
   like now gets a warning and those variables are not set. Add `--allow-reserved` (CLI) or
   `allowReservedKeys: true` (NestJS) where you really mean it.
-- **Dotenv export:** a value with a `'` together with `$`, a backtick, `"` or a newline now fails;
+- **Dotenv export:** a value with a `'` or a newline together with `$`, a backtick, `"` or `\`, or a trailing `\` now
+  fails;
   export JSON or YAML instead.
 - **`ANCHOR_TOKEN` under `anchor run`:** a command that itself calls `anchor` or the SDK with the
   parent's token needs `--pass-token`.

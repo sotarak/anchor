@@ -265,7 +265,7 @@ anchor imports remove prod:/shared --env prod --path /api
   (also when it replaces an existing file), asks before overwriting (`--yes` in scripts), and warns
   when the file is not gitignored. `--format dotenv` writes only lines that a dotenv parser reads
   back exactly **and** that a shell or docker-compose sourcing the file never runs or expands. A
-  value it cannot write that way (one with a `'` together with `$`, a backtick, `"` or a newline)
+  value it cannot write that way (one with a `'` or a newline together with `$`, a backtick, `"` or `\`, or a trailing `\`)
   fails with a hint: use `--format json` or `--format yaml` for such values. Reserved names (as for
   `anchor run`) are left out of dotenv files with a warning; `--allow-reserved` writes them.
 - `--format json` and `--format yaml` write typed values: a `number` as a number, a `boolean` as

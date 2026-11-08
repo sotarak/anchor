@@ -41,6 +41,8 @@ const SHELL_UNSAFE = [
   `both ' and "`,
   "back`tick and 'quote'",
   "a\"b`c'd",
+  "it's\\",
+  "it's \\\\ two",
 ];
 
 describe("formatDotenv", () => {
@@ -67,6 +69,16 @@ describe("formatDotenv", () => {
         e("M", "l1\nl2"),
       ]),
     ).toBe('U=postgres://u:p@h:5432/db\nP=\'a b$c\'\nQ="it\'s fine"\nM="l1\\nl2"\n');
+  });
+
+  it("a value ending in a backslash fails instead of corrupting the lines after it", () => {
+    expect(() => formatDotenv([e("A", "x\\"), e("B", "y")])).toThrow(
+      /cannot be represented in dotenv/,
+    );
+    expect(parseDotenv(formatDotenv([e("A", "C:\\dir\\x"), e("B", "y")]))).toEqual({
+      A: "C:\\dir\\x",
+      B: "y",
+    });
   });
 
   it.each(SHELL_UNSAFE)("refuses %j instead of writing a line a shell would run", (v) => {
@@ -99,6 +111,70 @@ describe("formatDotenv", () => {
           writeFileSync(file, text);
           execFileSync("sh", ["-c", `. "${file}"`], { cwd: dir, stdio: "ignore" });
           expect(existsSync(marker), `sourcing ${JSON.stringify(text)}`).toBe(false);
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "no accepted set of values runs a command when the whole file is sourced by sh",
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), "anchor-dotenv-"));
+      try {
+        const marker = join(dir, "pwned");
+        // A value can end a quoted string early for the next line (a trailing backslash escapes
+        // the closing quote), so whole files are sourced, not one value at a time.
+        const parts = [
+          "it's",
+          "\\",
+          "'",
+          '"',
+          "\n",
+          "#",
+          ";",
+          " ",
+          "$",
+          "x",
+          `; touch ${marker}; #`,
+        ];
+        let seed = 7;
+        const next = () => {
+          seed = (seed * 1103515245 + 12345) % 2 ** 31;
+          return seed;
+        };
+        const files = [
+          [e("A", "it's\\"), e("B", `x; touch ${marker}; #'`)],
+          ...Array.from({ length: 300 }, () =>
+            Array.from({ length: 3 }, (_, i) =>
+              e(
+                `K${i}`,
+                Array.from({ length: 1 + (next() % 4) }, () => parts[next() % parts.length]).join(
+                  "",
+                ),
+              ),
+            ),
+          ),
+        ];
+        for (const entries of files) {
+          let text: string;
+          try {
+            text = formatDotenv(entries);
+          } catch {
+            continue; // refused: nothing written
+          }
+          const file = join(dir, ".env");
+          writeFileSync(file, text);
+          try {
+            execFileSync("sh", ["-c", `. "${file}"`], { cwd: dir, stdio: "ignore" });
+          } catch {
+            // a syntax error is not an execution; the marker check below decides
+          }
+          expect(existsSync(marker), `sourcing ${JSON.stringify(text)}`).toBe(false);
+          expect(parseDotenv(text), text).toEqual(
+            Object.fromEntries(entries.map((x) => [x.key, x.value])),
+          );
         }
       } finally {
         rmSync(dir, { recursive: true, force: true });

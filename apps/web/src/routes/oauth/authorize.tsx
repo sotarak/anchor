@@ -23,15 +23,29 @@ const PARAMS = [
   "resource",
 ] as const;
 
-type Search = Partial<Record<(typeof PARAMS)[number], string>>;
+type Param = (typeof PARAMS)[number];
+/** As the router parsed them: a number, boolean or null only when JSON gives back the exact text. */
+type Search = Partial<Record<Param, string | number | boolean | null>>;
+
+/** The exact text of a parameter (src/lib/search-json parses only lossless values). */
+const text = (value: Search[Param]): string | undefined =>
+  value === undefined || typeof value === "string" ? value : JSON.stringify(value);
 
 export const Route = createFileRoute("/oauth/authorize")({
+  // Values keep the type the router gave them, so the canonical URL the router writes back is
+  // stable; the page turns them back into text.
   validateSearch: (search: Record<string, unknown>): Search => {
     const out: Search = {};
     for (const key of PARAMS) {
       const value = search[key];
-      // The router parses numeric-looking values; OAuth parameters are always strings.
-      if (typeof value === "string" || typeof value === "number") out[key] = String(value);
+      if (
+        value === null ||
+        typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean"
+      ) {
+        out[key] = value;
+      }
     }
     return out;
   },
@@ -51,7 +65,10 @@ const isRedirect = (
 ): r is { redirectTo: string } => "redirectTo" in r;
 
 function AuthorizePage() {
-  const search = Route.useSearch();
+  const raw = Route.useSearch();
+  const search = Object.fromEntries(PARAMS.map((k) => [k, text(raw[k])])) as Partial<
+    Record<Param, string>
+  >;
   const req: OAuthAuthorizeRequest = {
     ...search,
     client_id: search.client_id ?? "",

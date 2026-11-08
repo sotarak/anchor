@@ -95,6 +95,20 @@ describe("/oauth/authorize", () => {
     });
   });
 
+  it.each(["12345678901234567890", "true"])(
+    "posts state %j exactly as the client sent it",
+    async (state) => {
+      signedInAs(fixtures.owner);
+      const { checks, decisions } = consent(() => HttpResponse.json(dto()));
+      const qs = new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(QUERY)), state });
+      const { user } = await renderApp(`/oauth/authorize?${qs}`);
+      await user.click(await screen.findByRole("button", { name: "Approve" }));
+      await waitFor(() => expect(decisions).toHaveLength(1));
+      expect(checks[0]).toMatchObject({ state });
+      expect(decisions[0]).toMatchObject({ state });
+    },
+  );
+
   it("ticking the box sends allowReveal true", async () => {
     signedInAs(fixtures.owner);
     const { decisions } = consent(() => HttpResponse.json(dto()));

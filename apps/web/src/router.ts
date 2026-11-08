@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createRouter, type RouterHistory } from "@tanstack/react-router";
+import { parseSearch, stringifySearch } from "./lib/search-json";
 import { routeTree } from "./routeTree.gen";
 
 export function createAppRouter(opts: { queryClient: QueryClient; history?: RouterHistory }) {
@@ -11,6 +12,8 @@ export function createAppRouter(opts: { queryClient: QueryClient; history?: Rout
     // Data is fetched through TanStack Query; the router must not cache loader results itself.
     defaultPreloadStaleTime: 0,
     scrollRestoration: true,
+    parseSearch,
+    stringifySearch,
   });
 }
 

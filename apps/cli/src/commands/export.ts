@@ -1,5 +1,6 @@
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
+import { isReservedEnvKey } from "@anchor/shared";
 import { authedApi } from "../auth";
 import { confirmDestructive } from "../confirm";
 import { type CommandContext, requireProject } from "../context";
@@ -18,7 +19,7 @@ const FORMATTERS: Record<ExportFormat, (entries: Entry[]) => string> = {
 
 export async function exportCommand(
   ctx: CommandContext,
-  opts: { format: ExportFormat; output?: string; expand: boolean },
+  opts: { format: ExportFormat; output?: string; expand: boolean; allowReserved: boolean },
 ): Promise<void> {
   const { io } = ctx.deps;
   if (!opts.output) {
@@ -42,10 +43,22 @@ export async function exportCommand(
       includeImports: true,
     }),
   );
+  // A dotenv file gets sourced into shells: reserved names (PATH, NODE_OPTIONS, ...) stay out
+  // unless allowed. JSON and YAML are data, never sourced.
+  const skipped: string[] = [];
   const entries: Entry[] = secrets
     .filter((s) => s.value !== undefined)
+    .filter((s) => {
+      const drop = opts.format === "dotenv" && !opts.allowReserved && isReservedEnvKey(s.key);
+      if (drop) skipped.push(s.key);
+      return !drop;
+    })
     .map((s): Entry => ({ key: s.key, value: s.value as string, type: s.type }))
     .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  if (skipped.length > 0) {
+    const names = [...new Set(skipped)].sort().join(", ");
+    ctx.out.warn(`Skipped reserved names: ${names} (pass --allow-reserved to write them)`);
+  }
   // Format first: a value that cannot be represented fails before any file is touched.
   const content = FORMATTERS[opts.format](entries);
 

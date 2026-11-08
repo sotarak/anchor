@@ -47,6 +47,26 @@ describe("anchor export", () => {
     expect(parseDotenv(d.out)).toEqual({ MODELS: '["a","b"]', PORT: "8080" });
   });
 
+  it("dotenv leaves out reserved names with a warning; --allow-reserved writes them", async () => {
+    const reservedApi = {
+      listSecrets: async () => [secret("PATH", "/evil/bin"), secret("A_KEY", "1")],
+    };
+    const cli = await loggedIn();
+    const r = await cli.run(["export", ...P], reservedApi);
+    expect(r.code).toBe(0);
+    expect(r.out).toBe("A_KEY=1\n");
+    expect(r.err).toContain("Skipped reserved names: PATH (pass --allow-reserved to write them)");
+    expect(r.err).not.toContain("/evil/bin");
+    const allowed = await loggedIn();
+    const a = await allowed.run(["export", "--allow-reserved", ...P], reservedApi);
+    expect(parseDotenv(a.out)).toEqual({ A_KEY: "1", PATH: "/evil/bin" });
+    expect(a.err).not.toContain("Skipped reserved names");
+    const json = await loggedIn();
+    const j = await json.run(["export", "--format", "json", ...P], reservedApi);
+    expect(JSON.parse(j.out)).toEqual({ A_KEY: "1", PATH: "/evil/bin" });
+    expect(j.err).not.toContain("Skipped reserved names");
+  });
+
   it("refuses TTY stdout without --output", async () => {
     const cli = await loggedIn({ stdoutTTY: true });
     const r = await cli.run(["export", ...P], api);

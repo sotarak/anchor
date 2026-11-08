@@ -102,6 +102,7 @@ Options:
   --output <file>    write to a file instead of stdout
   --expand           expand \${KEY} references in values (default)
   --no-expand        write stored values without expanding references
+  --allow-reserved   write secrets with reserved names such as PATH in dotenv files
   -h, --help         display help for command
 
 Global Options:

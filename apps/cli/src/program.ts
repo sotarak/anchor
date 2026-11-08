@@ -390,6 +390,7 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
     .option("--output <file>", "write to a file instead of stdout")
     .option("--expand", "expand ${KEY} references in values (default)")
     .option("--no-expand", "write stored values without expanding references")
+    .option("--allow-reserved", "write secrets with reserved names such as PATH in dotenv files")
     .addHelpText(
       "after",
       examples(
@@ -398,12 +399,22 @@ export function buildProgram(deps: CliDeps, state: RunState = { exitCode: 0 }): 
       ),
     )
     .action(
-      act((ctx, opts: { format: ExportFormat; output?: string; expand?: boolean }) =>
-        exportCommand(ctx, {
-          format: opts.format,
-          output: opts.output,
-          expand: opts.expand !== false,
-        }),
+      act(
+        (
+          ctx,
+          opts: {
+            format: ExportFormat;
+            output?: string;
+            expand?: boolean;
+            allowReserved?: boolean;
+          },
+        ) =>
+          exportCommand(ctx, {
+            format: opts.format,
+            output: opts.output,
+            expand: opts.expand !== false,
+            allowReserved: opts.allowReserved === true,
+          }),
       ),
     );
 

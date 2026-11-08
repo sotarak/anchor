@@ -78,13 +78,15 @@ async function readJson(res: Response): Promise<unknown> {
 /**
  * One API call with timeout and bounded retries. The debug line carries only the method,
  * the path without its query string, the status and the duration: never headers or bodies.
+ * A 304 (an answer to `If-None-Match` in `extra.headers`) resolves with no data.
  */
 export async function request<T>(
   opts: HttpOptions,
   method: Method,
   path: string,
   body?: unknown,
-): Promise<{ status: number; data: T }> {
+  extra: { headers?: Record<string, string> } = {},
+): Promise<{ status: number; data: T; etag: string | null }> {
   const url = new URL(path, opts.baseUrl);
   const timeoutMs = opts.timeoutMs ?? 15_000;
   const maxRetries = RETRYABLE_METHODS.has(method) ? (opts.maxRetries ?? 2) : 0;
@@ -95,6 +97,7 @@ export async function request<T>(
     "user-agent": opts.userAgent,
   };
   if (opts.token) headers.authorization = `Bearer ${opts.token}`;
+  Object.assign(headers, extra.headers);
 
   for (let attempt = 0; ; attempt++) {
     const started = Date.now();
@@ -122,6 +125,11 @@ export async function request<T>(
       await sleep(RETRY_DELAYS_MS[attempt] ?? 1000);
       continue;
     }
+    const etag = res.headers.get("etag");
+    if (res.status === 304) {
+      res.body?.cancel().catch(() => {});
+      return { status: 304, data: undefined as T, etag };
+    }
     let data: unknown;
     try {
       data = await readJson(res);
@@ -132,7 +140,7 @@ export async function request<T>(
         `Unexpected response from server (HTTP ${res.status})`,
       );
     }
-    if (res.ok) return { status: res.status, data: data as T };
+    if (res.ok) return { status: res.status, data: data as T, etag };
     if (isErrorBody(data)) {
       throw new ApiRequestError(res.status, data.error.code, data.error.message);
     }

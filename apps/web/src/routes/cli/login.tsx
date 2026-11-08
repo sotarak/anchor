@@ -13,7 +13,7 @@ import { KeyValueList } from "@/components/ui/key-value-list";
 import { ApiClientError } from "@/lib/api/client";
 import { api } from "@/lib/api/endpoints";
 import { qk } from "@/lib/api/query-keys";
-import { meQueryOptions, requireUser } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { formatRelative } from "@/lib/format";
 
 export const Route = createFileRoute("/cli/login")({
@@ -81,7 +81,8 @@ function requestedLabel(createdAt: number, now = Date.now()): string {
 }
 
 function Request({ code }: { code: string }) {
-  const me = useQuery(meQueryOptions);
+  // requireUser loaded the account before this route rendered, so the email is always known.
+  const { me } = Route.useRouteContext();
   const request = useQuery({
     queryKey: qk.cliLogin(code),
     queryFn: () => api.cliLogin.get(code),
@@ -127,7 +128,7 @@ function Request({ code }: { code: string }) {
   return (
     <AuthLayout
       title="Approve CLI login"
-      description={`A terminal wants to sign in as ${me.data?.email ?? "you"}`}
+      description={`A terminal wants to sign in as ${me.email}`}
     >
       <div className="flex flex-col gap-4">
         <div className="flex flex-col items-center gap-1 rounded-lg border bg-bg-weak p-4 text-center">

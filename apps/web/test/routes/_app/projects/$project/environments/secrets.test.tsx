@@ -573,6 +573,21 @@ describe("/projects/$project/environments/$env", () => {
     expect(bodies[0]).toMatchObject({ value: '["a","b"]', type: "list" });
   });
 
+  it("an empty list asks for an item instead of naming the JSON form", async () => {
+    setup();
+    const bodies = recordPuts();
+    const { user, sheet } = await openAdd();
+    await user.type(within(sheet).getByLabelText("Key"), "HOSTS");
+    await chooseType(user, sheet, /^List/);
+    await user.click(within(sheet).getByRole("button", { name: "Add secret" }));
+    expect(await within(sheet).findByText("Add at least one item")).toBeInTheDocument();
+    expect(within(sheet).queryByText("must be a JSON array of strings")).toBeNull();
+    expect(bodies).toEqual([]);
+    await user.type(within(sheet).getByRole("textbox", { name: "Item 1" }), "a");
+    await user.click(within(sheet).getByRole("button", { name: "Add secret" }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+  });
+
   it("adding a boolean requires a choice", async () => {
     setup();
     const bodies = recordPuts();

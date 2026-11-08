@@ -30,7 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ApiClientError } from "@/lib/api/client";
 import { api } from "@/lib/api/endpoints";
 import { qk } from "@/lib/api/query-keys";
-import { jsonProblem, TYPE_META } from "@/lib/typed-value";
+import { jsonProblem, listItemsFrom, TYPE_META } from "@/lib/typed-value";
 
 type Key = "key" | "value" | "comment";
 const MESSAGES: Record<Key, string> = {
@@ -44,6 +44,8 @@ const TYPE_ERROR = "value is not valid for type ";
 /** Why `value` is not valid text of `type`, or undefined. JSON names the parser's position. */
 function typeProblem(type: SecretValueType, value: string): string | undefined {
   if (type === "json") return jsonProblem(value) ?? undefined;
+  // An empty list is valid JSON for the API, but in the sheet it is an unfinished value.
+  if (type === "list" && listItemsFrom(value).length === 0) return "Add at least one item";
   const check = checkTypedValue(type, value);
   return check.ok ? undefined : check.reason;
 }

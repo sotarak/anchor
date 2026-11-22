@@ -9,6 +9,7 @@ export const ERROR_CODES = [
   "setup_disabled",
   "payload_too_large",
   "internal",
+  "reauth_required",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

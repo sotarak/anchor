@@ -10,6 +10,8 @@ export type UserDto = {
   name: string;
   role: InstanceRole;
   disabledAt?: number | null;
+  /** Set in user listings: a confirmed TOTP or at least one passkey. */
+  mfaEnabled?: boolean;
 };
 
 export type ProjectRole = "admin" | "developer" | "viewer";

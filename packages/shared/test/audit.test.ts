@@ -56,8 +56,24 @@ const V040_ACTIONS = [
   "oauth.revoked",
 ];
 
+// 0.6.0: two-factor authentication, appended after every earlier action.
+const V060_ACTIONS = [
+  "auth.reauth",
+  "mfa.totp_enabled",
+  "mfa.totp_disabled",
+  "mfa.passkey_added",
+  "mfa.passkey_removed",
+  "mfa.recovery_codes_generated",
+  "mfa.reset",
+];
+
 describe("AUDIT_ACTIONS", () => {
-  it("AUDIT_ACTIONS contains every M2 and M5 action in spec §13.6, then the 0.4.0 ones", () => {
-    expect([...AUDIT_ACTIONS]).toEqual([...SPEC_M2_ACTIONS, ...SPEC_M5_ACTIONS, ...V040_ACTIONS]);
+  it("AUDIT_ACTIONS contains every M2 and M5 action in spec §13.6, then the 0.4.0 and 0.6.0 ones", () => {
+    expect([...AUDIT_ACTIONS]).toEqual([
+      ...SPEC_M2_ACTIONS,
+      ...SPEC_M5_ACTIONS,
+      ...V040_ACTIONS,
+      ...V060_ACTIONS,
+    ]);
   });
 });

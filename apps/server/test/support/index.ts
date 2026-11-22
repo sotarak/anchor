@@ -9,3 +9,4 @@ export * from "./factories/users";
 export * from "./http";
 export * from "./mcp";
 export * from "./oauth";
+export * from "./webauthn";

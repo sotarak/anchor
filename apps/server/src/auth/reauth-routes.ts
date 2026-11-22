@@ -1,4 +1,4 @@
-import { reauthBodySchema } from "@anchor/shared";
+import { reauthBodySchema, reauthPasskeyBodySchema } from "@anchor/shared";
 import { type Context, Hono } from "hono";
 import { recordAudit } from "../audit/record";
 import { getRootKeyring } from "../crypto/keyring";
@@ -6,9 +6,17 @@ import { verifyPassword } from "../crypto/password";
 import type { AppEnv, UserPrincipal } from "../env";
 import { ApiError } from "../lib/errors";
 import { parseJson } from "../lib/validate";
+import { storeChallenge, takeChallenge } from "../mfa/challenges";
+import { findPasskey, listPasskeys, touchPasskey } from "../mfa/passkey-store";
 import { consumeRecoveryCode } from "../mfa/recovery-store";
 import { hasMfa } from "../mfa/status";
 import { consumeTotpCode } from "../mfa/totp-store";
+import {
+  authenticationOptions,
+  credentialIdOf,
+  relyingPartyFor,
+  verifyAuthentication,
+} from "../mfa/webauthn";
 import { findUserById, reserveLoginAttempt, type UserRow, updateLoginState } from "../users/repo";
 import { LOCKOUT_MS, MAX_FAILED_LOGINS } from "./lockout";
 import { clearFactorAttempts, factorAttemptKey, reserveLoginKeys } from "./login-attempts";
@@ -81,4 +89,42 @@ reauthRoutes.post("/auth/reauth", async (c) => {
   if (!ok) throw INVALID_CODE();
   await clearFactorAttempts(c.env.DB, user.id);
   return finishReauth(c, principal, body.method, now);
+});
+
+reauthRoutes.post("/auth/reauth/passkey/options", async (c) => {
+  const { principal, user } = await reauthPrincipal(c);
+  const rp = relyingPartyFor(c.req.url);
+  const allow = (await listPasskeys(c.env.DB, user.id)).filter((p) => p.rpId === rp.id);
+  if (allow.length === 0) throw new ApiError(400, "bad_request", "No passkey for this address");
+  const { options, challenge } = await authenticationOptions(rp, allow);
+  await storeChallenge(
+    c.env.DB,
+    user.id,
+    { purpose: "reauth", sessionId: principal.sessionId },
+    challenge,
+    Date.now(),
+  );
+  return c.json({ options });
+});
+
+reauthRoutes.post("/auth/reauth/passkey", async (c) => {
+  const { principal, user } = await reauthPrincipal(c);
+  const body = await parseJson(c, reauthPasskeyBodySchema);
+  const now = Date.now();
+  await reserveReauthFactor(c.env.DB, user.id, now);
+  const rp = relyingPartyFor(c.req.url);
+  const challenge = await takeChallenge(
+    c.env.DB,
+    user.id,
+    { purpose: "reauth", sessionId: principal.sessionId },
+    now,
+  );
+  const credentialId = credentialIdOf(body.response);
+  const passkey = credentialId ? await findPasskey(c.env.DB, user.id, credentialId) : null;
+  if (!challenge || !passkey || passkey.rpId !== rp.id) throw INVALID_CODE();
+  const verified = await verifyAuthentication(rp, body.response, challenge, passkey);
+  if (!verified) throw INVALID_CODE();
+  await touchPasskey(c.env.DB, passkey.id, verified.newCounter, now);
+  await clearFactorAttempts(c.env.DB, user.id);
+  return finishReauth(c, principal, "passkey", now);
 });

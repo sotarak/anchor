@@ -28,3 +28,8 @@ export function jsonInit(
   }
   return { method, headers, body: body === undefined ? undefined : JSON.stringify(body) };
 }
+
+/** Like api(), but as if the dashboard were served from `origin` (a second hostname). */
+export function apiAt(origin: string, path: string, init?: RequestInit): Promise<Response> {
+  return exports.default.fetch(new Request(origin + path, init));
+}

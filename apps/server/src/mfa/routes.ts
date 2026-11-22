@@ -1,4 +1,10 @@
-import { type MfaStatusDto, type TotpSetupDto, totpConfirmBodySchema } from "@anchor/shared";
+import {
+  type MfaStatusDto,
+  type PasskeyDto,
+  passkeyCreateBodySchema,
+  type TotpSetupDto,
+  totpConfirmBodySchema,
+} from "@anchor/shared";
 import { type Context, Hono } from "hono";
 import { recordAudit } from "../audit/record";
 import { requireWebUser } from "../auth/middleware";
@@ -7,11 +13,20 @@ import { getRootKeyring } from "../crypto/keyring";
 import type { AppEnv } from "../env";
 import { ApiError } from "../lib/errors";
 import { parseJson } from "../lib/validate";
+import { storeChallenge, takeChallenge } from "./challenges";
+import {
+  deletePasskey,
+  findPasskey,
+  insertPasskey,
+  listPasskeys,
+  MAX_PASSKEYS,
+  toPasskeyDto,
+} from "./passkey-store";
 import { replaceRecoveryCodes } from "./recovery-store";
 import { afterFactorRemoved, hasMfa, mfaStatus } from "./status";
 import { base32Encode, otpauthUri } from "./totp";
 import { confirmTotp, deleteTotp, startTotpEnrollment } from "./totp-store";
-import { relyingPartyFor } from "./webauthn";
+import { registrationOptions, relyingPartyFor, verifyRegistration } from "./webauthn";
 
 /**
  * Mounted at /api/v1/auth/mfa. Dashboard sessions only; every change needs a step-up in the last
@@ -83,4 +98,77 @@ mfaRoutes.post("/recovery-codes", async (c) => {
   const recoveryCodes = await replaceRecoveryCodes(c.env.DB, principal.userId, Date.now());
   await recordAudit(c, { action: "mfa.recovery_codes_generated", target: principal.userId });
   return c.json<{ recoveryCodes: string[] }>({ recoveryCodes });
+});
+
+mfaRoutes.post("/passkeys/options", async (c) => {
+  const principal = await requireRecentReauth(c);
+  const rp = relyingPartyFor(c.req.url);
+  const exclude = (await listPasskeys(c.env.DB, principal.userId)).filter((p) => p.rpId === rp.id);
+  const { options, challenge } = await registrationOptions(
+    rp,
+    { id: principal.userId, email: principal.email, name: principal.name },
+    exclude,
+  );
+  await storeChallenge(
+    c.env.DB,
+    principal.userId,
+    { purpose: "register", sessionId: principal.sessionId },
+    challenge,
+    Date.now(),
+  );
+  return c.json({ options });
+});
+
+mfaRoutes.post("/passkeys", async (c) => {
+  const principal = await requireRecentReauth(c);
+  const body = await parseJson(c, passkeyCreateBodySchema);
+  const now = Date.now();
+  const rp = relyingPartyFor(c.req.url);
+  const challenge = await takeChallenge(
+    c.env.DB,
+    principal.userId,
+    { purpose: "register", sessionId: principal.sessionId },
+    now,
+  );
+  if (!challenge) throw new ApiError(400, "bad_request", "Passkey setup expired, try again");
+  const passkey = await verifyRegistration(rp, body.response, challenge);
+  if (!passkey) throw new ApiError(400, "bad_request", "The passkey could not be verified");
+  const wasOn = await hasMfa(c.env.DB, principal.userId);
+  const outcome = await insertPasskey(c.env.DB, principal.userId, rp.id, body.name, passkey, now);
+  if (outcome === "limit") {
+    throw new ApiError(409, "conflict", `You can register at most ${MAX_PASSKEYS} passkeys`);
+  }
+  if (outcome === "duplicate") {
+    throw new ApiError(409, "conflict", "This passkey is already registered");
+  }
+  await recordAudit(c, {
+    action: "mfa.passkey_added",
+    target: principal.userId,
+    metadata: { passkeyId: passkey.id, name: body.name },
+  });
+  const row = await findPasskey(c.env.DB, principal.userId, passkey.id);
+  if (!row) throw new ApiError(404, "not_found", "Passkey not found");
+  return c.json<{ passkey: PasskeyDto; recoveryCodes?: string[] }>(
+    {
+      passkey: toPasskeyDto(row, rp.id),
+      ...(await codesForFirstFactor(c, principal.userId, wasOn)),
+    },
+    201,
+  );
+});
+
+mfaRoutes.delete("/passkeys/:id", async (c) => {
+  const principal = await requireRecentReauth(c);
+  const id = c.req.param("id");
+  const row = await findPasskey(c.env.DB, principal.userId, id);
+  if (!row || !(await deletePasskey(c.env.DB, principal.userId, id))) {
+    throw new ApiError(404, "not_found", "Passkey not found");
+  }
+  await afterFactorRemoved(c.env.DB, principal.userId);
+  await recordAudit(c, {
+    action: "mfa.passkey_removed",
+    target: principal.userId,
+    metadata: { passkeyId: row.id, name: row.name },
+  });
+  return c.body(null, 204);
 });

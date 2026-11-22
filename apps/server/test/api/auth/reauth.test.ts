@@ -5,12 +5,14 @@ import {
   api,
   auditRows,
   createUserWithSession,
+  enablePasskey,
   enableTotp,
   giveRecoveryCodes,
   json,
   jsonInit,
   mfaCall,
   resetDb,
+  type SoftAuthenticator,
   staleReauth,
   TEST_PASSWORD,
 } from "#test/support";
@@ -107,5 +109,36 @@ describe("who may re-authenticate", () => {
       .bind(userId)
       .first<{ reauth_at: number }>();
     expect(Date.now() - (row?.reauth_at ?? 0)).toBeGreaterThan(600_000);
+  });
+});
+
+describe("passkey step-up", () => {
+  let auth: SoftAuthenticator;
+  beforeEach(async () => {
+    auth = await enablePasskey(userId);
+  });
+
+  async function passkeyReauth(o?: { tamper?: boolean }) {
+    const res = await mfaCall("POST", "/auth/reauth/passkey/options", cookie);
+    const { options } = await json<{ options: { challenge: string } }>(res);
+    return mfaCall("POST", "/auth/reauth/passkey", cookie, {
+      response: await auth.authenticate(options, o),
+    });
+  }
+
+  it("a passkey assertion refreshes the window", async () => {
+    const res = await passkeyReauth();
+    expect(res.status).toBe(200);
+    expect((await json<{ reauthUntil: number }>(res)).reauthUntil).toBeGreaterThan(Date.now());
+    const [event] = await auditRows("auth.reauth");
+    expect(JSON.parse(event?.metadata ?? "null")).toEqual({ method: "passkey" });
+  });
+
+  it("a tampered assertion is 401 and counts toward the factor limit", async () => {
+    expect((await passkeyReauth({ tamper: true })).status).toBe(401);
+    const row = await env.DB.prepare("SELECT failures FROM login_attempts WHERE key = ?")
+      .bind(`m|${userId}`)
+      .first<{ failures: number }>();
+    expect(row?.failures).toBe(1);
   });
 });

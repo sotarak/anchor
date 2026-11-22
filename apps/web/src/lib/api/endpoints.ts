@@ -9,6 +9,7 @@ import type {
   InviteDto,
   KeyRotationDto,
   LoginResponse,
+  LoginResult,
   MemberDto,
   OAuthAuthorizeCheckDto,
   OAuthAuthorizeRequest,
@@ -53,7 +54,18 @@ export const api = {
   auth: {
     me: async () => (await apiFetch<{ user: UserDto }>("/auth/me")).user,
     login: (body: { email: string; password: string }) =>
-      apiFetch<LoginResponse>("/auth/login", { method: "POST", body: { ...body, client: "web" } }),
+      apiFetch<LoginResult>("/auth/login", { method: "POST", body: { ...body, client: "web" } }),
+    loginMfa: (body: { ticket: string; method: "totp" | "recovery"; code: string }) =>
+      apiFetch<LoginResponse>("/auth/login/mfa", { method: "POST", body }),
+    loginPasskeyOptions: async (ticket: string) =>
+      (
+        await apiFetch<{ options: unknown }>("/auth/login/passkey/options", {
+          method: "POST",
+          body: { ticket },
+        })
+      ).options,
+    loginPasskey: (body: { ticket: string; response: unknown }) =>
+      apiFetch<LoginResponse>("/auth/login/passkey", { method: "POST", body }),
     logout: () => apiFetch<void>("/auth/logout", { method: "POST" }),
     changePassword: (body: { currentPassword: string; newPassword: string }) =>
       apiFetch<void>("/auth/password", { method: "POST", body }),

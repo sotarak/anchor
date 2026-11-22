@@ -14,7 +14,12 @@ export async function replaceRecoveryCodes(
         .prepare(
           "INSERT INTO recovery_codes (id, user_id, code_hash, created_at) VALUES (?, ?, ?, ?)",
         )
-        .bind(newId(), userId, await hashRecoveryCode(normalizeRecoveryCode(code) ?? ""), now),
+        .bind(
+          newId(),
+          userId,
+          await hashRecoveryCode(userId, normalizeRecoveryCode(code) ?? ""),
+          now,
+        ),
     ),
   );
   await db.batch([
@@ -38,7 +43,7 @@ export async function consumeRecoveryCode(
       `UPDATE recovery_codes SET used_at = ?
        WHERE user_id = ? AND code_hash = ? AND used_at IS NULL RETURNING id`,
     )
-    .bind(now, userId, await hashRecoveryCode(normalized))
+    .bind(now, userId, await hashRecoveryCode(userId, normalized))
     .first();
   return row !== null;
 }

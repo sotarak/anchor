@@ -41,7 +41,7 @@ factor on. Read the upgrade notes: password login from a 0.5.x CLI fails for acc
 - **Second factors are limited per account**: a ticket dies after 5 wrong codes, and 5 wrong
   factors in 15 minutes lock the account's second step (login and step-up) for 15 minutes.
 - The TOTP secret is sealed with the root key (AES-256-GCM, bound to the user) and a code is never
-  accepted twice. Recovery codes and tickets are stored as SHA-256 hashes.
+  accepted twice. Tickets are stored as SHA-256 hashes, recovery codes as PBKDF2 hashes salted per user.
 - A stolen dashboard session cannot remove a factor: step-up with a factor is required, and a CLI
   session cannot manage two-factor settings at all.
 - A pending second step stops working when the user is disabled, their 2FA is reset, or their

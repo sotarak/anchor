@@ -20,7 +20,7 @@ rotation work, and it lets CI read secrets with a plain bearer token.
 | Gets a copy of the D1 database (export, backup, leaked dump) | Sees metadata (users, project and secret names, audit events) and the PBKDF2 password hashes, which allow offline password guessing, but **no secret values**: those are AES-256-GCM ciphertexts under keys wrapped by a root key that is not in the database |
 | Can write to D1 but not run the Worker | Can grant themselves access (insert a session or token hash, change a role or a scope) and then read everything through the API, or point a secret back at an older version. The AAD only stops a ciphertext being moved to another secret, version, environment or project. **Protect D1 write access like access to the Worker** |
 | Steals a service token | Reads (or writes, for `read-write`) only the environments and folders in its scopes, until it expires or is revoked; every value read and every write is audited with the token's id (listing names is not) |
-| Steals a session | Acts as that user until the session expires (7 days for the dashboard, 30 days for the CLI) or is revoked from the **Account** page; cannot change two-factor settings without re-authenticating with a factor (0.6.0) |
+| Steals a session | Acts as that user until the session expires (7 days for the dashboard, 30 days for the CLI) or is revoked from the **Account** page. To change two-factor settings more than 10 minutes after that session signed in, it must confirm it's you again, with a factor when the account has one (0.6.0) |
 | Knows or guesses a password (leak, reuse, distributed guessing) | Signs in, unless the account has two-factor authentication: then it stops at the second step, where factor guesses are capped per account |
 | Cracks a PBKDF2 hash from a D1 dump | Signs in, unless the account has two-factor authentication (the TOTP secret is sealed by the root key, not readable from the dump) |
 | Phishes a password and a TOTP code on a fake page | Signs in with them. A **passkey** stops this: it is bound to the real origin |
@@ -64,11 +64,13 @@ rotation work, and it lets CI read secrets with a plain bearer token.
   login. A ticket stops working when the user is disabled, their 2FA is reset, or their password is
   changed or reset. Factor guesses are also capped per account: 5 failures in 15 minutes lock the
   second step (login and step-up) for that account.
-- Recovery codes: 10 single-use codes, shown once when the first factor is added, stored as SHA-256,
+- Recovery codes: 10 single-use codes, shown once when the first factor is added, stored as a
+  PBKDF2-SHA-256 hash salted with the user (so a database dump cannot be swept for all users at once),
   regenerated on demand (the old ones stop working) and deleted with the last factor.
 - Step-up: changing two-factor settings needs a dashboard session that re-authenticated in the last
   10 minutes (`403 reauth_required` otherwise): with the password when the account has no factor,
-  with a factor when it has one, so a stolen session plus a phished password cannot remove it.
+  with a factor when it has one, so a stolen session plus a phished password cannot remove it. A
+  new session counts as confirmed for its first 10 minutes.
   Owners and admins can **Reset 2FA** for a user, which also signs that user out everywhere.
 - Sessions, service tokens, invite links and password-reset links are high-entropy random tokens
   with a type prefix (`anc_s_`, `anc_st_`, `anc_inv_`, `anc_rst_`). Only their SHA-256 hash is

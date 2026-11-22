@@ -44,6 +44,25 @@ describe("recovery code store", () => {
     expect(await countRecoveryCodes(db, userId)).toBe(10);
   });
 
+  it("stored hashes copied to another user do not unlock them", async () => {
+    const codes = await replaceRecoveryCodes(db, userId, Date.now());
+    const { userId: other } = await createUserWithSession();
+    await db.batch([
+      db.prepare("DELETE FROM recovery_codes WHERE user_id = ?").bind(other),
+      db
+        .prepare(
+          `INSERT INTO recovery_codes (id, user_id, code_hash, created_at)
+           SELECT id || '-copy', ?, code_hash, created_at FROM recovery_codes WHERE user_id = ?`,
+        )
+        .bind(other, userId),
+    ]);
+    expect(await countRecoveryCodes(db, other)).toBe(10);
+    for (const code of codes) {
+      expect(await consumeRecoveryCode(db, other, code, Date.now())).toBe(false);
+    }
+    expect(await consumeRecoveryCode(db, userId, codes[0] ?? "", Date.now())).toBe(true);
+  });
+
   it("replacing invalidates the previous set; deleting removes all", async () => {
     const old = await replaceRecoveryCodes(db, userId, Date.now());
     const fresh = await replaceRecoveryCodes(db, userId, Date.now());

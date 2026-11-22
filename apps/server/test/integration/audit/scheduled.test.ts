@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { purgeAudit } from "#src/audit/repo";
 import { handleScheduled } from "#src/audit/scheduled";
-import { resetDb } from "#test/support";
+import { createUserWithSession, resetDb } from "#test/support";
 
 const DAY = 86_400_000;
 
@@ -134,6 +134,30 @@ describe("cli login purge", () => {
       expect(
         lines.some((l) => l.includes('"login_attempts_purged"') && l.includes('"count":1')),
       ).toBe(true);
+    } finally {
+      logs.mockRestore();
+    }
+  });
+});
+
+describe("mfa purge", () => {
+  it("the daily job purges expired MFA tickets and logs mfa_purged", async () => {
+    const { userId } = await createUserWithSession();
+    await env.DB.prepare(
+      "INSERT INTO mfa_tickets (id, user_id, client, created_at, expires_at) VALUES ('t', ?, 'web', 0, 1)",
+    )
+      .bind(userId)
+      .run();
+    const logs = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await handleScheduled(
+        createScheduledController({ cron: "0 3 * * *" }),
+        env,
+        createExecutionContext(),
+      );
+      expect(await env.DB.prepare("SELECT 1 FROM mfa_tickets").first()).toBeNull();
+      const lines = logs.mock.calls.map((c) => String(c[0]));
+      expect(lines.some((l) => l.includes('"mfa_purged"') && l.includes('"count":1'))).toBe(true);
     } finally {
       logs.mockRestore();
     }

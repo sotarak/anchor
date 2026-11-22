@@ -86,6 +86,18 @@ export async function loginSucceeded(
   if (stmts.length > 0) await db.batch(stmts);
 }
 
+/** Second-factor guesses per account (0.6.0): 5 failures in the window lock the second step. */
+export const FACTOR_MAX_FAILURES = 5;
+
+export function factorAttemptKey(userId: string): LoginKey {
+  return { key: `m|${userId}`, max: FACTOR_MAX_FAILURES };
+}
+
+/** A correct factor (or Reset 2FA) clears the account's factor counter. */
+export async function clearFactorAttempts(db: D1Database, userId: string): Promise<void> {
+  await db.prepare("DELETE FROM login_attempts WHERE key = ?").bind(`m|${userId}`).run();
+}
+
 /** A password reset lifts every lock on the email, from every address. */
 export async function clearLoginLocksForEmail(db: D1Database, email: string): Promise<void> {
   await db.prepare("DELETE FROM login_attempts WHERE email = ?").bind(email).run();

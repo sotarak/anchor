@@ -16,7 +16,8 @@ export type TokenKind =
   | "anc_dc"
   | "anc_oat"
   | "anc_ort"
-  | "anc_oac";
+  | "anc_oac"
+  | "anc_mfa";
 
 /** Bearer secret: "<kind>_" + base64url(32 random bytes). Only its SHA-256 hex is ever stored. */
 export function newToken(kind: TokenKind): string {

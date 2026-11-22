@@ -65,8 +65,8 @@ describe("passkey as the second login step", () => {
   it("the options list only this user's passkeys", async () => {
     const t = await ticket();
     const { body } = await options(t.ticket);
-    const allow = (body?.options as unknown as { allowCredentials: { id: string }[] })
-      .allowCredentials;
+    const opts = body?.options as unknown as { allowCredentials: { id: string }[] } | undefined;
+    const allow = opts?.allowCredentials ?? [];
     expect(allow.map((c) => c.id)).toEqual([auth.credentialId]);
   });
 

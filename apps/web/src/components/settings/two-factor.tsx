@@ -10,11 +10,12 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { api } from "@/lib/api/endpoints";
 import { qk } from "@/lib/api/query-keys";
+import { Passkeys } from "./passkeys";
 import { RecoveryCodesDialog } from "./recovery-codes-dialog";
 import { TotpDialog } from "./totp-dialog";
 import { isReauthCancel, useReauth } from "./use-reauth";
 
-/** Account page section: authenticator app and recovery codes (passkeys join in their own row). */
+/** Account page section: authenticator app, recovery codes and passkeys. */
 export function TwoFactor() {
   const queryClient = useQueryClient();
   const status = useQuery({ queryKey: qk.mfa, queryFn: api.mfa.status });
@@ -102,6 +103,7 @@ export function TwoFactor() {
           />
         ) : null}
       </div>
+      {s ? <Passkeys status={s} run={run} onCodes={setCodes} onChanged={refresh} /> : null}
       {setup ? (
         <TotpDialog
           setup={setup}

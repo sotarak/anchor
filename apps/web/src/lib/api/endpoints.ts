@@ -16,6 +16,7 @@ import type {
   OAuthAuthorizeRequest,
   OAuthGrantDto,
   OverviewDto,
+  PasskeyDto,
   ProjectDto,
   ProjectKeyDto,
   ProjectRole,
@@ -108,6 +109,16 @@ export const api = {
     regenerateRecoveryCodes: async () =>
       (await apiFetch<{ recoveryCodes: string[] }>("/auth/mfa/recovery-codes", { method: "POST" }))
         .recoveryCodes,
+    passkeyOptions: async () =>
+      (await apiFetch<{ options: unknown }>("/auth/mfa/passkeys/options", { method: "POST" }))
+        .options,
+    addPasskey: (body: { name: string; response: unknown }) =>
+      apiFetch<{ passkey: PasskeyDto; recoveryCodes?: string[] }>("/auth/mfa/passkeys", {
+        method: "POST",
+        body,
+      }),
+    removePasskey: (id: string) =>
+      apiFetch<void>(`/auth/mfa/passkeys/${e(id)}`, { method: "DELETE" }),
   },
   oauth: {
     /** 200 with the consent details, or with `redirectTo` when the client must get an error. */

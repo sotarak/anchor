@@ -25,6 +25,11 @@ export const TABLES_CHILD_FIRST = [
   "environments",
   "project_keys",
   "projects",
+  "webauthn_challenges",
+  "mfa_tickets",
+  "webauthn_credentials",
+  "recovery_codes",
+  "totp_credentials",
   "sessions",
   "users",
 ] as const;

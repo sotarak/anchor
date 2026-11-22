@@ -118,3 +118,21 @@ describe("session storage", () => {
     expect(row?.id).toBe(await sha256Hex(token));
   });
 });
+
+describe("sessions.reauth_at", () => {
+  const row = (userId: string) =>
+    env.DB.prepare("SELECT created_at, reauth_at FROM sessions WHERE user_id = ?")
+      .bind(userId)
+      .first<{ created_at: number; reauth_at: number | null }>();
+
+  it("a web session starts re-authenticated at its creation time", async () => {
+    const { userId } = await createUserWithSession({ kind: "web" });
+    const r = await row(userId);
+    expect(r?.reauth_at).toBe(r?.created_at);
+  });
+
+  it("a cli session never counts as re-authenticated", async () => {
+    const { userId } = await createUserWithSession({ kind: "cli" });
+    expect((await row(userId))?.reauth_at).toBeNull();
+  });
+});

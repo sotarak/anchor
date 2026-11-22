@@ -19,9 +19,20 @@ export async function createSession(
   const expiresAt = now + SESSION_TTL_MS[kind];
   await db
     .prepare(
-      "INSERT INTO sessions (id, user_id, kind, user_agent, created_at, expires_at, last_used_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO sessions (id, user_id, kind, user_agent, created_at, expires_at, last_used_at, reauth_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
-    .bind(await sha256Hex(token), userId, kind, userAgent, now, expiresAt, now)
+    // A dashboard session is created by a fresh password (and factor) proof: it starts
+    // re-authenticated. CLI sessions never can manage MFA.
+    .bind(
+      await sha256Hex(token),
+      userId,
+      kind,
+      userAgent,
+      now,
+      expiresAt,
+      now,
+      kind === "web" ? now : null,
+    )
     .run();
   return { token, expiresAt };
 }

@@ -7,7 +7,7 @@ dashboard and CLI.
 
 ## [Unreleased]
 
-## [0.6.0] - 2026-11-22
+## [0.6.0] - 2026-11-23
 
 Two-factor authentication. Opt-in per user: nothing changes for an account until its person turns a
 factor on. Read the upgrade notes: password login from a 0.5.x CLI fails for accounts that do.

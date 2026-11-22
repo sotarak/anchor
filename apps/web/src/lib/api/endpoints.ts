@@ -157,6 +157,7 @@ export const api = {
       apiFetch<{ url: string; expiresAt: number }>(`/users/${e(id)}/password-reset`, {
         method: "POST",
       }),
+    resetMfa: (id: string) => apiFetch<void>(`/users/${e(id)}/mfa-reset`, { method: "POST" }),
   },
   projects: {
     list: async () => (await apiFetch<{ projects: ProjectDto[] }>("/projects")).projects,

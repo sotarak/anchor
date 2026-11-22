@@ -10,9 +10,13 @@ export type UserRow = {
   failed_logins: number;
   locked_until: number | null;
   disabled_at: number | null;
+  /** 1 when the user has a confirmed TOTP or a passkey (0.6.0). */
+  mfa_enabled?: number;
 };
 
-const COLUMNS = "id, email, name, password_hash, role, failed_logins, locked_until, disabled_at";
+const COLUMNS = `id, email, name, password_hash, role, failed_logins, locked_until, disabled_at,
+  (EXISTS (SELECT 1 FROM totp_credentials t WHERE t.user_id = users.id AND t.confirmed_at IS NOT NULL)
+    OR EXISTS (SELECT 1 FROM webauthn_credentials w WHERE w.user_id = users.id)) AS mfa_enabled`;
 
 export function findUserByEmail(db: D1Database, email: string): Promise<UserRow | null> {
   return db.prepare(`SELECT ${COLUMNS} FROM users WHERE email = ?`).bind(email).first<UserRow>();
@@ -107,10 +111,14 @@ export async function updateLoginState(
 
 /** disabledAt is included only when the caller has it (a full row); principals omit it. */
 export function toUserDto(
-  u: Pick<UserRow, "id" | "email" | "name" | "role"> & { disabled_at?: number | null },
+  u: Pick<UserRow, "id" | "email" | "name" | "role"> & {
+    disabled_at?: number | null;
+    mfa_enabled?: number;
+  },
 ): UserDto {
   const dto: UserDto = { id: u.id, email: u.email, name: u.name, role: u.role };
   if (u.disabled_at !== undefined) dto.disabledAt = u.disabled_at;
+  if (u.mfa_enabled !== undefined) dto.mfaEnabled = u.mfa_enabled === 1;
   return dto;
 }
 

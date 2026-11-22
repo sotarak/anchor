@@ -16,7 +16,7 @@ import type { AppEnv } from "../env";
 import { ApiError } from "../lib/errors";
 import { parseJson } from "../lib/validate";
 import { hasMfa, loginMethods } from "../mfa/status";
-import { createMfaTicket } from "../mfa/tickets";
+import { createMfaTicket, deleteUserMfaTickets } from "../mfa/tickets";
 import { relyingPartyFor } from "../mfa/webauthn";
 import { revokeUserGrants } from "../oauth/store";
 import { loadServiceTokenDto } from "../service-tokens/repo";
@@ -169,6 +169,7 @@ authRoutes.post("/auth/password", async (c) => {
   await setPassword(c.env.DB, user.id, await hashPassword(body.newPassword), now);
   await revokeUserSessions(c.env.DB, user.id, principal.sessionId);
   await revokeUserGrants(c.env.DB, user.id, now);
+  await deleteUserMfaTickets(c.env.DB, user.id);
   await recordAudit(c, { action: "auth.password_changed", target: user.id });
   return c.body(null, 204);
 });
@@ -181,6 +182,7 @@ authRoutes.post("/auth/password-reset", async (c) => {
   if (!userId) throw new ApiError(404, "not_found", "Link is invalid or has expired");
   await revokeUserSessions(c.env.DB, userId);
   await revokeUserGrants(c.env.DB, userId, now);
+  await deleteUserMfaTickets(c.env.DB, userId);
   const user = await findUserById(c.env.DB, userId);
   if (user) await clearLoginLocksForEmail(c.env.DB, user.email);
   await recordAudit(c, {

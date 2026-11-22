@@ -7,6 +7,8 @@ import { authorize } from "../authz/policy";
 import type { AppEnv, UserPrincipal } from "../env";
 import { ApiError } from "../lib/errors";
 import { parseJson } from "../lib/validate";
+import { resetUserMfa } from "../mfa/status";
+import { revokeUserGrants } from "../oauth/store";
 import { createPasswordReset } from "./password-resets";
 import {
   deleteUserGuarded,
@@ -127,4 +129,25 @@ userRoutes.post("/:id/password-reset", async (c) => {
   });
   const url = `${new URL(c.req.url).origin}/reset-password#token=${token}`;
   return c.json<{ url: string; expiresAt: number }>({ url, expiresAt }, 201);
+});
+
+/** Reset 2FA (0.6.0): removes every factor of someone who lost theirs. Same rule as reset links. */
+userRoutes.post("/:id/mfa-reset", async (c) => {
+  const actor = await userManager(c);
+  const target = await targetUser(c);
+  if (target.id === actor.userId)
+    throw new ApiError(409, "conflict", "Use your Account page instead");
+  if (actor.role !== "owner" && target.role !== "member") {
+    throw new ApiError(403, "forbidden", "Only an owner can reset an owner or admin");
+  }
+  const now = Date.now();
+  await resetUserMfa(c.env.DB, target.id);
+  await revokeUserSessions(c.env.DB, target.id);
+  await revokeUserGrants(c.env.DB, target.id, now);
+  await recordAudit(c, {
+    action: "mfa.reset",
+    target: target.id,
+    metadata: { userId: target.id },
+  });
+  return c.body(null, 204);
 });

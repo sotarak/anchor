@@ -369,6 +369,19 @@ describe("anchor login --with-password and two-factor authentication", () => {
     }
   });
 
+  it("a code typed with a space is still an authenticator code", async () => {
+    const { io } = await env({ tty: true });
+    const prompts = fakePrompts({ input: [user.email], password: [PASSWORD, "246 810"] });
+    const r = run(
+      io,
+      ["login", "--api-url", API, "--with-password"],
+      { login: mfa(["totp", "recovery"]), loginMfa: loginOk },
+      { prompts: prompts.prompts },
+    );
+    expect(await r.code).toBe(0);
+    expect(r.fake.called("loginMfa")[0]?.args).toEqual([TICKET, "totp", CODE]);
+  });
+
   it("anything but six digits is sent as a recovery code", async () => {
     const { io } = await env({ tty: true });
     const prompts = fakePrompts({ input: [user.email], password: [PASSWORD, " abcde-fghij "] });

@@ -67,14 +67,18 @@ export function timeStep(nowMs: number): number {
   return Math.floor(nowMs / PERIOD_MS);
 }
 
-/** The step (s-1, s or s+1) whose code equals `code`, compared in constant time; else null. */
+/**
+ * The step (s-1, s or s+1) whose code equals `code`, compared in constant time; else null.
+ * Spaces and hyphens are ignored: apps display codes as `123 456` and people type them so.
+ */
 export async function matchTotp(
   secret: Uint8Array,
   code: string,
   nowMs: number,
 ): Promise<number | null> {
-  if (!SIX_DIGITS.test(code)) return null;
-  const submitted = new TextEncoder().encode(code);
+  const compact = code.replace(/[\s-]/g, "");
+  if (!SIX_DIGITS.test(compact)) return null;
+  const submitted = new TextEncoder().encode(compact);
   const current = timeStep(nowMs);
   let matched: number | null = null;
   // Every candidate is computed and compared, so timing does not reveal which step matched.

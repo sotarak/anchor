@@ -145,8 +145,11 @@ async function secondFactor(
   const message = challenge.methods.includes("totp")
     ? "Authentication code (or recovery code)"
     : "Recovery code (passkeys work with 'anchor login' in the browser)";
-  const code = (await ctx.deps.prompts.password({ message })).trim();
-  const method = SIX_DIGITS.test(code) ? "totp" : "recovery";
+  const typed = (await ctx.deps.prompts.password({ message })).trim();
+  // Apps display codes as `123 456`; six digits once spaces are gone is an authenticator code.
+  const compact = typed.replace(/\s/g, "");
+  const method = SIX_DIGITS.test(compact) ? "totp" : "recovery";
+  const code = method === "totp" ? compact : typed;
   try {
     return await rawApiFor(ctx, apiUrl).loginMfa(challenge.ticket, method, code);
   } catch (e) {

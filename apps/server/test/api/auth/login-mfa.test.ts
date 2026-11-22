@@ -88,6 +88,13 @@ describe("POST /auth/login/mfa", () => {
     expect(await errorOf(await second(ticket, "totp", await codeAt(Date.now())))).toEqual(EXPIRED);
   });
 
+  it("a code typed as the app shows it (123 456) signs in", async () => {
+    const { ticket } = await ticketFor("web");
+    const code = await codeAt(Date.now());
+    const res = await second(ticket, "totp", `${code.slice(0, 3)} ${code.slice(3)}`);
+    expect(res.status).toBe(200);
+  });
+
   it("a cli ticket returns a bearer token", async () => {
     const { ticket } = await ticketFor("cli");
     const res = await second(ticket, "totp", await codeAt(Date.now()));

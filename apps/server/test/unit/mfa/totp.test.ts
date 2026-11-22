@@ -45,6 +45,17 @@ describe("matchTotp", () => {
     expect(await matchTotp(RFC_SECRET, await codeAt(step + 2), now)).toBeNull();
   });
 
+  it("accepts a code typed with spaces or a hyphen, the way apps display it", async () => {
+    const code = await codeAt(step);
+    for (const typed of [
+      `${code.slice(0, 3)} ${code.slice(3)}`,
+      ` ${code} `,
+      `${code.slice(0, 3)}-${code.slice(3)}`,
+    ]) {
+      expect(await matchTotp(RFC_SECRET, typed, now)).toBe(step);
+    }
+  });
+
   it("refuses anything but exactly six ASCII digits", async () => {
     for (const code of ["12345", "1234567", "12 456", "١٢٣٤٥٦", "abcdef", ""]) {
       expect(await matchTotp(RFC_SECRET, code, now)).toBeNull();

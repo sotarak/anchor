@@ -7,6 +7,70 @@ dashboard and CLI.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-22
+
+Two-factor authentication. Opt-in per user: nothing changes for an account until its person turns a
+factor on. Read the upgrade notes: password login from a 0.5.x CLI fails for accounts that do.
+
+### Added
+
+- **Two-factor authentication** on **Account → Two-factor authentication**: an authenticator app
+  (TOTP, 6 digits, 30 seconds) set up from a QR code, and **passkeys** (WebAuthn, up to 20 per
+  user, named) as a second factor after the password. Signing in then asks for a code, a passkey or
+  a recovery code; the dashboard, `POST /auth/login/mfa` and `POST /auth/login/passkey` finish the
+  login with a 5-minute ticket that `POST /auth/login` returns instead of a session.
+- **Recovery codes**: 10 single-use codes shown once when the first factor is added, copy or
+  download as `anchor-recovery-codes.txt`, and **Generate new codes** on demand.
+- **Step-up**: changing two-factor settings asks the person to confirm it's you (the password
+  without a factor, a factor with one) at most every 10 minutes; the API answers
+  `403 reauth_required` and `POST /auth/reauth` confirms.
+- **Reset 2FA** on the **Users** page and `POST /users/:id/mfa-reset` (owners, and admins for
+  members): removes the user's factors and signs them out everywhere. A **2FA** tag shows who has
+  it on; user payloads carry `mfaEnabled`.
+- `anchor login --with-password` asks for the authentication or recovery code when the account
+  needs one (hidden input; exits 3 without a terminal, pointing to the browser login).
+- New audit actions: `auth.reauth`, `mfa.totp_enabled`, `mfa.totp_disabled`, `mfa.passkey_added`,
+  `mfa.passkey_removed`, `mfa.recovery_codes_generated`, `mfa.reset`. A login records its method
+  (`password+totp`, `password+passkey`, `password+recovery`).
+
+### Security
+
+- **A password is no longer enough** for an account with a factor: a leaked or guessed password, a
+  cracked hash from a database dump, or a password-reset link stops at the second step. Passkeys
+  also stop phishing; TOTP codes can still be phished.
+- **Second factors are limited per account**: a ticket dies after 5 wrong codes, and 5 wrong
+  factors in 15 minutes lock the account's second step (login and step-up) for 15 minutes.
+- The TOTP secret is sealed with the root key (AES-256-GCM, bound to the user) and a code is never
+  accepted twice. Recovery codes and tickets are stored as SHA-256 hashes.
+- A stolen dashboard session cannot remove a factor: step-up with a factor is required, and a CLI
+  session cannot manage two-factor settings at all.
+- A pending second step stops working when the user is disabled, their 2FA is reset, or their
+  password is changed or reset.
+
+### Changed
+
+- `POST /auth/login` has a second answer shape, `{ mfaRequired: true, ticket, methods, expiresAt }`,
+  for accounts with a factor.
+- `POST /admin/root-key/rewrap` also re-wraps TOTP secrets and returns `totpRewrapped`.
+- Docs: security model, dashboard, CLI, deploy, upgrade, break-glass, root-key rotation, rate
+  limiting, HTTP API and limits pages cover two-factor authentication.
+
+### Upgrade notes
+
+- **Migration `0010_mfa`** is applied by the normal upgrade (Workers Builds, `pnpm deploy:worker`,
+  or `wrangler d1 migrations apply`). It only adds tables and a column.
+- **Upgrade the CLI**: a 0.5.x CLI doing password login against an account with two-factor
+  authentication fails with `The server did not return a CLI session`. Browser login
+  (`anchor login`) works with any version; CI keeps using service tokens.
+- **Choose the final hostname before people register passkeys**: a passkey works only on the
+  hostname it was created on (recovery codes and authenticator apps work everywhere).
+- **Root-key rotation**: the rewrap response gains `totpRewrapped`; run the rewrap before dropping
+  the previous key, or authenticator apps stop working for their users.
+- **Rolling back below 0.6.0** lets accounts with a factor sign in with the password alone until
+  you upgrade again.
+- New dependencies: `@simplewebauthn/server` 14.1.0 (server), `@simplewebauthn/browser` 14.0.0 and
+  `uqr` 0.1.3 (dashboard).
+
 ## [0.5.3] - 2026-11-09
 
 A security release. No change to encryption, stored data or the API: a 0.5.2 CLI keeps working
@@ -389,7 +453,8 @@ Cloudflare Workers, D1 and Queues.
   - A documentation site at https://sotarak.github.io/anchor/ (guides, operations runbooks,
     security model, API reference).
 
-[Unreleased]: https://github.com/sotarak/anchor/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/sotarak/anchor/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/sotarak/anchor/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/sotarak/anchor/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/sotarak/anchor/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/sotarak/anchor/compare/v0.5.0...v0.5.1

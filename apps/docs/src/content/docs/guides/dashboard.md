@@ -59,7 +59,9 @@ disabled, and the server rejects the request anyway.
 
 - **Users**: invite people (a link valid 72 hours), change instance roles, disable or delete
   accounts, create password-reset links. The last active owner cannot be demoted, disabled or
-  deleted.
+  deleted. A **2FA** tag marks users with two-factor authentication on; **Reset 2FA** (0.6.0)
+  removes their authenticator app, passkeys and recovery codes and signs them out everywhere, for
+  someone who lost their factors. Admins can reset members only; owners anyone but themselves.
 - **Audit log**: the instance audit log, filterable by project, actor and action, with each
   event's target and metadata. Project admins who are not instance admins get **Project audit
   log** in the sidebar instead, for their project.
@@ -67,6 +69,14 @@ disabled, and the server rejects the request anyway.
 ## Account (everyone)
 
 - Change your password.
+- **Two-factor authentication** (0.6.0, optional): set up an authenticator app (scan the QR code,
+  then enter a code) and add passkeys (named, up to 20). Adding the first factor shows 10 recovery
+  codes once: copy or download them, each works once. **Generate new codes** replaces them. A
+  passkey works only on the address it was registered on; one from another address is marked
+  **Registered on &lt;host&gt;**. Changing these settings asks you to confirm it's you (your
+  password, or a factor once you have one) at most every 10 minutes.
+  With a factor on, signing in asks for a code from the app, a passkey or a recovery code after
+  the password.
 - See your active sessions (dashboard and CLI) and revoke any of them.
 - **Connected apps**: the AI agents and apps you approved over OAuth (see
   [Connect AI agents over MCP](/anchor/guides/mcp/)), with their permissions (Read, Write,

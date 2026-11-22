@@ -12,6 +12,7 @@ Without them the CLI uses `.anchor.json` in the directory or a parent.
 | `anchor whoami` | Who is signed in (user or service token), or "Not logged in" |
 | `anchor login` | Browser sign-in, the person approves on the dashboard; session lasts 30 days |
 | `anchor login --no-browser` | Prints the URL instead of opening a browser |
+| `anchor login --with-password` | Email and password; with two-factor authentication on it then asks for an authenticator or recovery code (needs a terminal; exits 3 without one, so agents and CI should use browser login or `ANCHOR_TOKEN`) |
 | `anchor logout` | Revokes the session on the server and deletes it locally |
 | `anchor init [--project p --env e]` | Writes `.anchor.json` (identifiers only, safe to commit) |
 | `anchor projects list`, `anchor envs list` | Discover slugs |

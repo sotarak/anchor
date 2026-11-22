@@ -154,9 +154,18 @@ refuses to create projects under a root key that cannot open the existing ones (
 ## Manage users
 
 The first owner manages everyone else on the dashboard's **Users** page (invite links valid 72
-hours, role changes, disable, delete, password-reset links), or through the API at
+hours, role changes, disable, delete, password-reset links, Reset 2FA), or through the API at
 `/api/v1/users` and `/api/v1/invites`. An instance always keeps at least one active owner: the API
 refuses to demote, disable or delete the last one.
+
+## Choose the final hostname before users add passkeys
+
+Passkeys (0.6.0) are bound to the hostname they are registered on. Settle the address people will
+use (a custom domain, or the `workers.dev` one) before anyone adds a passkey: a passkey registered
+on `anchor-xyz.workers.dev` does not work on `anchor.example.com`, and moving to a new domain
+leaves every existing passkey unusable there. Users can still sign in with an authenticator app or
+a recovery code and register new passkeys; the Account page marks the old ones
+**Registered on &lt;host&gt;**.
 
 ## Next steps
 

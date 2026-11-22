@@ -11,6 +11,7 @@ import type {
   LoginResponse,
   LoginResult,
   MemberDto,
+  MfaStatusDto,
   OAuthAuthorizeCheckDto,
   OAuthAuthorizeRequest,
   OAuthGrantDto,
@@ -24,6 +25,7 @@ import type {
   ServiceTokenDto,
   SessionDto,
   SetupStatusDto,
+  TotpSetupDto,
   UserDto,
 } from "@anchor/shared";
 import { apiFetch } from "./client";
@@ -66,6 +68,19 @@ export const api = {
       ).options,
     loginPasskey: (body: { ticket: string; response: unknown }) =>
       apiFetch<LoginResponse>("/auth/login/passkey", { method: "POST", body }),
+    reauth: (
+      body:
+        | { method: "password"; password: string }
+        | { method: "totp" | "recovery"; code: string },
+    ) => apiFetch<{ reauthUntil: number }>("/auth/reauth", { method: "POST", body }),
+    reauthPasskeyOptions: async () =>
+      (await apiFetch<{ options: unknown }>("/auth/reauth/passkey/options", { method: "POST" }))
+        .options,
+    reauthPasskey: (response: unknown) =>
+      apiFetch<{ reauthUntil: number }>("/auth/reauth/passkey", {
+        method: "POST",
+        body: { response },
+      }),
     logout: () => apiFetch<void>("/auth/logout", { method: "POST" }),
     changePassword: (body: { currentPassword: string; newPassword: string }) =>
       apiFetch<void>("/auth/password", { method: "POST", body }),
@@ -80,6 +95,19 @@ export const api = {
       apiFetch<void>(`/auth/cli/requests/${e(code)}/approve`, { method: "POST" }),
     deny: (code: string) =>
       apiFetch<void>(`/auth/cli/requests/${e(code)}/deny`, { method: "POST" }),
+  },
+  mfa: {
+    status: () => apiFetch<MfaStatusDto>("/auth/mfa"),
+    setupTotp: () => apiFetch<TotpSetupDto>("/auth/mfa/totp", { method: "POST" }),
+    confirmTotp: (code: string) =>
+      apiFetch<{ recoveryCodes?: string[] }>("/auth/mfa/totp/confirm", {
+        method: "POST",
+        body: { code },
+      }),
+    disableTotp: () => apiFetch<void>("/auth/mfa/totp", { method: "DELETE" }),
+    regenerateRecoveryCodes: async () =>
+      (await apiFetch<{ recoveryCodes: string[] }>("/auth/mfa/recovery-codes", { method: "POST" }))
+        .recoveryCodes,
   },
   oauth: {
     /** 200 with the consent details, or with `redirectTo` when the client must get an error. */

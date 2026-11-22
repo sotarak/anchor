@@ -1,5 +1,6 @@
-import type { EnvironmentDto, FolderDto, ProjectDto, UserDto } from "@anchor/shared";
+import type { EnvironmentDto, FolderDto, MfaStatusDto, ProjectDto, UserDto } from "@anchor/shared";
 import { HttpResponse, http } from "msw";
+import { vi } from "vitest";
 import { fixtures } from "./fixtures";
 import { apiError, server } from "./msw";
 
@@ -53,4 +54,19 @@ export function foldersAre(
     ),
   );
   return { urls };
+}
+
+export const MFA_OFF: MfaStatusDto = {
+  enabled: false,
+  totp: false,
+  passkeys: [],
+  recoveryCodesRemaining: 0,
+  reauthUntil: null,
+};
+
+/** GET /auth/mfa answers from `status()` (called per request); records each GET. */
+export function mfaStatusIs(status: MfaStatusDto | (() => MfaStatusDto) = MFA_OFF) {
+  const handler = vi.fn(() => HttpResponse.json(typeof status === "function" ? status() : status));
+  server.use(http.get("/api/v1/auth/mfa", handler));
+  return handler;
 }

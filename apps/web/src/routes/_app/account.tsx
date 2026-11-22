@@ -22,6 +22,7 @@ import {
 } from "@/components/forms/validate";
 import { ConfirmDialog } from "@/components/overlays/confirm-dialog";
 import { ConnectedApps } from "@/components/settings/connected-apps";
+import { TwoFactor } from "@/components/settings/two-factor";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import {
@@ -68,6 +69,9 @@ function AccountPage() {
       </Section>
       <Section id="password" title="Password">
         <PasswordForm />
+      </Section>
+      <Section id="two-factor" title="Two-factor authentication">
+        <TwoFactor />
       </Section>
       <Section id="sessions" title="Sessions">
         <Sessions />

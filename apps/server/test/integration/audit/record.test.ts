@@ -84,6 +84,12 @@ describe("recordAudit", () => {
         { nested: { password: "x" } },
         { Token: "x" },
         { list: [{ rawValue: "x" }] },
+        { code: "123456" },
+        { codes: ["a"] },
+        { recoveryCodes: ["a"] },
+        { secret: "x" },
+        { ticket: "anc_mfa_x" },
+        { response: {} },
       ]) {
         expect((await send({ metadata })).status, JSON.stringify(metadata)).toBe(500);
       }

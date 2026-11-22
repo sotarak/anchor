@@ -2,8 +2,11 @@ import { env } from "cloudflare:workers";
 import type { SecretDto } from "@anchor/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "#src/app";
+import { getRootKeyring } from "#src/crypto/keyring";
 import { toBase64 } from "#src/lib/encoding";
 import { randomBytes } from "#src/lib/random";
+import { hotp, timeStep } from "#src/mfa/totp";
+import { confirmTotp, consumeTotpCode, startTotpEnrollment } from "#src/mfa/totp-store";
 import {
   auditRows,
   createUserWithSession,
@@ -93,12 +96,32 @@ describe("root keyring", () => {
   it("rewrap converts all rows and second call returns 0", async () => {
     const first = await rewrap(ROTATED);
     expect(first.status).toBe(200);
-    expect(await json(first)).toEqual({ rewrapped: 2 });
+    expect(await json(first)).toEqual({ rewrapped: 2, totpRewrapped: 0 });
     expect(await rootKeyIds()).toEqual(["rk2", "rk2"]);
     const second = await rewrap(ROTATED);
-    expect(await json(second)).toEqual({ rewrapped: 0 });
+    expect(await json(second)).toEqual({ rewrapped: 0, totpRewrapped: 0 });
     const [row] = await auditRows("root_key.rewrapped");
-    expect(JSON.parse(row?.metadata ?? "null")).toEqual({ count: 2, toKeyId: "rk2" });
+    expect(JSON.parse(row?.metadata ?? "null")).toEqual({
+      count: 2,
+      toKeyId: "rk2",
+      totpRewrapped: 0,
+    });
+  });
+
+  it("rewrap also re-wraps TOTP secrets, which then open with the new key alone", async () => {
+    const { userId } = await createUserWithSession();
+    const now = Date.now();
+    const secret = await startTotpEnrollment(env.DB, await getRootKeyring(env), userId, now);
+    if (!secret) throw new Error("no secret");
+    const code = await hotp(secret, timeStep(now));
+    expect(await confirmTotp(env.DB, await getRootKeyring(env), userId, code, now)).toBe(true);
+    const res = await rewrap(ROTATED);
+    expect(await json(res)).toEqual({ rewrapped: 2, totpRewrapped: 1 });
+    const later = now + 60_000;
+    const newOnly = await getRootKeyring({ ...env, ...NEW_ONLY });
+    expect(
+      await consumeTotpCode(env.DB, newOnly, userId, await hotp(secret, timeStep(later)), later),
+    ).toBe(true);
   });
 
   it("after rewrap, previous key can be removed and data still decrypts", async () => {

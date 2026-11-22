@@ -4,6 +4,7 @@ import {
   RiForbidLine,
   RiLockPasswordLine,
   RiMore2Fill,
+  RiShieldKeyholeLine,
   RiShieldUserLine,
   RiUserFollowLine,
 } from "react-icons/ri";
@@ -38,12 +39,13 @@ export type UserActions = {
   onChangeRole: (u: UserDto, role: InstanceRole) => void;
   onToggleDisabled: (u: UserDto) => void;
   onResetLink: (u: UserDto) => void;
+  onResetMfa: (u: UserDto) => void;
   onDelete: (u: UserDto) => void;
 };
 
 /**
  * What `me` may do to `target`, mirroring the server: nothing to yourself; only owners touch
- * owners or grant the owner role; admins create reset links for members only.
+ * owners or grant the owner role; admins create reset links and reset 2FA for members only.
  */
 export function permissions(me: UserDto, target: UserDto) {
   const self = me.id === target.id;
@@ -54,6 +56,7 @@ export function permissions(me: UserDto, target: UserDto) {
       ? ["owner", "admin", "member"]
       : ["admin", "member"]) as InstanceRole[],
     resetLink: manage && !target.disabledAt && (me.role === "owner" || target.role === "member"),
+    resetMfa: manage && !!target.mfaEnabled && (me.role === "owner" || target.role === "member"),
   };
 }
 
@@ -101,7 +104,10 @@ export function UsersTable({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Tag>{roleLabel(u.role)}</Tag>
+                  <div className="flex items-center gap-1">
+                    <Tag>{roleLabel(u.role)}</Tag>
+                    {u.mfaEnabled ? <Tag>2FA</Tag> : null}
+                  </div>
                 </TableCell>
                 <TableCell>
                   {u.disabledAt ? (
@@ -151,6 +157,12 @@ export function UsersTable({
                           <DropdownMenuItem onSelect={() => actions.onResetLink(u)}>
                             <RiLockPasswordLine aria-hidden />
                             Create password reset link
+                          </DropdownMenuItem>
+                        ) : null}
+                        {can.resetMfa ? (
+                          <DropdownMenuItem onSelect={() => actions.onResetMfa(u)}>
+                            <RiShieldKeyholeLine aria-hidden />
+                            Reset 2FA
                           </DropdownMenuItem>
                         ) : null}
                         <DropdownMenuSeparator />

@@ -461,6 +461,7 @@ describe("error mapping", () => {
       setup_disabled: 1,
       payload_too_large: 1,
       internal: 1,
+      reauth_required: 4,
     };
     for (const code of ERROR_CODES) {
       expect(exitCodeForApiError(new ApiRequestError(400, code, "m"))).toBe(expected[code]);

@@ -93,6 +93,14 @@ it after each upgrade) so upgrades do not overwrite it.
 > with a 500 until you upgrade again. No data is lost. To run 0.3.x again, restore the bookmark
 > from the step above, which discards every write made since.
 
+> **0.6.0 adds one migration** (`0010_mfa`: two-factor tables and `sessions.reauth_at`), applied
+> like the others; no data is rewritten and users without two-factor authentication see no change.
+> Upgrade the CLI too: a 0.5.x CLI doing `anchor login --with-password` against an account with
+> two-factor authentication fails with `The server did not return a CLI session` (browser login
+> works). Before anyone adds a passkey, settle the hostname people use (passkeys work only there).
+> **Rolling back below 0.6.0** ignores the new tables: accounts with two-factor authentication then
+> sign in with their password alone until you upgrade again, so avoid it.
+
 If a release changes Worker configuration (a new binding or queue in `wrangler.jsonc`), the changelog
 says so; create the resource before you deploy.
 

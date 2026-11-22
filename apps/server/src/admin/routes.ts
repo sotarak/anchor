@@ -4,11 +4,12 @@ import { requireUser } from "../auth/middleware";
 import { getRootKeyring, rewrapAllKeks } from "../crypto/keyring";
 import type { AppEnv } from "../env";
 import { ApiError } from "../lib/errors";
+import { rewrapTotpSecrets } from "../mfa/totp-store";
 
 /** Mounted at /api/v1/admin. Instance owners only. */
 export const adminRoutes = new Hono<AppEnv>();
 
-/** Re-wraps every project KEK under the current root key (root key rotation, see the operations docs in apps/docs). */
+/** Re-wraps every project KEK and TOTP secret under the current root key (root key rotation, see the operations docs in apps/docs). */
 adminRoutes.post("/root-key/rewrap", async (c) => {
   const user = requireUser(c);
   if (user.role !== "owner") {
@@ -16,9 +17,11 @@ adminRoutes.post("/root-key/rewrap", async (c) => {
   }
   const keyring = await getRootKeyring(c.env);
   const rewrapped = await rewrapAllKeks(c.env.DB, keyring);
+  // Authenticator-app secrets are sealed by the root key too (0.6.0).
+  const totpRewrapped = await rewrapTotpSecrets(c.env.DB, keyring);
   await recordAudit(c, {
     action: "root_key.rewrapped",
-    metadata: { count: rewrapped, toKeyId: keyring.current.id },
+    metadata: { count: rewrapped, toKeyId: keyring.current.id, totpRewrapped },
   });
-  return c.json<{ rewrapped: number }>({ rewrapped });
+  return c.json<{ rewrapped: number; totpRewrapped: number }>({ rewrapped, totpRewrapped });
 });

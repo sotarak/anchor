@@ -371,7 +371,7 @@ describe("open-source repository", () => {
     expect(upgrading).toContain("run_worker_first");
   });
 
-  it("every manifest is 0.5.3 and the changelog has a 0.5.3 entry", () => {
+  it("every manifest is 0.6.0 and the changelog has a 0.6.0 entry", () => {
     for (const f of [
       "package.json",
       "apps/cli/package.json",
@@ -382,19 +382,20 @@ describe("open-source repository", () => {
       "packages/sdk/package.json",
       "packages/nestjs/package.json",
     ]) {
-      expect(JSON.parse(read(f)).version, f).toBe("0.5.3");
+      expect(JSON.parse(read(f)).version, f).toBe("0.6.0");
     }
     // The MCP server reports this as its version.
-    expect(read("apps/server/src/version.ts")).toContain('SERVER_VERSION = "0.5.3"');
+    expect(read("apps/server/src/version.ts")).toContain('SERVER_VERSION = "0.6.0"');
     // Exits non-zero (and throws here) when the section is missing.
-    const notes = execFileSync(process.execPath, ["scripts/changelog.mjs", "0.5.3"], {
+    const notes = execFileSync(process.execPath, ["scripts/changelog.mjs", "0.6.0"], {
       cwd: path(""),
       encoding: "utf8",
     });
     expect(notes).toContain("### Security");
-    expect(notes).toContain("--allow-reserved");
+    expect(notes).toContain("0010_mfa");
+    expect(notes).toContain("totpRewrapped");
     expect(notes).toContain("### Upgrade notes");
-    expect(notes).toContain("0009_login_attempts");
+    expect(notes).toContain("@simplewebauthn/server");
   });
 
   it("SDK docs describe read-triggered refresh and conditional requests", () => {
@@ -529,11 +530,12 @@ describe("open-source repository", () => {
     expect(read("README.md")).toContain("https://sotarak.github.io/anchor/guides/agent-skills/");
   });
 
-  it("the CI guide pins the 0.5.3 CLI", () => {
+  it("the CI guide pins the 0.6.0 CLI", () => {
     const ci = read("apps/docs/src/content/docs/guides/ci.md");
     expect(ci).not.toContain("0.5.1");
     expect(ci).not.toContain("0.5.2");
-    expect(ci.match(/0\.5\.3/g)?.length).toBe(4);
+    expect(ci).not.toContain("0.5.3");
+    expect(ci.match(/0\.6\.0/g)?.length).toBe(4);
   });
 
   it("workflows use actions/checkout v7 and actions/upload-pages-artifact v5 (pinned by SHA)", () => {

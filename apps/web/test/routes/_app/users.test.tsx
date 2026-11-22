@@ -292,3 +292,76 @@ describe("/users", () => {
     expect(revoke).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("/users two-factor", () => {
+  const maxMfa: UserDto = { ...max, mfaEnabled: true };
+  const adaMfa: UserDto = { ...ada, mfaEnabled: true };
+  const otherAdmin: UserDto = {
+    id: "u_alan",
+    email: "alan@example.com",
+    name: "Alan Admin",
+    role: "admin",
+    disabledAt: null,
+    mfaEnabled: true,
+  };
+
+  it("tags users with two-factor on, and only them", async () => {
+    setup([{ ...me, disabledAt: null }, maxMfa, ada]);
+    await renderApp("/users");
+    expect(within(await rowOf("Max Member")).getByText("2FA")).toBeInTheDocument();
+    expect(within(await rowOf("Ada Admin")).queryByText("2FA")).toBeNull();
+  });
+
+  it("an owner resets 2FA after confirming; the list refreshes", async () => {
+    const store = setup([{ ...me, disabledAt: null }, maxMfa, ada]);
+    const reset = vi.fn(({ params }: { params: Record<string, string | readonly string[]> }) => {
+      store.users = store.users.map((u) => (u.id === params.id ? { ...u, mfaEnabled: false } : u));
+      return new HttpResponse(null, { status: 204 });
+    });
+    server.use(http.post("/api/v1/users/:id/mfa-reset", reset));
+    const { user } = await renderApp("/users");
+
+    await openActions(user, "Ada Admin");
+    expect(screen.queryByRole("menuitem", { name: "Reset 2FA" })).toBeNull();
+    await user.keyboard("{Escape}");
+
+    await openActions(user, "Max Member");
+    await user.click(await screen.findByRole("menuitem", { name: "Reset 2FA" }));
+    const dialog = await screen.findByRole("dialog", { name: `Reset 2FA for ${max.email}?` });
+    expect(
+      within(dialog).getByText(
+        "They will be signed out everywhere and can sign in with their password only, until they set up two-factor authentication again.",
+      ),
+    ).toBeInTheDocument();
+    expect(reset).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole("button", { name: "Reset 2FA" }));
+    expect(await screen.findByText(`2FA reset for ${max.email}`)).toBeInTheDocument();
+    expect(reset).toHaveBeenCalledTimes(1);
+    expect(reset.mock.calls[0]?.[0].params.id).toBe(max.id);
+    await waitFor(() =>
+      expect(
+        within(screen.getByText("Max Member").closest("tr") as HTMLElement).queryByText("2FA"),
+      ).toBeNull(),
+    );
+  });
+
+  it("an admin resets 2FA for members but not for other admins", async () => {
+    signedInAs(adaMfa);
+    server.use(
+      http.get("/api/v1/users", () =>
+        HttpResponse.json({ users: [me, adaMfa, maxMfa, otherAdmin] }),
+      ),
+      http.get("/api/v1/invites", () => HttpResponse.json({ invites: [] })),
+    );
+    const { user } = await renderApp("/users");
+    await openActions(user, "Max Member");
+    expect(await screen.findByRole("menuitem", { name: "Reset 2FA" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await openActions(user, "Alan Admin");
+    await screen.findByRole("menuitem", { name: "Disable" });
+    expect(screen.queryByRole("menuitem", { name: "Reset 2FA" })).toBeNull();
+    expect(
+      within(await rowOf("Ada Admin")).queryByRole("button", { name: /^Actions for/ }),
+    ).toBeNull();
+  });
+});

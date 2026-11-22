@@ -113,6 +113,17 @@ approve a request. `Login was denied in the browser` and
 `anchor login --with-password` keeps the email and password flow; `--email` and
 `--password-stdin` imply it, so existing scripts keep working. CI should use `ANCHOR_TOKEN`.
 
+For an account with two-factor authentication (0.6.0), the password login then asks
+`Authentication code (or recovery code)` (input hidden): six digits are checked as a code from
+the authenticator app, anything else as a recovery code. Passkeys need the browser: an account
+whose only factor is a passkey is asked for a recovery code, so prefer plain `anchor login`. A
+wrong code prints `Invalid authentication code`, an expired second step (5 minutes)
+`Sign-in expired, start again`; both exit 3. Without a terminal (`--password-stdin` in a script)
+it exits 3 with `This account uses two-factor authentication`: use the browser login, or a
+service token in CI. The browser login needs nothing new: the dashboard you approve from already
+passed the second step. A CLI older than 0.6.0 doing password login against such an account fails
+with `The server did not return a CLI session`; upgrade it or use the browser login.
+
 ## Commands
 
 Run `anchor <command> --help` for the options and examples of each command.

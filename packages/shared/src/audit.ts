@@ -45,6 +45,14 @@ export const AUDIT_ACTIONS = [
   "oauth.authorized",
   "oauth.denied",
   "oauth.revoked",
+  // 0.6.0: two-factor authentication
+  "auth.reauth",
+  "mfa.totp_enabled",
+  "mfa.totp_disabled",
+  "mfa.passkey_added",
+  "mfa.passkey_removed",
+  "mfa.recovery_codes_generated",
+  "mfa.reset",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

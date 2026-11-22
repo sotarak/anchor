@@ -9,11 +9,14 @@ import type {
   InviteDto,
   KeyRotationDto,
   LoginResponse,
+  LoginResult,
   MemberDto,
+  MfaStatusDto,
   OAuthAuthorizeCheckDto,
   OAuthAuthorizeRequest,
   OAuthGrantDto,
   OverviewDto,
+  PasskeyDto,
   ProjectDto,
   ProjectKeyDto,
   ProjectRole,
@@ -23,6 +26,7 @@ import type {
   ServiceTokenDto,
   SessionDto,
   SetupStatusDto,
+  TotpSetupDto,
   UserDto,
 } from "@anchor/shared";
 import { apiFetch } from "./client";
@@ -53,7 +57,31 @@ export const api = {
   auth: {
     me: async () => (await apiFetch<{ user: UserDto }>("/auth/me")).user,
     login: (body: { email: string; password: string }) =>
-      apiFetch<LoginResponse>("/auth/login", { method: "POST", body: { ...body, client: "web" } }),
+      apiFetch<LoginResult>("/auth/login", { method: "POST", body: { ...body, client: "web" } }),
+    loginMfa: (body: { ticket: string; method: "totp" | "recovery"; code: string }) =>
+      apiFetch<LoginResponse>("/auth/login/mfa", { method: "POST", body }),
+    loginPasskeyOptions: async (ticket: string) =>
+      (
+        await apiFetch<{ options: unknown }>("/auth/login/passkey/options", {
+          method: "POST",
+          body: { ticket },
+        })
+      ).options,
+    loginPasskey: (body: { ticket: string; response: unknown }) =>
+      apiFetch<LoginResponse>("/auth/login/passkey", { method: "POST", body }),
+    reauth: (
+      body:
+        | { method: "password"; password: string }
+        | { method: "totp" | "recovery"; code: string },
+    ) => apiFetch<{ reauthUntil: number }>("/auth/reauth", { method: "POST", body }),
+    reauthPasskeyOptions: async () =>
+      (await apiFetch<{ options: unknown }>("/auth/reauth/passkey/options", { method: "POST" }))
+        .options,
+    reauthPasskey: (response: unknown) =>
+      apiFetch<{ reauthUntil: number }>("/auth/reauth/passkey", {
+        method: "POST",
+        body: { response },
+      }),
     logout: () => apiFetch<void>("/auth/logout", { method: "POST" }),
     changePassword: (body: { currentPassword: string; newPassword: string }) =>
       apiFetch<void>("/auth/password", { method: "POST", body }),
@@ -68,6 +96,29 @@ export const api = {
       apiFetch<void>(`/auth/cli/requests/${e(code)}/approve`, { method: "POST" }),
     deny: (code: string) =>
       apiFetch<void>(`/auth/cli/requests/${e(code)}/deny`, { method: "POST" }),
+  },
+  mfa: {
+    status: () => apiFetch<MfaStatusDto>("/auth/mfa"),
+    setupTotp: () => apiFetch<TotpSetupDto>("/auth/mfa/totp", { method: "POST" }),
+    confirmTotp: (code: string) =>
+      apiFetch<{ recoveryCodes?: string[] }>("/auth/mfa/totp/confirm", {
+        method: "POST",
+        body: { code },
+      }),
+    disableTotp: () => apiFetch<void>("/auth/mfa/totp", { method: "DELETE" }),
+    regenerateRecoveryCodes: async () =>
+      (await apiFetch<{ recoveryCodes: string[] }>("/auth/mfa/recovery-codes", { method: "POST" }))
+        .recoveryCodes,
+    passkeyOptions: async () =>
+      (await apiFetch<{ options: unknown }>("/auth/mfa/passkeys/options", { method: "POST" }))
+        .options,
+    addPasskey: (body: { name: string; response: unknown }) =>
+      apiFetch<{ passkey: PasskeyDto; recoveryCodes?: string[] }>("/auth/mfa/passkeys", {
+        method: "POST",
+        body,
+      }),
+    removePasskey: (id: string) =>
+      apiFetch<void>(`/auth/mfa/passkeys/${e(id)}`, { method: "DELETE" }),
   },
   oauth: {
     /** 200 with the consent details, or with `redirectTo` when the client must get an error. */
@@ -106,6 +157,7 @@ export const api = {
       apiFetch<{ url: string; expiresAt: number }>(`/users/${e(id)}/password-reset`, {
         method: "POST",
       }),
+    resetMfa: (id: string) => apiFetch<void>(`/users/${e(id)}/mfa-reset`, { method: "POST" }),
   },
   projects: {
     list: async () => (await apiFetch<{ projects: ProjectDto[] }>("/projects")).projects,

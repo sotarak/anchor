@@ -17,6 +17,11 @@ response shapes are the Zod schemas and DTO types in `packages/shared/src` (`sch
 | Session (`anc_s_…`) | `Authorization: Bearer <token>` | The CLI (30 days) |
 | Service token (`anc_st_…`) | `Authorization: Bearer <token>` only | CI and servers |
 
+An account with two-factor authentication (0.6.0) gets no session from `POST /auth/login`: the
+answer is `{ mfaRequired: true, ticket, methods, expiresAt }`, and `POST /auth/login/mfa` or the
+passkey pair finishes the login with that ticket. `methods` lists `totp`, `passkey` (only when a
+passkey is registered on this hostname) and `recovery`.
+
 When both are present, the `Authorization` header wins. A state-changing request (`POST`, `PUT`,
 `PATCH`, `DELETE`) authenticated by the cookie must send an `Origin` header equal to the instance's
 own origin. Service tokens can only call the secret, folder and import read/write routes in their
@@ -34,12 +39,13 @@ Every error has the same body:
 |------|--------|---------|
 | `bad_request` | 400 | Invalid body, query or path parameter |
 | `unauthenticated` | 401 | No credential, or an expired or revoked one |
-| `invalid_credentials` | 401 | Wrong email or password |
+| `invalid_credentials` | 401 | Wrong email or password, or a wrong authentication code |
 | `forbidden` | 403 | Authenticated, but not allowed |
+| `reauth_required` | 403 | A two-factor setting change needs a fresh confirmation: call `POST /auth/reauth` and retry (0.6.0) |
 | `not_found` | 404 | No such resource (or not visible to you) |
 | `conflict` | 409 | Already exists, or a concurrent write won; retry |
 | `payload_too_large` | 413 | A secret value over 65,536 bytes |
-| `rate_limited` | 429 | Too many failed logins from this address (for this email, or in total); locked for 15 minutes |
+| `rate_limited` | 429 | Too many failed logins from this address (for this email, or in total), or too many wrong second factors for the account; locked for 15 minutes |
 | `internal` | 500 | Server error, including a misconfigured root key (`config_error` in the logs) |
 
 Messages never contain secret values.
@@ -56,16 +62,25 @@ All paths are relative to `/api/v1`. `:project` and `:env` are slugs.
 | `GET /setup/status`, `POST /setup` | First-run setup: the first `POST` creates the owner, later ones get `409` |
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | Sessions |
 | `POST /auth/password`, `POST /auth/password-reset` | Change your password; complete a reset link |
+| `POST /auth/login/mfa` | Second sign-in step (0.6.0, no session): `{ ticket, method: "totp" \| "recovery", code }` → the login response |
+| `POST /auth/login/passkey/options`, `POST /auth/login/passkey` | Second step with a passkey: `{ ticket }` → `{ options }`, then `{ ticket, response }` → the login response |
+| `POST /auth/reauth` | Confirm it's you (dashboard session only): `{ method: "password", password }` without 2FA, `{ method: "totp" \| "recovery", code }` with it → `{ reauthUntil }` |
+| `POST /auth/reauth/passkey/options`, `POST /auth/reauth/passkey` | The same with a passkey: `{ options }`, then `{ response }` → `{ reauthUntil }` |
+| `GET /auth/mfa` | Your two-factor status (dashboard session only): `{ enabled, totp, passkeys, recoveryCodesRemaining, reauthUntil }` |
+| `POST /auth/mfa/totp`, `POST /auth/mfa/totp/confirm`, `DELETE /auth/mfa/totp` | Set up an authenticator app (`{ secret, otpauthUri }`), confirm it with `{ code }`, turn it off. Needs a fresh confirmation |
+| `POST /auth/mfa/passkeys/options`, `POST /auth/mfa/passkeys`, `DELETE /auth/mfa/passkeys/:id` | Add a passkey (`{ options }`, then `{ name, response }` → `201 { passkey }`), remove one. Needs a fresh confirmation |
+| `POST /auth/mfa/recovery-codes` | New recovery codes (the old ones stop working): `{ recoveryCodes }`. Needs a fresh confirmation |
 | `POST /auth/cli/start` | Start a browser login for the CLI (no session): `{ clientName? }` → `{ deviceCode, userCode, verificationUri, verificationUriComplete, expiresAt, interval }` |
 | `POST /auth/cli/token` | Poll a browser login with `{ deviceCode }` (no session): `202 { status: "pending" }`, `200` with a CLI session token, `429` when polled sooner than `interval` seconds, `403` when denied, `404` when expired, unknown or already used |
 | `GET /auth/cli/requests/:userCode` | A pending browser login, for the approval page (dashboard session only) |
 | `POST /auth/cli/requests/:userCode/approve`, `POST …/deny` | Approve or deny it (dashboard session only, same `Origin`): `204`, or `404` when it is no longer pending |
 | `GET /auth/sessions`, `DELETE /auth/sessions/:id` | List and revoke your sessions |
-| `GET /users`, `PATCH /users/:id`, `DELETE /users/:id`, `POST /users/:id/password-reset` | User management (owners and admins) |
+| `GET /users`, `PATCH /users/:id`, `DELETE /users/:id`, `POST /users/:id/password-reset` | User management (owners and admins); each user carries `mfaEnabled` (0.6.0) |
+| `POST /users/:id/mfa-reset` | Reset 2FA (0.6.0, owners and admins; admins for members only, nobody for themselves): removes the user's factors and signs them out everywhere, `204` |
 | `GET /invites`, `POST /invites`, `DELETE /invites/:id` | Invite links (owners and admins) |
 | `POST /invites/inspect`, `POST /invites/accept` | Open and accept an invite link (no session) |
 | `GET /audit` | Instance audit log (owners and admins), paginated with `limit` and `before` |
-| `POST /admin/root-key/rewrap` | Re-wrap every project key after a root key change (owners) |
+| `POST /admin/root-key/rewrap` | Re-wrap every project key and authenticator-app secret after a root key change (owners): `{ rewrapped, totpRewrapped }` |
 
 ### Projects
 

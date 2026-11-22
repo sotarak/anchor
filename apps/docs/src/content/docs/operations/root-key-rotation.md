@@ -5,8 +5,8 @@ sidebar:
   order: 2
 ---
 
-The root key wraps every project key (KEK). Rotating it re-wraps those keys; secret values are
-not touched. Every root key has an id, stored with each KEK it wraps: `ANCHOR_ROOT_KEY_ID`
+The root key wraps every project key (KEK) and, since 0.6.0, seals every authenticator-app (TOTP)
+secret. Rotating it re-wraps those; secret values are not touched. Every root key has an id, stored with each KEK it wraps: `ANCHOR_ROOT_KEY_ID`
 (default `rk1`, format `^[a-z0-9-]{1,32}$`). While rotating, the old key stays configured as
 `ANCHOR_ROOT_KEY_PREVIOUS` so existing data keeps working.
 
@@ -41,8 +41,11 @@ change together, in one `wrangler secret bulk` request.
 3. Check the deployment: `GET /api/v1/health` answers, and a secret read still works.
 4. As an instance owner, re-wrap every project key:
    `curl -X POST https://<host>/api/v1/admin/root-key/rewrap -H 'authorization: Bearer <token>'`
-5. Check that `rewrapped` equals the number of project key rows, then call it again and expect
-   `{ "rewrapped": 0 }`.
+5. Check that `rewrapped` equals the number of project key rows and `totpRewrapped` the number of
+   users with an authenticator app (0.6.0), then call it again and expect
+   `{ "rewrapped": 0, "totpRewrapped": 0 }`. Skipping the rewrap and dropping the previous key
+   would lock those users out of their authenticator app (their recovery codes and passkeys still
+   work).
 6. Remove the previous key and its id together (a previous key left without its id fails
    closed):
 

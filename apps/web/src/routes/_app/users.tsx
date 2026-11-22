@@ -81,6 +81,7 @@ function UsersPage() {
   const [inviting, setInviting] = useState(false);
   const [reveal, setReveal] = useState<Reveal | null>(null);
   const [deleting, setDeleting] = useState<UserDto | null>(null);
+  const [resettingMfa, setResettingMfa] = useState<UserDto | null>(null);
   const [revoking, setRevoking] = useState<InviteDto | null>(null);
   useSetHeader({ title: "Users" });
 
@@ -139,6 +140,7 @@ function UsersPage() {
           }
         })(),
       ),
+    onResetMfa: setResettingMfa,
     onDelete: setDeleting,
   };
 
@@ -247,6 +249,19 @@ function UsersPage() {
         onConfirm={() =>
           deleting
             ? act(() => api.users.remove(deleting.id), `${deleting.name} deleted`)
+            : Promise.resolve()
+        }
+      />
+      <ConfirmDialog
+        open={resettingMfa !== null}
+        onOpenChange={(open) => !open && setResettingMfa(null)}
+        title={`Reset 2FA for ${resettingMfa?.email ?? ""}?`}
+        description="They will be signed out everywhere and can sign in with their password only, until they set up two-factor authentication again."
+        confirmLabel="Reset 2FA"
+        destructive
+        onConfirm={() =>
+          resettingMfa
+            ? act(() => api.users.resetMfa(resettingMfa.id), `2FA reset for ${resettingMfa.email}`)
             : Promise.resolve()
         }
       />

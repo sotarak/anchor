@@ -2,7 +2,7 @@ import type { OAuthGrantDto } from "@anchor/shared";
 import { screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
-import { fixtures, renderApp, server, signedInAs } from "#test/support";
+import { fixtures, mfaStatusIs, renderApp, server, signedInAs } from "#test/support";
 
 const now = Date.now();
 const grant: OAuthGrantDto = {
@@ -19,6 +19,7 @@ function grantsAre(list: OAuthGrantDto[]) {
     store.list = store.list.filter((g) => g.id !== params.id);
     return new HttpResponse(null, { status: 204 });
   });
+  mfaStatusIs();
   server.use(
     http.get("/api/v1/auth/sessions", () => HttpResponse.json({ sessions: [] })),
     http.get("/api/v1/oauth/grants", () => HttpResponse.json({ grants: store.list })),

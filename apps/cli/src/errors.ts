@@ -49,6 +49,7 @@ export function exitCodeForApiError(e: ApiRequestError): number {
     case "invalid_credentials":
       return EXIT.AUTH;
     case "forbidden":
+    case "reauth_required":
       return EXIT.FORBIDDEN;
     case "not_found":
       return EXIT.NOT_FOUND;

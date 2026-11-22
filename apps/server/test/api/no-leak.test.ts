@@ -1,6 +1,16 @@
 import type { LoginResponse } from "@anchor/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, json, jsonInit, resetDb } from "#test/support";
+import { base32Encode } from "#src/mfa/totp";
+import {
+  api,
+  createUserWithSession,
+  enableTotp,
+  giveRecoveryCodes,
+  json,
+  jsonInit,
+  resetDb,
+  TEST_PASSWORD,
+} from "#test/support";
 
 const SECRET_CANARY = "LEAK-CANARY-7f3a";
 const REFERENCED_CANARY = "LEAK-CANARY-REFERENCED-41d0";
@@ -115,6 +125,41 @@ describe("no plaintext in logs", () => {
       OWNER_PASSWORD,
       token,
     ]) {
+      expect(output).not.toContain(canary);
+    }
+  });
+
+  it("TOTP secrets, codes, recovery codes and tickets never reach console output", async () => {
+    const { userId } = await createUserWithSession({ email: "mfa@example.test" });
+    const { secret, codeAt } = await enableTotp(userId);
+    const [recovery] = await giveRecoveryCodes(userId);
+    const start = () =>
+      api(
+        "/api/v1/auth/login",
+        jsonInit("POST", { email: "mfa@example.test", password: TEST_PASSWORD }),
+      );
+    const { ticket } = await json<{ ticket: string }>(await start());
+    await api(
+      "/api/v1/auth/login/mfa",
+      jsonInit("POST", { ticket, method: "totp", code: "000000" }),
+    );
+    const code = await codeAt(Date.now());
+    expect(
+      (await api("/api/v1/auth/login/mfa", jsonInit("POST", { ticket, method: "totp", code })))
+        .status,
+    ).toBe(200);
+    const next = await json<{ ticket: string }>(await start());
+    await api(
+      "/api/v1/auth/login/mfa",
+      jsonInit("POST", { ticket: next.ticket, method: "recovery", code: recovery }),
+    );
+    const output = spies
+      .flatMap((s) => s.mock.calls)
+      .map((args: unknown[]) =>
+        args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" "),
+      )
+      .join("\n");
+    for (const canary of [base32Encode(secret), code, recovery ?? "", ticket, next.ticket]) {
       expect(output).not.toContain(canary);
     }
   });

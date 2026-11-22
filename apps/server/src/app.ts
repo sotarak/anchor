@@ -2,7 +2,9 @@ import { Hono } from "hono";
 import { adminRoutes } from "./admin/routes";
 import { instanceAuditRoutes, projectAuditRoutes } from "./audit/routes";
 import { cliLoginRoutes } from "./auth/cli-login-routes";
+import { mfaLoginRoutes } from "./auth/mfa-login-routes";
 import { authenticate, checkOrigin } from "./auth/middleware";
+import { reauthRoutes } from "./auth/reauth-routes";
 import { authRoutes } from "./auth/routes";
 import type { AppEnv } from "./env";
 import { folderRoutes } from "./folders/routes";
@@ -14,6 +16,7 @@ import { requestContext } from "./lib/request";
 import { securityHeaders } from "./lib/security-headers";
 import { mcpRoutes } from "./mcp/route";
 import { memberRoutes } from "./members/routes";
+import { mfaRoutes } from "./mfa/routes";
 import { consentRoutes } from "./oauth/consent-routes";
 import { publicOAuthRoutes } from "./oauth/public-routes";
 import { projectRoutes } from "./projects/routes";
@@ -36,6 +39,9 @@ export function createApp(): Hono<AppEnv> {
 
   app.get("/api/v1/health", (c) => c.json({ status: "ok" }));
   app.route("/api/v1", authRoutes);
+  app.route("/api/v1", mfaLoginRoutes);
+  app.route("/api/v1", reauthRoutes);
+  app.route("/api/v1/auth/mfa", mfaRoutes);
   app.route("/api/v1", cliLoginRoutes);
   app.route("/api/v1/projects/:project/environments/:env/secrets", secretRoutes);
   app.route("/api/v1/projects/:project/environments/:env/folders", folderRoutes);

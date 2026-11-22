@@ -44,6 +44,13 @@ over a limit fails with `400 bad_request`, or `413 payload_too_large` for an ove
 | Invite link | 72 hours |
 | Password-reset link | 1 hour |
 | Failed logins before lockout | 5 per email and address, 50 per address; each then locked for 15 minutes |
+| Passkeys per user | 20; name 1–64 characters |
+| Recovery codes | 10 per set, each usable once |
+| Sign-in ticket (second step) | 5 minutes; deleted after 5 wrong codes |
+| Wrong second factors per account | 5 in 15 minutes, then the second step is locked for the rest of the 15 minutes |
+| Passkey challenge | 5 minutes, single use |
+| Confirmation for two-factor changes ("Confirm it's you") | 10 minutes |
+| Authentication code | 6 digits, 30-second steps; the previous and next step are accepted |
 
 ## Audit and background work
 

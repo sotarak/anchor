@@ -20,7 +20,11 @@ rotation work, and it lets CI read secrets with a plain bearer token.
 | Gets a copy of the D1 database (export, backup, leaked dump) | Sees metadata (users, project and secret names, audit events) and the PBKDF2 password hashes, which allow offline password guessing, but **no secret values**: those are AES-256-GCM ciphertexts under keys wrapped by a root key that is not in the database |
 | Can write to D1 but not run the Worker | Can grant themselves access (insert a session or token hash, change a role or a scope) and then read everything through the API, or point a secret back at an older version. The AAD only stops a ciphertext being moved to another secret, version, environment or project. **Protect D1 write access like access to the Worker** |
 | Steals a service token | Reads (or writes, for `read-write`) only the environments and folders in its scopes, until it expires or is revoked; every value read and every write is audited with the token's id (listing names is not) |
-| Steals a session | Acts as that user until the session expires (7 days for the dashboard, 30 days for the CLI) or is revoked from the **Account** page |
+| Steals a session | Acts as that user until the session expires (7 days for the dashboard, 30 days for the CLI) or is revoked from the **Account** page. To change two-factor settings more than 10 minutes after that session signed in, it must confirm it's you again, with a factor when the account has one (0.6.0) |
+| Knows or guesses a password (leak, reuse, distributed guessing) | Signs in, unless the account has two-factor authentication: then it stops at the second step, where factor guesses are capped per account |
+| Cracks a PBKDF2 hash from a D1 dump | Signs in, unless the account has two-factor authentication (the TOTP secret is sealed by the root key, not readable from the dump) |
+| Phishes a password and a TOTP code on a fake page | Signs in with them. A **passkey** stops this: it is bound to the real origin |
+| Holds a password-reset link | Sets a new password; an account with two-factor authentication still needs its factor |
 | Steals an agent's OAuth tokens | Calls the MCP tools as that user within the app's permissions until the refresh token expires (30 days) or the app is revoked on **Account → Connected apps** or the user's password changes; if the agent and the thief both refresh, the grant is revoked |
 | A malicious project member | Limited to the member's role and allowed environments; cannot read the audit log unless a project admin |
 | Reaches a freshly deployed instance's URL before its owner exists | **Becomes the owner**: the first account created at `/setup` owns the instance. Nothing is stored yet at that point, but create the owner right after the deploy, and start over with an empty database if `/setup` says an owner exists that you did not create (see [Troubleshooting](/anchor/troubleshooting/#setup-says-the-instance-already-has-an-owner)) |
@@ -49,6 +53,25 @@ rotation work, and it lets CI read secrets with a plain bearer token.
   Someone guessing elsewhere cannot lock the owner out, and the answer (including the `429`) is
   the same whether the email exists or not. A successful login clears its pair; a password reset
   clears every lock on that email.
+- Two-factor authentication (0.6.0) is opt-in per user, on **Account → Two-factor authentication**:
+  an authenticator app (TOTP: SHA-1, 6 digits, 30 seconds, the previous, current and next step
+  accepted, a step never accepted twice) and passkeys (WebAuthn, attestation `none`, the relying
+  party is the request's hostname). The TOTP secret is sealed with the root key (AES-256-GCM, AAD
+  `anchor/totp/v1|<userId>`) and re-wrapped by root-key rotation; passkey public keys are not
+  secret.
+- With a factor on, `POST /auth/login` answers `mfaRequired` with a ticket (`anc_mfa_`, SHA-256
+  stored, 5 minutes, deleted after 5 wrong codes) and no session; the code or passkey finishes the
+  login. A ticket stops working when the user is disabled, their 2FA is reset, or their password is
+  changed or reset. Factor guesses are also capped per account: 5 failures in 15 minutes lock the
+  second step (login and step-up) for that account.
+- Recovery codes: 10 single-use codes, shown once when the first factor is added, stored as a
+  PBKDF2-SHA-256 hash salted with the user (so a database dump cannot be swept for all users at once),
+  regenerated on demand (the old ones stop working) and deleted with the last factor.
+- Step-up: changing two-factor settings needs a dashboard session that re-authenticated in the last
+  10 minutes (`403 reauth_required` otherwise): with the password when the account has no factor,
+  with a factor when it has one, so a stolen session plus a phished password cannot remove it. A
+  new session counts as confirmed for its first 10 minutes.
+  Owners and admins can **Reset 2FA** for a user, which also signs that user out everywhere.
 - Sessions, service tokens, invite links and password-reset links are high-entropy random tokens
   with a type prefix (`anc_s_`, `anc_st_`, `anc_inv_`, `anc_rst_`). Only their SHA-256 hash is
   stored. Invite links last 72 hours, reset links 1 hour.
@@ -120,14 +143,19 @@ access to `prod:/db`, and a forbidden target is a `403` whether it exists or not
 - **No end-to-end encryption.** See the trust model above.
 - **Only login is rate limited, and not per account.** Limits are per address and email, so an
   attacker with many addresses (a botnet, or an IPv6 /48 with 65,536 /64s) can keep guessing one
-  account's password: the price of nobody being able to lock the owner out. Use a long, unique
-  password, and add a Cloudflare rate-limiting rule on `/api/v1/auth/login` and the other anonymous
+  account's password: the price of nobody being able to lock the owner out. Two-factor
+  authentication closes this for the accounts that turn it on. Use a long, unique password, and add a Cloudflare rate-limiting rule on `/api/v1/auth/login` and the other anonymous
   endpoints; see [Rate limiting](/anchor/operations/rate-limiting/).
 - **Break-glass recovery leaves no audit event.** It is a direct D1 update; see
   [Break-glass recovery](/anchor/operations/break-glass/).
 - **First-run setup is open until the owner exists.** `/setup` asks for no token; the first account
   created there owns the instance. Create it right after deploying.
-- **No SSO or MFA yet.** Accounts are email and password.
+- **No SSO, and MFA is opt-in.** Accounts are email and password, with an optional authenticator
+  app or passkeys; nothing forces users to turn two-factor authentication on.
+- **Two-factor residual risks.** Someone who knows the password can lock an account's second step
+  for 15 minutes with 5 wrong codes. Passkeys work only on the hostname they were registered on: a
+  second hostname or a domain change makes them unusable there (recovery codes still work). TOTP
+  codes can be phished on a fake page; passkeys cannot.
 - **Approving a code someone else sent you signs them in.** CLI logins and agent approvals are
   phishable the way `gh auth login` is: the page shows the device, IP and age; type and approve only
   a code from your own terminal.

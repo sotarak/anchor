@@ -2,6 +2,7 @@ import {
   changePasswordBodySchema,
   type LoginResponse,
   loginBodySchema,
+  type MfaRequiredResponse,
   resetPasswordBodySchema,
   type ServiceTokenDto,
   type SessionDto,
@@ -14,6 +15,9 @@ import { hashPassword, verifyAgainstDummy, verifyPassword } from "../crypto/pass
 import type { AppEnv } from "../env";
 import { ApiError } from "../lib/errors";
 import { parseJson } from "../lib/validate";
+import { hasMfa, loginMethods } from "../mfa/status";
+import { createMfaTicket, deleteUserMfaTickets } from "../mfa/tickets";
+import { relyingPartyFor } from "../mfa/webauthn";
 import { revokeUserGrants } from "../oauth/store";
 import { loadServiceTokenDto } from "../service-tokens/repo";
 import { consumePasswordReset } from "../users/password-resets";
@@ -25,6 +29,7 @@ import {
   setPassword,
   toUserDto,
 } from "../users/repo";
+import { issueLoginSession } from "./finish-login";
 import { LOCKOUT_MS, MAX_FAILED_LOGINS } from "./lockout";
 import {
   clearLoginLocksForEmail,
@@ -138,24 +143,13 @@ authRoutes.post("/auth/login", async (c) => {
     throw new ApiError(403, "forbidden", "Account disabled");
   }
   await loginSucceeded(c.env.DB, clientIp, body.email, now);
-  const { token, expiresAt } = await createSession(
-    c.env.DB,
-    user.id,
-    body.client,
-    c.req.header("user-agent") ?? null,
-    now,
-  );
-  await recordAudit(c, {
-    action: "auth.login",
-    actor: { type: "user", id: user.id, label: user.email },
-    metadata: { client: body.client, method: "password" },
-  });
-  const dto = toUserDto(user);
-  if (body.client === "web") {
-    setSessionCookie(c, token, expiresAt);
-    return c.json<LoginResponse>({ user: dto, expiresAt });
+  // With a second factor (0.6.0) the password only buys a short-lived ticket, never a session.
+  if (await hasMfa(c.env.DB, user.id)) {
+    const { ticket, expiresAt } = await createMfaTicket(c.env.DB, user.id, body.client, now);
+    const methods = await loginMethods(c.env.DB, user.id, relyingPartyFor(c.req.url).id);
+    return c.json<MfaRequiredResponse>({ mfaRequired: true, ticket, methods, expiresAt });
   }
-  return c.json<LoginResponse>({ user: dto, token, expiresAt });
+  return issueLoginSession(c, user, body.client, "password", now);
 });
 
 authRoutes.post("/auth/password", async (c) => {
@@ -175,6 +169,7 @@ authRoutes.post("/auth/password", async (c) => {
   await setPassword(c.env.DB, user.id, await hashPassword(body.newPassword), now);
   await revokeUserSessions(c.env.DB, user.id, principal.sessionId);
   await revokeUserGrants(c.env.DB, user.id, now);
+  await deleteUserMfaTickets(c.env.DB, user.id);
   await recordAudit(c, { action: "auth.password_changed", target: user.id });
   return c.body(null, 204);
 });
@@ -187,6 +182,7 @@ authRoutes.post("/auth/password-reset", async (c) => {
   if (!userId) throw new ApiError(404, "not_found", "Link is invalid or has expired");
   await revokeUserSessions(c.env.DB, userId);
   await revokeUserGrants(c.env.DB, userId, now);
+  await deleteUserMfaTickets(c.env.DB, userId);
   const user = await findUserById(c.env.DB, userId);
   if (user) await clearLoginLocksForEmail(c.env.DB, user.email);
   await recordAudit(c, {

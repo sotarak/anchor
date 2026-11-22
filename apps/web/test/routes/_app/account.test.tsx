@@ -2,7 +2,15 @@ import type { SessionDto } from "@anchor/shared";
 import { screen, waitFor, within } from "@testing-library/react";
 import { delay, HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { apiError, fixtures, renderApp, server, signedInAs, signedOut } from "#test/support";
+import {
+  apiError,
+  fixtures,
+  mfaStatusIs,
+  renderApp,
+  server,
+  signedInAs,
+  signedOut,
+} from "#test/support";
 
 const DAY = 86_400_000;
 const now = Date.now();
@@ -38,6 +46,7 @@ const sessionsTable = () =>
 
 // The Connected apps section loads on the same page; its own tests live beside this file.
 beforeEach(() => {
+  mfaStatusIs();
   server.use(http.get("/api/v1/oauth/grants", () => HttpResponse.json({ grants: [] })));
 });
 

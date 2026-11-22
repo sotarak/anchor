@@ -19,7 +19,7 @@ export type AuditInput = {
 };
 
 const FORBIDDEN_KEY =
-  /^(value|values|rawValue|password|currentPassword|newPassword|token|cookie|authorization)$/i;
+  /^(value|values|rawValue|password|currentPassword|newPassword|token|cookie|authorization|code|codes|recoveryCodes|secret|ticket|response)$/i;
 const MAX_METADATA_BYTES = 16_384;
 const MAX_KEYS = 500;
 

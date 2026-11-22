@@ -1,10 +1,12 @@
-import { loginMfaBodySchema } from "@anchor/shared";
+import { loginMfaBodySchema, loginPasskeyBodySchema, mfaTicketBodySchema } from "@anchor/shared";
 import { type Context, Hono } from "hono";
 import { recordAudit } from "../audit/record";
 import { getRootKeyring } from "../crypto/keyring";
 import type { AppEnv } from "../env";
 import { ApiError } from "../lib/errors";
 import { parseJson } from "../lib/validate";
+import { storeChallenge, takeChallenge } from "../mfa/challenges";
+import { findPasskey, listPasskeys, touchPasskey } from "../mfa/passkey-store";
 import { consumeRecoveryCode, countRecoveryCodes } from "../mfa/recovery-store";
 import {
   consumeMfaTicket,
@@ -13,6 +15,12 @@ import {
   recordTicketFailure,
 } from "../mfa/tickets";
 import { consumeTotpCode } from "../mfa/totp-store";
+import {
+  authenticationOptions,
+  credentialIdOf,
+  relyingPartyFor,
+  verifyAuthentication,
+} from "../mfa/webauthn";
 import { findUserById, type UserRow } from "../users/repo";
 import { issueLoginSession, type LoginMethod } from "./finish-login";
 import { clearFactorAttempts, factorAttemptKey, reserveLoginKeys } from "./login-attempts";
@@ -102,4 +110,45 @@ mfaLoginRoutes.post("/auth/login/mfa", async (c) => {
   }
   const recoveryCodesRemaining = await countRecoveryCodes(c.env.DB, user.id);
   return completeLogin(c, ticket, user, "password+recovery", now, { recoveryCodesRemaining });
+});
+
+/** Assertion options for the ticket's user, limited to passkeys registered on this hostname. */
+mfaLoginRoutes.post("/auth/login/passkey/options", async (c) => {
+  const body = await parseJson(c, mfaTicketBodySchema);
+  const now = Date.now();
+  const { ticket, user } = await loadTicketUser(c, body.ticket, now);
+  const rp = relyingPartyFor(c.req.url);
+  const allow = (await listPasskeys(c.env.DB, user.id)).filter((p) => p.rpId === rp.id);
+  if (allow.length === 0) throw new ApiError(400, "bad_request", "No passkey for this address");
+  const { options, challenge } = await authenticationOptions(rp, allow);
+  await storeChallenge(
+    c.env.DB,
+    user.id,
+    { purpose: "login", ticketId: ticket.id },
+    challenge,
+    now,
+  );
+  return c.json({ options });
+});
+
+mfaLoginRoutes.post("/auth/login/passkey", async (c) => {
+  const body = await parseJson(c, loginPasskeyBodySchema);
+  const now = Date.now();
+  const { ticket, user } = await loadTicketUser(c, body.ticket, now);
+  await reserveFactorAttempt(c, user, now);
+  const rp = relyingPartyFor(c.req.url);
+  // The challenge is spent whatever happens next: an assertion answers one options call only.
+  const challenge = await takeChallenge(
+    c.env.DB,
+    user.id,
+    { purpose: "login", ticketId: ticket.id },
+    now,
+  );
+  const credentialId = credentialIdOf(body.response);
+  const passkey = credentialId ? await findPasskey(c.env.DB, user.id, credentialId) : null;
+  if (!challenge || !passkey || passkey.rpId !== rp.id) return rejectFactor(c, ticket, user);
+  const verified = await verifyAuthentication(rp, body.response, challenge, passkey);
+  if (!verified) return rejectFactor(c, ticket, user);
+  await touchPasskey(c.env.DB, passkey.id, verified.newCounter, now);
+  return completeLogin(c, ticket, user, "password+passkey", now);
 });

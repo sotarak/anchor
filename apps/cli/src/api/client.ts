@@ -4,6 +4,7 @@ import type {
   FolderDto,
   FolderImportDto,
   LoginResponse,
+  LoginResult,
   ProjectDto,
   SecretDto,
   SecretValueType,
@@ -30,7 +31,10 @@ export type ConditionalSecrets =
   | { changed: true; secrets: SecretDto[]; etag: string | null };
 
 export interface ApiClient {
-  login(email: string, password: string): Promise<LoginResponse>;
+  /** A session, or (0.6.0) a ticket when the account needs a second factor. */
+  login(email: string, password: string): Promise<LoginResult>;
+  /** Finishes a two-factor login with a TOTP or recovery code. */
+  loginMfa(ticket: string, method: "totp" | "recovery", code: string): Promise<LoginResponse>;
   /** Starts a browser login (no session needed). */
   cliLoginStart(body: { clientName?: string }): Promise<CliLoginStartDto>;
   /** One poll: 202 is pending; 403, 404 and 429 throw ApiRequestError. */
@@ -142,7 +146,9 @@ export function createApiClient(opts: HttpOptions): ApiClient {
 
   return {
     login: (email, password) =>
-      data<LoginResponse>("POST", "/auth/login", { email, password, client: "cli" }),
+      data<LoginResult>("POST", "/auth/login", { email, password, client: "cli" }),
+    loginMfa: (ticket, method, code) =>
+      data<LoginResponse>("POST", "/auth/login/mfa", { ticket, method, code }),
     cliLoginStart: (body) => data<CliLoginStartDto>("POST", "/auth/cli/start", body),
     cliLoginToken: async (deviceCode) => {
       const res = await call<LoginResponse | { status: "pending" }>("POST", "/auth/cli/token", {

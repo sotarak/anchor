@@ -336,6 +336,105 @@ describe("anchor login", () => {
   });
 });
 
+describe("anchor login --with-password and two-factor authentication", () => {
+  const TICKET = "anc_mfa_TICKETCANARY";
+  const CODE = "246810";
+  const mfa = (methods: ("totp" | "passkey" | "recovery")[]) => async () => ({
+    mfaRequired: true as const,
+    ticket: TICKET,
+    methods,
+    expiresAt: Date.now() + 300_000,
+  });
+
+  it("prompts for a hidden code, sends totp, and stores the session", async () => {
+    const { io } = await env({ tty: true });
+    const prompts = fakePrompts({ input: [user.email], password: [PASSWORD, CODE] });
+    const r = run(
+      io,
+      ["login", "--api-url", API, "--with-password"],
+      { login: mfa(["totp", "recovery"]), loginMfa: loginOk },
+      { prompts: prompts.prompts },
+    );
+    expect(await r.code).toBe(0);
+    expect(prompts.calls.map((c) => [c.kind, c.message])).toEqual([
+      ["input", "Email"],
+      ["password", "Password"],
+      ["password", "Authentication code (or recovery code)"],
+    ]);
+    expect(r.fake.called("loginMfa")[0]?.args).toEqual([TICKET, "totp", CODE]);
+    expect(r.mem.items.get(API)?.token).toBe(TOKEN);
+    for (const text of [io.out(), io.err()]) {
+      expect(text).not.toContain("TICKETCANARY");
+      expect(text).not.toContain(CODE);
+    }
+  });
+
+  it("anything but six digits is sent as a recovery code", async () => {
+    const { io } = await env({ tty: true });
+    const prompts = fakePrompts({ input: [user.email], password: [PASSWORD, " abcde-fghij "] });
+    const r = run(
+      io,
+      ["login", "--api-url", API, "--with-password"],
+      { login: mfa(["totp", "recovery"]), loginMfa: loginOk },
+      { prompts: prompts.prompts },
+    );
+    expect(await r.code).toBe(0);
+    expect(r.fake.called("loginMfa")[0]?.args).toEqual([TICKET, "recovery", "abcde-fghij"]);
+  });
+
+  it("a passkey-only account is asked for a recovery code", async () => {
+    const { io } = await env({ tty: true });
+    const prompts = fakePrompts({ input: [user.email], password: [PASSWORD, "abcde-fghij"] });
+    const r = run(
+      io,
+      ["login", "--api-url", API, "--with-password"],
+      { login: mfa(["passkey", "recovery"]), loginMfa: loginOk },
+      { prompts: prompts.prompts },
+    );
+    expect(await r.code).toBe(0);
+    expect(prompts.calls.at(-1)?.message).toBe(
+      "Recovery code (passkeys work with 'anchor login' in the browser)",
+    );
+  });
+
+  it("without a terminal it exits 3 and never sends a code", async () => {
+    const { io } = await env({ stdin: PASSWORD });
+    const r = run(io, ["login", "--api-url", API, "--email", user.email, "--password-stdin"], {
+      login: mfa(["totp", "recovery"]),
+      loginMfa: loginOk,
+    });
+    expect(await r.code).toBe(3);
+    expect(r.fake.called("loginMfa")).toEqual([]);
+    expect(io.err()).toContain("error: This account uses two-factor authentication");
+    expect(io.err()).toContain(
+      "hint: Run 'anchor login' to sign in through the browser; use a service token in CI",
+    );
+    expect(r.mem.items.size).toBe(0);
+  });
+
+  it("a wrong code exits 3, an expired ticket exits 3, a lock exits 1", async () => {
+    const cases: [ApiRequestError, number, string][] = [
+      [apiError(401, "invalid_credentials", "x"), 3, "error: Invalid authentication code"],
+      [apiError(401, "unauthenticated", "x"), 3, "error: Sign-in expired, start again"],
+      [apiError(429, "rate_limited", "x"), 1, "error: Too many failed attempts; try again later"],
+    ];
+    for (const [error, exit, message] of cases) {
+      const { io } = await env({ tty: true });
+      const prompts = fakePrompts({ input: [user.email], password: [PASSWORD, CODE] });
+      const r = run(
+        io,
+        ["login", "--api-url", API, "--with-password"],
+        { login: mfa(["totp", "recovery"]), loginMfa: async () => Promise.reject(error) },
+        { prompts: prompts.prompts },
+      );
+      expect(await r.code).toBe(exit);
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: strips the TTY colors
+      expect(io.err().replace(/\x1b\[[0-9;]*m/g, "")).toContain(message);
+      expect(r.mem.items.size).toBe(0);
+    }
+  });
+});
+
 describe("anchor logout", () => {
   const stored = { apiUrl: API, token: TOKEN, email: user.email, expiresAt };
 

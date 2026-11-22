@@ -1,4 +1,4 @@
-import type { LoginResponse } from "@anchor/shared";
+import { isMfaRequired, type LoginResponse, type MfaRequiredResponse } from "@anchor/shared";
 import { ApiRequestError } from "../api/http";
 import { credentialStore, rawApiFor } from "../auth";
 import { normalizeApiUrl } from "../config/api-url";
@@ -108,8 +108,10 @@ async function loginWithPassword(
   // Log in and store the session token.
   let res: LoginResponse;
   try {
-    res = await rawApiFor(ctx, apiUrl).login(email, password);
+    const first = await rawApiFor(ctx, apiUrl).login(email, password);
+    res = isMfaRequired(first) ? await secondFactor(ctx, apiUrl, first) : first;
   } catch (e) {
+    if (e instanceof CliError) throw e;
     if (e instanceof ApiRequestError && e.code === "invalid_credentials") {
       throw new CliError(EXIT.AUTH, "Invalid email or password");
     }
@@ -119,6 +121,43 @@ async function loginWithPassword(
     throw toCliError(e, { apiUrl, during: "login" });
   }
   await saveLogin(ctx, apiUrl, source, res);
+}
+
+const SIX_DIGITS = /^[0-9]{6}$/;
+
+/**
+ * The second step of a password login (0.6.0): a TOTP or recovery code typed at a hidden prompt.
+ * Passkeys need a browser, so a passkey-only account is asked for a recovery code. Without a
+ * terminal there is no one to ask: CI should use a service token.
+ */
+async function secondFactor(
+  ctx: CommandContext,
+  apiUrl: string,
+  challenge: MfaRequiredResponse,
+): Promise<LoginResponse> {
+  if (!isInteractive(ctx)) {
+    throw new CliError(
+      EXIT.AUTH,
+      "This account uses two-factor authentication",
+      "Run 'anchor login' to sign in through the browser; use a service token in CI",
+    );
+  }
+  const message = challenge.methods.includes("totp")
+    ? "Authentication code (or recovery code)"
+    : "Recovery code (passkeys work with 'anchor login' in the browser)";
+  const code = (await ctx.deps.prompts.password({ message })).trim();
+  const method = SIX_DIGITS.test(code) ? "totp" : "recovery";
+  try {
+    return await rawApiFor(ctx, apiUrl).loginMfa(challenge.ticket, method, code);
+  } catch (e) {
+    if (e instanceof ApiRequestError && e.code === "invalid_credentials") {
+      throw new CliError(EXIT.AUTH, "Invalid authentication code");
+    }
+    if (e instanceof ApiRequestError && e.code === "unauthenticated") {
+      throw new CliError(EXIT.AUTH, "Sign-in expired, start again");
+    }
+    throw e;
+  }
 }
 
 /** Where the login's API URL came from: a resolved config source, or the interactive prompt. */
